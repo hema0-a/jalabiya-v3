@@ -1,13 +1,12 @@
 /* ==========================================================================
    main.js — نقطة الدخول + Demo UI (المرحلة 5)
    ==========================================================================
-   ✅ لا شاشة تحميل — #app يظهر فوراً بنص placeholder يستبدله JS.
-   ✅ Dynamic imports — أي فشل يظهر على الشاشة بالأحمر.
+   1. يستورد الأدوات (el, toast)
+   2. يبني واجهة تجريبية
+   3. يستورد سجل الاختبارات ويشغّلها
    ========================================================================== */
 
 const app = document.getElementById('app');
-
-/* --- مسح الـ placeholder قبل أي بناء --- */
 if (app) app.innerHTML = '';
 
 /* --- عرض خطأ على الشاشة --- */
@@ -23,7 +22,7 @@ function showError(title, err) {
 }
 
 /* --- استيراد الأدوات --- */
-let el, toast;
+let el, toast, testsIndex;
 try {
   ({ el } = await import('./core/dom.js'));
 } catch (e) {
@@ -34,6 +33,12 @@ try {
   ({ toast } = await import('./ui/toast.js'));
 } catch (e) {
   showError('Failed to load ui/toast.js', e);
+  throw e;
+}
+try {
+  testsIndex = await import('./tests/index.js');
+} catch (e) {
+  showError('Failed to load tests/index.js', e);
   throw e;
 }
 
@@ -182,7 +187,7 @@ function buildDemo() {
     ]),
   ]);
 
-  /* Tests Section — قابل للطي */
+  /* Tests Section */
   const testsSection = el('section', {
     style: {
       padding: '0 16px',
@@ -220,7 +225,6 @@ function buildDemo() {
   app.appendChild(testsSection);
 }
 
-/* --- البناء ثم الاختبار --- */
 try {
   buildDemo();
 } catch (e) {
@@ -228,13 +232,37 @@ try {
   throw e;
 }
 
+/* --- تشغيل الاختبارات --- */
 try {
-  await import('./tests/all.js');
+  const container = document.getElementById('tests-container');
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;border-radius:8px;box-sizing:border-box';
+  container.appendChild(pre);
+
+  const lines = [];
+  const paint = () => { pre.textContent = lines.join('\n'); };
+
+  lines.push('🚀 main.js running');
+  lines.push('');
+  paint();
+
+  const result = await testsIndex.runAll((header, body) => {
+    lines.push(header);
+    if (body) lines.push(body);
+    paint();
+  });
+
+  lines.push('');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
+  paint();
+
+  console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
 } catch (err) {
-  const tc = document.getElementById('tests-container') || document.body;
+  const container = document.getElementById('tests-container') || document.body;
   const pre = document.createElement('pre');
   pre.style.cssText = 'font-family:monospace;font-size:12px;white-space:pre-wrap;color:#c00;background:#fff;padding:8px;border-radius:6px';
-  pre.textContent = '❌ Failed to load tests:\n' + (err.message || String(err)) + '\n\n' + (err.stack || '');
-  tc.appendChild(pre);
+  pre.textContent = '❌ Failed to run tests:\n' + (err.message || String(err)) + '\n\n' + (err.stack || '');
+  container.appendChild(pre);
   console.error(err);
 }
