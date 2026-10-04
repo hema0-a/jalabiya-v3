@@ -1,280 +1,289 @@
 /* ==========================================================================
-   main.js — STUB مؤقت لاختبار config + events + sanitize + dom + utils
+   main.js — DIAGNOSTIC + TESTS (Hybrid)
    ==========================================================================
-   ⚠️ هذا ملف مؤقت سيُستبدل بالكامل في الخطوة 1-6.
-   ✅ إخفاء شاشة التحميل أولاً — ثم تشغيل الاختبارات.
+   نسخة تُخفي شاشة التحميل فوراً وتُظهر نتائج الاختبارات على الصفحة.
+   تستخدم dynamic imports لتجنب مشاكل static imports.
    ========================================================================== */
 
-import { APP_CONFIG, STORES, LIMITS, SYNC_CONFIG } from './core/config.js';
-import { events } from './core/events.js';
-import { escapeHtml, escapeAttr, sanitizeUrl } from './core/sanitize.js';
-import { el, qs, qsa, on, clear, show, hide } from './core/dom.js';
-import {
-  isEgyptPhone, isEmail, isValidPin, normalizePhone,
-  formatDate, formatTime, relativeTime, formatEGP, agoPhrase,
-  debounce, throttle, uid,
-} from './core/utils.js';
+const output = [];
+const render = () => {
+  document.body.innerHTML =
+    '<pre style="padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:100vh;box-sizing:border-box">'
+    + output.join('\n') + '</pre>';
+};
+const log = (msg) => { output.push(msg); render(); };
 
-/* --- إخفاء شاشة التحميل فوراً + إظهار حاوية النتائج --- */
-const loading = document.getElementById('app-loading');
-const app = document.getElementById('app');
-if (loading) loading.hidden = true;
-if (app) app.hidden = false;
+log('🚀 main.js running');
+log('');
 
-/* --- أداة عرض النتائج على الصفحة (بدل Console فقط) --- */
-const lines = [];
-const push = (html) => { lines.push(html); if (app) app.innerHTML = lines.join('\n'); };
+/* --- استيراد الملفات (dynamic) --- */
+let c, ev, s, d, u;
+try { c  = await import('./core/config.js');   log('✅ config.js'); }
+catch (e) { log('❌ config.js: ' + e.message); }
 
-push('<pre style="padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word">');
-push('✅ config.js loaded');
-push('📱 App: ' + APP_CONFIG.name + ' — v' + APP_CONFIG.version);
-push('📦 Stores: ' + Object.keys(STORES).length);
-push('🔒 Limits: ' + Object.keys(LIMITS).length);
-push('🔄 Sync config: ' + Object.keys(SYNC_CONFIG).length);
-push('');
+try { ev = await import('./core/events.js');   log('✅ events.js'); }
+catch (e) { log('❌ events.js: ' + e.message); }
+
+try { s  = await import('./core/sanitize.js'); log('✅ sanitize.js'); }
+catch (e) { log('❌ sanitize.js: ' + e.message); }
+
+try { d  = await import('./core/dom.js');      log('✅ dom.js'); }
+catch (e) { log('❌ dom.js: ' + e.message); }
+
+try { u  = await import('./core/utils.js');    log('✅ utils.js'); }
+catch (e) { log('❌ utils.js: ' + e.message); }
+
+log('');
 
 let totalPassed = 0;
 let totalTests = 0;
 
 /* ==========================================================================
-   1. events.js (7)
+   events.js (7)
    ========================================================================== */
-let passedEvents = 0;
-const totalEvents = 7;
-push('▶ events.js tests');
-const assertE = (label, cond) => {
-  if (cond) { push('  ✅ ' + label); passedEvents++; }
-  else      { push('  ❌ ' + label); }
-};
+if (ev && ev.events) {
+  const events = ev.events;
+  let passed = 0;
+  const total = 7;
+  log('▶ events.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    let r1 = 0;
+    events.on('t1', () => { r1++; });
+    events.emit('t1');
+    assert('1. on + emit', r1 === 1);
 
-try {
-  let r1 = 0;
-  events.on('t1', () => { r1++; });
-  events.emit('t1');
-  assertE('1. on + emit', r1 === 1);
+    let r2a = 0, r2b = 0;
+    events.on('t2', () => { r2a++; });
+    events.on('t2', () => { r2b++; });
+    events.emit('t2');
+    assert('2. multiple listeners', r2a === 1 && r2b === 1);
 
-  let r2a = 0, r2b = 0;
-  events.on('t2', () => { r2a++; });
-  events.on('t2', () => { r2b++; });
-  events.emit('t2');
-  assertE('2. multiple listeners', r2a === 1 && r2b === 1);
+    let r3 = 0;
+    const h3a = () => { r3++; };
+    const h3b = () => { r3++; events.off('t3', h3a); };
+    events.on('t3', h3a);
+    events.on('t3', h3b);
+    let err3 = false;
+    try { events.emit('t3'); } catch { err3 = true; }
+    assert('3. off during emit', !err3 && r3 === 2);
 
-  let r3 = 0;
-  const h3a = () => { r3++; };
-  const h3b = () => { r3++; events.off('t3', h3a); };
-  events.on('t3', h3a);
-  events.on('t3', h3b);
-  let err3 = false;
-  try { events.emit('t3'); } catch { err3 = true; }
-  assertE('3. off during emit', !err3 && r3 === 2);
+    let r4 = 0;
+    events.once('t4', () => { r4++; });
+    events.emit('t4');
+    events.emit('t4');
+    assert('4. once fires once', r4 === 1);
 
-  let r4 = 0;
-  events.once('t4', () => { r4++; });
-  events.emit('t4');
-  events.emit('t4');
-  assertE('4. once fires once', r4 === 1);
+    let r5 = true;
+    try { events.emit('t5-no-listeners'); } catch { r5 = false; }
+    assert('5. emit without listeners', r5);
 
-  let r5 = true;
-  try { events.emit('t5-no-listeners'); } catch { r5 = false; }
-  assertE('5. emit without listeners', r5);
+    events.on('t6a', () => {});
+    events.on('t6b', () => {});
+    events.clear();
+    assert('6. clear all', events.count() === 0);
 
-  events.on('t6a', () => {});
-  events.on('t6b', () => {});
-  events.clear();
-  assertE('6. clear all', events.count() === 0);
-
-  let r7 = 0;
-  const unsub7 = events.on('t7', () => { r7++; });
-  unsub7();
-  events.emit('t7');
-  assertE('7. unsubscribe function', r7 === 0);
-} catch (err) {
-  push('  ❌ events group failed: ' + err.message);
+    let r7 = 0;
+    const unsub7 = events.on('t7', () => { r7++; });
+    unsub7();
+    events.emit('t7');
+    assert('7. unsubscribe function', r7 === 0);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 events: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ events.js skipped');
+  totalTests += 7;
 }
-push('📊 events: ' + passedEvents + '/' + totalEvents);
-push('');
-totalPassed += passedEvents; totalTests += totalEvents;
+log('');
 
 /* ==========================================================================
-   2. sanitize.js (7)
+   sanitize.js (7)
    ========================================================================== */
-let passedSan = 0;
-const totalSan = 7;
-push('▶ sanitize.js tests');
-const assertS = (label, cond) => {
-  if (cond) { push('  ✅ ' + label); passedSan++; }
-  else      { push('  ❌ ' + label); }
-};
+if (s && s.escapeHtml) {
+  let passed = 0;
+  const total = 7;
+  log('▶ sanitize.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    assert('1. escapeHtml <script>',   s.escapeHtml('<script>') === '&lt;script&gt;');
+    assert('2. escapeHtml "quoted"',   s.escapeHtml('"quoted"') === '&quot;quoted&quot;');
+    assert("3. escapeHtml O'Brien",    s.escapeHtml("O'Brien") === 'O&#39;Brien');
+    assert('4. escapeHtml null/undef', s.escapeHtml(null) === '' && s.escapeHtml(undefined) === '');
+    assert('5. escapeHtml 123',        s.escapeHtml(123) === '123');
 
-try {
-  assertS('1. escapeHtml <script>',   escapeHtml('<script>') === '&lt;script&gt;');
-  assertS('2. escapeHtml "quoted"',   escapeHtml('"quoted"') === '&quot;quoted&quot;');
-  assertS("3. escapeHtml O'Brien",    escapeHtml("O'Brien") === 'O&#39;Brien');
-  assertS('4. escapeHtml null/undef', escapeHtml(null) === '' && escapeHtml(undefined) === '');
-  assertS('5. escapeHtml 123',        escapeHtml(123) === '123');
+    const urlCases = [
+      ['javascript:alert(1)',           '',                            'js basic'],
+      ['JavaScript:alert(1)',           '',                            'js case'],
+      ['java\nscript:alert(1)',         '',                            'js newline'],
+      ['javascript :alert(1)',          '',                            'js space before colon'],
+      ['java\tscript:alert(1)',         '',                            'js tab'],
+      ['\u0000javascript:alert(1)',     '',                            'js null byte'],
+      ['vbscript:msgbox(1)',            '',                            'vbscript'],
+      ['data:text/html,x',              '',                            'data html'],
+      ['data:image/svg+xml,...',        '',                            'svg+xml'],
+      ['data:image/svg,...',            '',                            'svg bare'],
+      ['data:image/png;base64,A',       'data:image/png;base64,A',     'png allowed'],
+      ['data:image/jpeg;base64',        'data:image/jpeg;base64',      'jpeg allowed'],
+      ['https://example.com',           'https://example.com',         'https'],
+      ['https://example.com?x=<script>','https://example.com?x=<script>','query with <script>'],
+      ['/relative/path',                '/relative/path',              'relative'],
+      ['',                              '',                            'empty'],
+    ];
+    let urlOk = 0;
+    urlCases.forEach(([input, expected, label]) => {
+      const actual = s.sanitizeUrl(input);
+      if (actual === expected) urlOk++;
+      else log('    ❌ ' + label + ': got "' + actual + '", expected "' + expected + '"');
+    });
+    assert('6. sanitizeUrl (16 cases)', urlOk === urlCases.length);
 
-  const urlCases = [
-    ['javascript:alert(1)',           '',                            'js basic'],
-    ['JavaScript:alert(1)',           '',                            'js case'],
-    ['java\nscript:alert(1)',         '',                            'js newline'],
-    ['javascript :alert(1)',          '',                            'js space before colon'],
-    ['java\tscript:alert(1)',         '',                            'js tab'],
-    ['\u0000javascript:alert(1)',     '',                            'js null byte'],
-    ['vbscript:msgbox(1)',            '',                            'vbscript'],
-    ['data:text/html,x',              '',                            'data html'],
-    ['data:image/svg+xml,...',        '',                            'svg+xml'],
-    ['data:image/svg,...',            '',                            'svg bare'],
-    ['data:image/png;base64,A',       'data:image/png;base64,A',     'png allowed'],
-    ['data:image/jpeg;base64',        'data:image/jpeg;base64',      'jpeg allowed'],
-    ['https://example.com',           'https://example.com',         'https'],
-    ['https://example.com?x=<script>','https://example.com?x=<script>','query with <script>'],
-    ['/relative/path',                '/relative/path',              'relative'],
-    ['',                              '',                            'empty'],
-  ];
-  let urlOk = 0;
-  urlCases.forEach(([input, expected, label]) => {
-    const actual = sanitizeUrl(input);
-    if (actual === expected) urlOk++;
-    else push('    ❌ ' + label + ': got "' + actual + '", expected "' + expected + '"');
-  });
-  assertS('6. sanitizeUrl (16 cases)', urlOk === urlCases.length);
-
-  assertS('7. escapeAttr comprehensive',
-    escapeAttr('a`b') === 'a&#96;b' &&
-    escapeAttr('a=b') === 'a&#61;b' &&
-    escapeAttr(null) === '' &&
-    escapeAttr(undefined) === '');
-} catch (err) {
-  push('  ❌ sanitize group failed: ' + err.message);
+    assert('7. escapeAttr comprehensive',
+      s.escapeAttr('a`b') === 'a&#96;b' &&
+      s.escapeAttr('a=b') === 'a&#61;b' &&
+      s.escapeAttr(null) === '' &&
+      s.escapeAttr(undefined) === '');
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 sanitize: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ sanitize.js skipped');
+  totalTests += 7;
 }
-push('📊 sanitize: ' + passedSan + '/' + totalSan);
-push('');
-totalPassed += passedSan; totalTests += totalSan;
+log('');
 
 /* ==========================================================================
-   3. dom.js (8)
+   dom.js (8)
    ========================================================================== */
-let passedDom = 0;
-const totalDom = 8;
-push('▶ dom.js tests');
-const assertD = (label, cond) => {
-  if (cond) { push('  ✅ ' + label); passedDom++; }
-  else      { push('  ❌ ' + label); }
-};
+if (d && d.el) {
+  let passed = 0;
+  const total = 8;
+  log('▶ dom.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    const n1 = d.el('div');
+    assert('1. el creates element', n1 instanceof HTMLElement && n1.tagName === 'DIV');
 
-try {
-  const n1 = el('div');
-  assertD('1. el creates element', n1 instanceof HTMLElement && n1.tagName === 'DIV');
+    const n2 = d.el('div', { className: 'card', text: 'مرحبا' });
+    assert('2. className + text', n2.className === 'card' && n2.textContent === 'مرحبا');
 
-  const n2 = el('div', { className: 'card', text: 'مرحبا' });
-  assertD('2. className + text', n2.className === 'card' && n2.textContent === 'مرحبا');
+    const n3 = d.el('div', { text: '<script>alert(1)</script>' });
+    assert('3. text is safe (no script)', n3.querySelector('script') === null);
 
-  const n3 = el('div', { text: '<script>alert(1)</script>' });
-  assertD('3. text is safe (no script)', n3.querySelector('script') === null);
+    let clicked = 0;
+    const n4 = d.el('button', { onClick: () => { clicked++; } });
+    n4.click();
+    assert('4. onClick fires', clicked === 1);
 
-  let clicked = 0;
-  const n4 = el('button', { onClick: () => { clicked++; } });
-  n4.click();
-  assertD('4. onClick fires', clicked === 1);
+    const n5 = d.el('div', {}, [d.el('span', { text: 'أ' }), d.el('span', { text: 'ب' })]);
+    assert('5. children array', n5.children.length === 2);
 
-  const n5 = el('div', {}, [el('span', { text: 'أ' }), el('span', { text: 'ب' })]);
-  assertD('5. children array', n5.children.length === 2);
+    const root = d.el('div', {}, [
+      d.el('span', { className: 'x' }),
+      d.el('span', { className: 'x' }),
+    ]);
+    assert('6. qs + qsa', d.qs('.x', root) !== null && d.qsa('.x', root).length === 2);
 
-  const root = el('div', {}, [
-    el('span', { className: 'x' }),
-    el('span', { className: 'x' }),
-  ]);
-  assertD('6. qs + qsa', qs('.x', root) !== null && qsa('.x', root).length === 2);
+    let hits = 0;
+    const n7 = d.el('button');
+    const unsubD = d.on(n7, 'click', () => { hits++; });
+    n7.click();
+    unsubD();
+    n7.click();
+    assert('7. on unsubscribe', hits === 1);
 
-  let hits = 0;
-  const n7 = el('button');
-  const unsubD = on(n7, 'click', () => { hits++; });
-  n7.click();
-  unsubD();
-  n7.click();
-  assertD('7. on unsubscribe', hits === 1);
+    const n8 = d.el('div', {}, [d.el('span'), d.el('span')]);
+    d.clear(n8);
+    assert('8. clear removes all', n8.children.length === 0);
 
-  const n8 = el('div', {}, [el('span'), el('span')]);
-  clear(n8);
-  assertD('8. clear removes all', n8.children.length === 0);
-
-  show(n8); hide(n8);
-} catch (err) {
-  push('  ❌ dom group failed: ' + err.message);
+    d.show(n8); d.hide(n8);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 dom: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ dom.js skipped');
+  totalTests += 8;
 }
-push('📊 dom: ' + passedDom + '/' + totalDom);
-push('');
-totalPassed += passedDom; totalTests += totalDom;
+log('');
 
 /* ==========================================================================
-   4. utils.js (10)
+   utils.js (10)
    ========================================================================== */
-let passedUtils = 0;
-const totalUtils = 10;
-push('▶ utils.js tests');
-const assertU = (label, cond) => {
-  if (cond) { push('  ✅ ' + label); passedUtils++; }
-  else      { push('  ❌ ' + label); }
-};
+if (u && u.isEgyptPhone) {
+  let passed = 0;
+  const total = 10;
+  log('▶ utils.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    assert('1. isEgyptPhone valid/invalid',
+      u.isEgyptPhone('01012345678') === true &&
+      u.isEgyptPhone('+201012345678') === true &&
+      u.isEgyptPhone('123') === false);
 
-try {
-  assertU('1. isEgyptPhone valid/invalid',
-    isEgyptPhone('01012345678') === true &&
-    isEgyptPhone('+201012345678') === true &&
-    isEgyptPhone('123') === false);
+    assert('2. isEmail',
+      u.isEmail('a@b.co') === true &&
+      u.isEmail('bad') === false &&
+      u.isEmail(null) === false);
 
-  assertU('2. isEmail',
-    isEmail('a@b.co') === true &&
-    isEmail('bad') === false &&
-    isEmail(null) === false);
+    assert('3. isValidPin',
+      u.isValidPin('1234') === true &&
+      u.isValidPin('12') === false &&
+      u.isValidPin('abcd') === false);
 
-  assertU('3. isValidPin',
-    isValidPin('1234') === true &&
-    isValidPin('12') === false &&
-    isValidPin('abcd') === false);
+    assert('4. normalizePhone',
+      u.normalizePhone('01012345678') === '+201012345678' &&
+      u.normalizePhone('+201012345678') === '+201012345678');
 
-  assertU('4. normalizePhone',
-    normalizePhone('01012345678') === '+201012345678' &&
-    normalizePhone('+201012345678') === '+201012345678');
+    assert('5. formatDate includes 2026',
+      u.formatDate(new Date('2026-10-04')).includes('2026'));
 
-  assertU('5. formatDate includes 2026',
-    formatDate(new Date('2026-10-04')).includes('2026'));
+    assert('6. formatTime non-empty',
+      u.formatTime(new Date()).length > 0);
 
-  assertU('6. formatTime non-empty',
-    formatTime(new Date()).length > 0);
+    assert('7. relativeTime Arabic plurals',
+      u.relativeTime(Date.now() - 30 * 1000).includes('الآن') &&
+      u.relativeTime(Date.now() - 5 * 60 * 1000).includes('دقائق') &&
+      u.agoPhrase(0,  ['دقيقة', 'دقيقتين', 'دقائق']) === '' &&
+      u.agoPhrase(1,  ['دقيقة', 'دقيقتين', 'دقائق']) === 'دقيقة' &&
+      u.agoPhrase(2,  ['دقيقة', 'دقيقتين', 'دقائق']) === 'دقيقتين' &&
+      u.agoPhrase(5,  ['دقيقة', 'دقيقتين', 'دقائق']) === '5 دقائق' &&
+      u.agoPhrase(15, ['دقيقة', 'دقيقتين', 'دقائق']) === '15 دقيقة');
 
-  assertU('7. relativeTime Arabic plurals',
-    relativeTime(Date.now() - 30 * 1000).includes('الآن') &&
-    relativeTime(Date.now() - 5 * 60 * 1000).includes('دقائق') &&
-    agoPhrase(0,  ['دقيقة', 'دقيقتين', 'دقائق']) === '' &&
-    agoPhrase(1,  ['دقيقة', 'دقيقتين', 'دقائق']) === 'دقيقة' &&
-    agoPhrase(2,  ['دقيقة', 'دقيقتين', 'دقائق']) === 'دقيقتين' &&
-    agoPhrase(5,  ['دقيقة', 'دقيقتين', 'دقائق']) === '5 دقائق' &&
-    agoPhrase(15, ['دقيقة', 'دقيقتين', 'دقائق']) === '15 دقيقة');
+    assert('8. formatEGP',
+      u.formatEGP(1234.5).includes('ج.م') &&
+      u.formatEGP('bad').includes('0'));
 
-  assertU('8. formatEGP',
-    formatEGP(1234.5).includes('ج.م') &&
-    formatEGP('bad').includes('0'));
+    assert('9. debounce/throttle return function',
+      typeof u.debounce(() => {}, 100) === 'function' &&
+      typeof u.throttle(() => {}, 100) === 'function');
 
-  assertU('9. debounce/throttle return function',
-    typeof debounce(() => {}, 100) === 'function' &&
-    typeof throttle(() => {}, 100) === 'function');
-
-  assertU('10. uid unique + string',
-    uid() !== uid() && typeof uid() === 'string');
-} catch (err) {
-  push('  ❌ utils group failed: ' + err.message);
+    assert('10. uid unique + string',
+      u.uid() !== u.uid() && typeof u.uid() === 'string');
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 utils: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ utils.js skipped');
+  totalTests += 10;
 }
-push('📊 utils: ' + passedUtils + '/' + totalUtils);
-push('');
-totalPassed += passedUtils; totalTests += totalUtils;
+log('');
 
 /* ==========================================================================
-   5. الخلاصة
+   الخلاصة
    ========================================================================== */
-push('━━━━━━━━━━━━━━━━━━━━━━━━');
-push('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
-push('</pre>');
+log('━━━━━━━━━━━━━━━━━━━━━━━━');
+log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
 
-/* أيضاً إلى Console لمن يفتحه */
 console.log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
