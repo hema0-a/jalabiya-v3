@@ -1,23 +1,34 @@
 /* ==========================================================================
-   main.js — DIAGNOSTIC + TESTS (Hybrid)
+   main.js — DIAGNOSTIC + TESTS (Hybrid v2)
    ==========================================================================
-   نسخة تُخفي شاشة التحميل فوراً وتُظهر نتائج الاختبارات على الصفحة.
-   تستخدم dynamic imports لتجنب مشاكل static imports.
+   ✅ يستخدم textContent بدل innerHTML — يعرض كل الرموز حرفياً.
+   ✅ Dynamic imports — لا تعلّق شاشة التحميل.
+   ✅ 32 اختباراً موزّعة على 4 ملفات.
    ========================================================================== */
 
 const output = [];
 const render = () => {
-  document.body.innerHTML =
-    '<pre style="padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:100vh;box-sizing:border-box">'
-    + output.join('\n') + '</pre>';
+  let pre = document.getElementById('__diag');
+  if (!pre) {
+    document.body.innerHTML = '';
+    pre = document.createElement('pre');
+    pre.id = '__diag';
+    pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:100vh;box-sizing:border-box';
+    document.body.appendChild(pre);
+  }
+  // textContent — لا يُفسّر HTML، يعرض كل شيء حرفياً
+  pre.textContent = output.join('\n');
 };
 const log = (msg) => { output.push(msg); render(); };
 
 log('🚀 main.js running');
 log('');
 
-/* --- استيراد الملفات (dynamic) --- */
+/* ==========================================================================
+   استيراد الملفات (dynamic — لتفادي مشاكل static imports)
+   ========================================================================== */
 let c, ev, s, d, u;
+
 try { c  = await import('./core/config.js');   log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -39,7 +50,7 @@ let totalPassed = 0;
 let totalTests = 0;
 
 /* ==========================================================================
-   events.js (7)
+   1. events.js (7 اختبارات)
    ========================================================================== */
 if (ev && ev.events) {
   const events = ev.events;
@@ -101,7 +112,7 @@ if (ev && ev.events) {
 log('');
 
 /* ==========================================================================
-   sanitize.js (7)
+   2. sanitize.js (7 اختبارات)
    ========================================================================== */
 if (s && s.escapeHtml) {
   let passed = 0;
@@ -159,7 +170,7 @@ if (s && s.escapeHtml) {
 log('');
 
 /* ==========================================================================
-   dom.js (8)
+   3. dom.js (8 اختبارات)
    ========================================================================== */
 if (d && d.el) {
   let passed = 0;
@@ -216,7 +227,7 @@ if (d && d.el) {
 log('');
 
 /* ==========================================================================
-   utils.js (10)
+   4. utils.js (10 اختبارات)
    ========================================================================== */
 if (u && u.isEgyptPhone) {
   let passed = 0;
