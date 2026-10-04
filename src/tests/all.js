@@ -1,9 +1,10 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   94 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
+   106 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
               +idb(8)+repository(8)+customers(8)+orders(6)+payments(5)
               +inventory(5)+workers(4)+settings(6)+appointments(6)
+              +expenses(5)+trash(7)
    ========================================================================== */
 
 const output = [];
@@ -23,7 +24,7 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk, stg, apt;
+let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk, stg, apt, exp, trs;
 try { c    = await import('../core/config.js');              log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -68,6 +69,12 @@ catch (e) { log('❌ repos/settings.js: ' + e.message); }
 
 try { apt  = await import('../data/repos/appointments.js');  log('✅ repos/appointments.js'); }
 catch (e) { log('❌ repos/appointments.js: ' + e.message); }
+
+try { exp  = await import('../data/repos/expenses.js');      log('✅ repos/expenses.js'); }
+catch (e) { log('❌ repos/expenses.js: ' + e.message); }
+
+try { trs  = await import('../data/repos/trash.js');         log('✅ repos/trash.js'); }
+catch (e) { log('❌ repos/trash.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -724,9 +731,6 @@ if (apt && apt.appointments) {
     await a14.clear();
 
     const now = Date.now();
-    const todayStart = new Date();
-    todayStart.setHours(12, 0, 0, 0);
-
     const a1 = await a14.create({
       customerId: 'c1',
       orderId: 'o1',
@@ -759,7 +763,7 @@ if (apt && apt.appointments) {
     assert('4. getUpcoming excludes past', upcoming.length === 2);
 
     const today = await a14.getToday();
-    assert('5. getToday returns array (0+ items)', Array.isArray(today));
+    assert('5. getToday returns array', Array.isArray(today));
 
     await a14.remove(a1.id);
     const after = await a14.find(a1.id);
@@ -770,6 +774,133 @@ if (apt && apt.appointments) {
   log('📊 appointments: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ appointments.js skipped'); totalTests += 6; }
+log('');
+
+/* ===== 15. expenses.js (5) ===== */
+if (exp && exp.expenses) {
+  const e15 = exp.expenses;
+  let passed = 0;
+  const total = 5;
+  log('▶ expenses.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await e15.clear();
+
+    const e1 = await e15.create({ category: 'fabric', amount: 100, date: 1000 });
+    await e15.create({ category: 'fabric', amount: 200, date: 2000 });
+    await e15.create({ category: 'thread', amount: 50, date: 3000 });
+    await e15.create({ category: 'rent', amount: 500, date: 4000 });
+
+    const byCat = await e15.listByCategory('fabric');
+    assert('1. listByCategory fabric → 2', byCat.length === 2);
+
+    const byPeriod = await e15.listByPeriod(1500, 3500);
+    assert('2. listByPeriod [1500,3500] → 2', byPeriod.length === 2);
+
+    const sumCat = await e15.sumByCategory('fabric');
+    assert('3. sumByCategory fabric = 300', sumCat === 300);
+
+    const sumPeriod = await e15.sumByPeriod(1000, 3000);
+    assert('4. sumByPeriod [1000,3000] = 350', sumPeriod === 350);
+
+    await e15.remove(e1.id);
+    const afterRemove = await e15.find(e1.id);
+    assert('5. remove works', afterRemove === undefined);
+
+    await e15.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 expenses: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ expenses.js skipped'); totalTests += 5; }
+log('');
+
+/* ===== 16. trash.js (7) ===== */
+if (trs && trs.trash) {
+  const t16 = trs.trash;
+  let passed = 0;
+  const total = 7;
+  log('▶ trash.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    /* 1. addToTrash — metadata */
+    await t16.clear();
+    const t1 = await t16.addToTrash('customers', { id: 'orig-1', name: 'أحمد' });
+    assert('1. addToTrash creates record with metadata',
+      t1 && t1.originalStore === 'customers' &&
+      t1.originalId === 'orig-1' &&
+      t1.data && t1.data.name === 'أحمد' &&
+      typeof t1.deletedAt === 'number');
+
+    /* 2. listByStore — يفلتر صحيحاً */
+    await t16.addToTrash('orders', { id: 'orig-2' });
+    await t16.addToTrash('customers', { id: 'orig-3' });
+    const byStore = await t16.listByStore('customers');
+    assert('2. listByStore filters by originalStore', byStore.length === 2);
+
+    /* 3. listRecent — ترتيب تنازلي + limit */
+    await t16.clear();
+    await t16.create({ originalStore: 'x', originalId: 'a', data: { id: 'a' }, deletedAt: 100 });
+    await t16.create({ originalStore: 'x', originalId: 'b', data: { id: 'b' }, deletedAt: 300 });
+    await t16.create({ originalStore: 'x', originalId: 'c', data: { id: 'c' }, deletedAt: 200 });
+    const recent = await t16.listRecent(2);
+    assert('3. listRecent sorts desc + limits',
+      recent.length === 2 && recent[0].deletedAt === 300 && recent[1].deletedAt === 200);
+
+    /* 4. restore — يعيد + يحذف من السلة */
+    await t16.clear();
+    await idb.clear('customers');
+    await idb.put('customers', { id: 'restore-me', name: 'فاطمة' });
+    const trashItem = await t16.addToTrash('customers', { id: 'restore-me', name: 'فاطمة' });
+    await idb.remove('customers', 'restore-me');
+    const restored = await t16.restore(trashItem.id);
+    const backInStore = await idb.get('customers', 'restore-me');
+    const goneFromTrash = await t16.find(trashItem.id);
+    assert('4. restore puts back + removes from trash',
+      restored && restored.id === 'restore-me' &&
+      backInStore && backInStore.name === 'فاطمة' &&
+      goneFromTrash === undefined);
+
+    /* 5. restore — معرّف غير موجود → null */
+    const nullRestore = await t16.restore('no-such-id');
+    assert('5. restore missing → null', nullRestore === null);
+
+    /* 6. prune — لا يحذف عند عدم تجاوز الحد */
+    await t16.clear();
+    for (let i = 0; i < 5; i++) {
+      await t16.create({ originalStore: 'x', originalId: String(i), data: {}, deletedAt: i });
+    }
+    const removedNoOp = await t16.prune();
+    const countNoOp = await t16.count();
+    assert('6. prune no-op when below limit', removedNoOp === 0 && countNoOp === 5);
+
+    /* 7. prune — يحذف الزائد بالأقدم أولاً (مع تعديل مؤقت للحد) */
+    await t16.clear();
+    const origMax = c.LIMITS.maxTrashItems;
+    try {
+      c.LIMITS.maxTrashItems = 3;
+      for (let i = 0; i < 7; i++) {
+        await t16.create({ originalStore: 'x', originalId: String(i), data: {}, deletedAt: i });
+      }
+      const removedPrune = await t16.prune();
+      const countPrune = await t16.count();
+      assert('7. prune trims to maxTrashItems (oldest first)',
+        removedPrune === 4 && countPrune === 3);
+    } finally {
+      c.LIMITS.maxTrashItems = origMax;
+    }
+
+    await t16.clear();
+    await idb.clear('customers');
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 trash: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ trash.js skipped'); totalTests += 7; }
 log('');
 
 /* ===== الخلاصة ===== */
