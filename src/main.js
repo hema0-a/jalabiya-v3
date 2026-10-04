@@ -1,15 +1,15 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + Demo UI (المرحلة 5)
+   main.js — نقطة الدخول + App Shell (المرحلة 5)
    ==========================================================================
-   1. يستورد الأدوات (el, toast)
-   2. يبني واجهة تجريبية
-   3. يستورد سجل الاختبارات ويشغّلها
+   1. يستورد الأدوات والمكونات
+   2. يبني App Shell بـ Sidebar + Topbar
+   3. يستورد ويشغّل الاختبارات
    ========================================================================== */
 
 const app = document.getElementById('app');
 if (app) app.innerHTML = '';
 
-/* --- عرض خطأ على الشاشة --- */
+/* --- شاشة خطأ --- */
 function showError(title, err) {
   const msg = (err && err.message) ? err.message : String(err);
   const stack = (err && err.stack) ? err.stack : '';
@@ -21,248 +21,240 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-/* --- استيراد الأدوات --- */
-let el, toast, testsIndex;
+/* --- الاستيرادات --- */
+let el, toast, createLayout, testsIndex;
 try {
   ({ el } = await import('./core/dom.js'));
-} catch (e) {
-  showError('Failed to load core/dom.js', e);
-  throw e;
-}
-try {
   ({ toast } = await import('./ui/toast.js'));
-} catch (e) {
-  showError('Failed to load ui/toast.js', e);
-  throw e;
-}
-try {
+  ({ createLayout } = await import('./ui/layout.js'));
   testsIndex = await import('./tests/index.js');
 } catch (e) {
-  showError('Failed to load tests/index.js', e);
+  showError('Failed to load modules', e);
   throw e;
 }
 
-/* --- بناء الـ Demo UI --- */
-function buildDemo() {
-  if (!app) return;
+/* --- قائمة السايدبار --- */
+const SIDEBAR_ITEMS = [
+  { id: 'home',         icon: '🏠', label: 'الرئيسية' },
+  { id: 'customers',    icon: '👥', label: 'العملاء' },
+  { id: 'orders',       icon: '📦', label: 'الطلبات' },
+  { id: 'payments',     icon: '💰', label: 'الدفعات' },
+  { id: 'inventory',    icon: '🧵', label: 'المخزون' },
+  { id: 'workers',      icon: '👷', label: 'العمال' },
+  { id: 'expenses',     icon: '🧾', label: 'المصروفات' },
+  { id: 'appointments', icon: '📅', label: 'المواعيد' },
+  { id: 'reports',      icon: '📊', label: 'التقارير' },
+  { id: 'tests',        icon: '🧪', label: 'الاختبارات' },
+];
 
-  /* Header */
-  const header = el('header', {
-    style: {
-      background: 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
-      color: '#fff',
-      padding: '24px 16px',
-      borderRadius: '0 0 16px 16px',
-      textAlign: 'center',
-      marginBottom: '24px',
-    },
-  }, [
-    el('div', { style: { fontSize: '42px', lineHeight: '1' } }, '🧵'),
-    el('h1', {
-      style: {
-        color: '#fff',
-        fontSize: '22px',
-        margin: '8px 0 0 0',
-        fontWeight: '600',
+/* --- إنشاء App Shell --- */
+const layout = createLayout({
+  sidebar: {
+    title: 'ورشة الجلابيب',
+    subtitle: 'V3 — قيد التطوير',
+    logo: '🧵',
+    items: SIDEBAR_ITEMS,
+    activeId: 'home',
+    footer: '© 2026 — v3.0.0',
+  },
+  topbar: {
+    title: 'الرئيسية',
+    actions: [
+      {
+        id: 'theme',
+        icon: '🌙',
+        label: 'تبديل الثيم',
+        onClick: () => toast.info('الوضع الليلي — قريباً'),
       },
-    }, 'ورشة تفصيل الجلابيب'),
+    ],
+    showMenu: true,
+  },
+  onPageSelect: (id) => {
+    renderPage(id);
+  },
+});
+
+app.appendChild(layout.node);
+
+/* ==========================================================================
+   الصفحات
+   ========================================================================== */
+
+/**
+ * صفحة الرئيسية — Demo UI.
+ */
+function buildHomePage() {
+  const wrap = el('div', {});
+
+  wrap.appendChild(el('div', { className: 'card', style: { marginBottom: '16px' } }, [
+    el('div', { className: 'card__header' }, [
+      el('h3', { className: 'card__title' }, '🎨 تجربة المكونات'),
+    ]),
     el('p', {
-      style: {
-        fontSize: '13px',
-        margin: '4px 0 0 0',
-        opacity: '0.9',
-      },
-    }, 'نسخة تجريبية — المرحلة 5: UI Core'),
-  ]);
-
-  /* Demo Section */
-  const demoSection = el('section', {
-    style: { padding: '0 16px', marginBottom: '24px' },
-  }, [
-    el('h2', {
-      style: {
-        fontSize: '18px',
-        color: '#123C2F',
-        margin: '0 0 16px 0',
-        fontWeight: '600',
-      },
-    }, '🎨 تجربة المكونات'),
-
-    el('div', { className: 'card' }, [
-      el('div', { className: 'card__header' }, [
-        el('h3', { className: 'card__title' }, 'Toast — الإشعارات القصيرة'),
-      ]),
-      el('p', {
-        style: {
-          fontSize: '13px',
-          color: '#2E8B6F',
-          margin: '0 0 16px 0',
-        },
-      }, 'اضغط أي زر لعرض الإشعار أسفل الشاشة:'),
-      el('div', {
-        style: {
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '8px',
-        },
-      }, [
-        el('button', {
-          className: 'btn btn--primary',
-          onClick: () => toast.success('تم حفظ البيانات بنجاح'),
-        }, '✅ نجاح'),
-        el('button', {
-          className: 'btn btn--accent',
-          onClick: () => toast.warning('المخزون على وشك الانتهاء'),
-        }, '⚠️ تحذير'),
-        el('button', {
-          className: 'btn btn--danger',
-          onClick: () => toast.danger('فشل في حفظ الطلب'),
-        }, '❌ خطأ'),
-        el('button', {
-          className: 'btn btn--secondary',
-          onClick: () => toast.info('آخر مزامنة قبل 3 دقائق'),
-        }, 'ℹ️ معلومة'),
-      ]),
-      el('div', { style: { marginTop: '8px' } }, [
-        el('button', {
-          className: 'btn btn--ghost btn--block',
-          onClick: () => { toast.clear(); toast.info('تم مسح الإشعارات'); },
-        }, '🗑️ مسح الإشعارات'),
-      ]),
-    ]),
-
-    el('div', { className: 'card', style: { marginTop: '16px' } }, [
-      el('div', { className: 'card__header' }, [
-        el('h3', { className: 'card__title' }, 'Badges — الشارات'),
-      ]),
-      el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, [
-        el('span', { className: 'badge badge--success' }, 'مكتمل'),
-        el('span', { className: 'badge badge--warning' }, 'قيد التنفيذ'),
-        el('span', { className: 'badge badge--danger' }, 'متأخر'),
-        el('span', { className: 'badge badge--info' }, 'جديد'),
-        el('span', { className: 'badge badge--accent' }, 'VIP'),
-      ]),
-    ]),
-  ]);
-
-  /* Stats Demo */
-  const statsSection = el('section', {
-    style: { padding: '0 16px', marginBottom: '24px' },
-  }, [
-    el('h2', {
-      style: {
-        fontSize: '18px',
-        color: '#123C2F',
-        margin: '0 0 16px 0',
-        fontWeight: '600',
-      },
-    }, '📊 إحصائيات (تجريبية)'),
+      style: { fontSize: '13px', color: '#2E8B6F', margin: '0 0 16px 0' },
+    }, 'اضغط أي زر لعرض الإشعار:'),
     el('div', {
-      style: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '8px',
-      },
+      style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
     }, [
-      el('div', { className: 'stat' }, [
-        el('span', { className: 'stat__icon' }, '👥'),
-        el('span', { className: 'stat__value' }, '0'),
-        el('span', { className: 'stat__label' }, 'عملاء'),
-      ]),
-      el('div', { className: 'stat' }, [
-        el('span', { className: 'stat__icon' }, '📦'),
-        el('span', { className: 'stat__value' }, '0'),
-        el('span', { className: 'stat__label' }, 'طلبات نشطة'),
-      ]),
-      el('div', { className: 'stat' }, [
-        el('span', { className: 'stat__icon' }, '💰'),
-        el('span', { className: 'stat__value' }, '0 ج.م'),
-        el('span', { className: 'stat__label' }, 'إيرادات الشهر'),
-      ]),
-      el('div', { className: 'stat' }, [
-        el('span', { className: 'stat__icon' }, '📅'),
-        el('span', { className: 'stat__value' }, '0'),
-        el('span', { className: 'stat__label' }, 'مواعيد اليوم'),
-      ]),
+      el('button', {
+        className: 'btn btn--primary',
+        onClick: () => toast.success('تم حفظ البيانات بنجاح'),
+      }, '✅ نجاح'),
+      el('button', {
+        className: 'btn btn--accent',
+        onClick: () => toast.warning('المخزون على وشك الانتهاء'),
+      }, '⚠️ تحذير'),
+      el('button', {
+        className: 'btn btn--danger',
+        onClick: () => toast.danger('فشل في حفظ الطلب'),
+      }, '❌ خطأ'),
+      el('button', {
+        className: 'btn btn--secondary',
+        onClick: () => toast.info('آخر مزامنة قبل 3 دقائق'),
+      }, 'ℹ️ معلومة'),
     ]),
-  ]);
+  ]));
 
-  /* Tests Section */
-  const testsSection = el('section', {
-    style: {
-      padding: '0 16px',
-      marginBottom: '32px',
-    },
+  wrap.appendChild(el('div', { className: 'card', style: { marginBottom: '16px' } }, [
+    el('div', { className: 'card__header' }, [
+      el('h3', { className: 'card__title' }, '🏷️ الشارات'),
+    ]),
+    el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, [
+      el('span', { className: 'badge badge--success' }, 'مكتمل'),
+      el('span', { className: 'badge badge--warning' }, 'قيد التنفيذ'),
+      el('span', { className: 'badge badge--danger' }, 'متأخر'),
+      el('span', { className: 'badge badge--info' }, 'جديد'),
+      el('span', { className: 'badge badge--accent' }, 'VIP'),
+    ]),
+  ]));
+
+  wrap.appendChild(el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
   }, [
-    el('details', {
-      style: {
-        background: '#FFFFFF',
-        borderRadius: '12px',
-        padding: '16px',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-      },
-    }, [
-      el('summary', {
-        style: {
-          cursor: 'pointer',
-          fontWeight: '600',
-          color: '#123C2F',
-          fontSize: '16px',
-          padding: '4px 0',
-          userSelect: 'none',
-        },
-      }, '🧪 نتائج الاختبارات (اضغط للعرض)'),
-      el('div', {
-        id: 'tests-container',
-        style: { marginTop: '16px' },
-      }),
+    el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '👥'),
+      el('span', { className: 'stat__value' }, '0'),
+      el('span', { className: 'stat__label' }, 'عملاء'),
     ]),
+    el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '📦'),
+      el('span', { className: 'stat__value' }, '0'),
+      el('span', { className: 'stat__label' }, 'طلبات نشطة'),
+    ]),
+    el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '💰'),
+      el('span', { className: 'stat__value' }, '0 ج.م'),
+      el('span', { className: 'stat__label' }, 'إيرادات الشهر'),
+    ]),
+    el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '📅'),
+      el('span', { className: 'stat__value' }, '0'),
+      el('span', { className: 'stat__label' }, 'مواعيد اليوم'),
+    ]),
+  ]));
+
+  return wrap;
+}
+
+/**
+ * صفحة placeholder لقسم قيد الإنشاء.
+ * @param {string} title
+ * @param {string} icon
+ */
+function buildPlaceholderPage(title, icon) {
+  return el('div', { className: 'empty-state' }, [
+    el('div', { className: 'empty-state__icon' }, icon),
+    el('h2', { className: 'empty-state__title', text: title }),
+    el('p', { className: 'empty-state__text' }, 'قيد التطوير — سيُبنى في المراحل القادمة.'),
   ]);
-
-  app.appendChild(header);
-  app.appendChild(demoSection);
-  app.appendChild(statsSection);
-  app.appendChild(testsSection);
 }
 
-try {
-  buildDemo();
-} catch (e) {
-  showError('Failed to build Demo UI', e);
-  throw e;
-}
-
-/* --- تشغيل الاختبارات --- */
-try {
-  const container = document.getElementById('tests-container');
-  const pre = document.createElement('pre');
-  pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;border-radius:8px;box-sizing:border-box';
-  container.appendChild(pre);
+/**
+ * صفحة الاختبارات.
+ */
+async function buildTestsPage() {
+  const wrap = el('div', {});
+  const pre = el('pre', {
+    style: {
+      padding: '16px',
+      margin: '0',
+      fontFamily: 'monospace',
+      direction: 'ltr',
+      textAlign: 'left',
+      fontSize: '12px',
+      lineHeight: '1.5',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+      background: '#111',
+      color: '#0f0',
+      borderRadius: '8px',
+      boxSizing: 'border-box',
+    },
+  });
 
   const lines = [];
   const paint = () => { pre.textContent = lines.join('\n'); };
 
-  lines.push('🚀 main.js running');
-  lines.push('');
+  lines.push('🚀 Running tests...');
   paint();
+  wrap.appendChild(pre);
 
-  const result = await testsIndex.runAll((header, body) => {
-    lines.push(header);
-    if (body) lines.push(body);
+  try {
+    const result = await testsIndex.runAll((header, body) => {
+      lines.push(header);
+      if (body) lines.push(body);
+      paint();
+    });
+
+    lines.push('');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
     paint();
-  });
 
-  lines.push('');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
-  paint();
+    console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
+  } catch (err) {
+    lines.push('');
+    lines.push('❌ Failed: ' + (err.message || String(err)));
+    paint();
+  }
 
-  console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
-} catch (err) {
-  const container = document.getElementById('tests-container') || document.body;
-  const pre = document.createElement('pre');
-  pre.style.cssText = 'font-family:monospace;font-size:12px;white-space:pre-wrap;color:#c00;background:#fff;padding:8px;border-radius:6px';
-  pre.textContent = '❌ Failed to run tests:\n' + (err.message || String(err)) + '\n\n' + (err.stack || '');
-  container.appendChild(pre);
-  console.error(err);
+  return wrap;
 }
+
+/**
+ * عرض صفحة حسب معرّفها.
+ * @param {string} id
+ */
+async function renderPage(id) {
+  const item = SIDEBAR_ITEMS.find((i) => i.id === id);
+  if (item) {
+    layout.setTitle(item.label);
+  }
+
+  if (id === 'home') {
+    layout.setContent(buildHomePage());
+    return;
+  }
+
+  if (id === 'tests') {
+    layout.setContent(await buildTestsPage());
+    return;
+  }
+
+  const labels = {
+    customers:    ['العملاء',   '👥'],
+    orders:       ['الطلبات',   '📦'],
+    payments:     ['الدفعات',   '💰'],
+    inventory:    ['المخزون',   '🧵'],
+    workers:      ['العمال',    '👷'],
+    expenses:     ['المصروفات', '🧾'],
+    appointments: ['المواعيد',  '📅'],
+    reports:      ['التقارير',  '📊'],
+  };
+
+  const [title, icon] = labels[id] || ['صفحة', '📄'];
+  layout.setContent(buildPlaceholderPage(title, icon));
+}
+
+/* --- تشغيل الصفحة الافتراضية --- */
+renderPage('home');
