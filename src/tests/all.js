@@ -1,8 +1,9 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   73 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
+   82 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
               +idb(8)+repository(8)+customers(8)+orders(6)+payments(5)
+              +inventory(5)+workers(4)
    ========================================================================== */
 
 const output = [];
@@ -22,7 +23,7 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-let c, ev, s, d, u, sc, idb, repo, cust, ord, pay;
+let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk;
 try { c    = await import('../core/config.js');          log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -55,6 +56,12 @@ catch (e) { log('❌ repos/orders.js: ' + e.message); }
 
 try { pay  = await import('../data/repos/payments.js');  log('✅ repos/payments.js'); }
 catch (e) { log('❌ repos/payments.js: ' + e.message); }
+
+try { inv  = await import('../data/repos/inventory.js'); log('✅ repos/inventory.js'); }
+catch (e) { log('❌ repos/inventory.js: ' + e.message); }
+
+try { wrk  = await import('../data/repos/workers.js');   log('✅ repos/workers.js'); }
+catch (e) { log('❌ repos/workers.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -575,6 +582,81 @@ if (pay && pay.payments) {
   log('📊 payments: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ payments.js skipped'); totalTests += 5; }
+log('');
+
+/* ===== 11. inventory.js (5) ===== */
+if (inv && inv.inventory) {
+  const i11 = inv.inventory;
+  let passed = 0;
+  const total = 5;
+  log('▶ inventory.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await i11.clear();
+
+    const a = await i11.create({ name: 'قماش كتان', category: 'fabric', quantity: 3 });
+    await i11.create({ name: 'خيط', category: 'thread', quantity: 20 });
+    await i11.create({ name: 'أزرار', category: 'accessory', quantity: 2 });
+
+    const search = await i11.searchByName('قماش');
+    assert('1. searchByName', search.length === 1 && search[0].id === a.id);
+
+    const byCat = await i11.listByCategory('thread');
+    assert('2. listByCategory', byCat.length === 1);
+
+    const low = await i11.getLowStock(5);
+    assert('3. getLowStock < 5 → 2 items', low.length === 2);
+
+    const adjusted = await i11.adjustStock(a.id, 10);
+    assert('4. adjustStock +10 = 13', adjusted && adjusted.quantity === 13);
+
+    const floor = await i11.adjustStock(a.id, -100);
+    assert('5. adjustStock clamps to 0', floor && floor.quantity === 0);
+
+    await i11.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 inventory: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ inventory.js skipped'); totalTests += 5; }
+log('');
+
+/* ===== 12. workers.js (4) ===== */
+if (wrk && wrk.workers) {
+  const w12 = wrk.workers;
+  let passed = 0;
+  const total = 4;
+  log('▶ workers.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await w12.clear();
+
+    const a = await w12.create({ name: 'سيد', active: true });
+    const b = await w12.create({ name: 'رمضان', active: false });
+    await w12.create({ name: 'عبد الله' });
+
+    const search = await w12.searchByName('سيد');
+    assert('1. searchByName', search.length === 1 && search[0].id === a.id);
+
+    const active = await w12.listActive();
+    assert('2. listActive → 2 (سيد + عبد الله)', active.length === 2);
+
+    const toggled = await w12.toggleActive(b.id);
+    assert('3. toggleActive false → true', toggled && toggled.active === true);
+
+    const missing = await w12.toggleActive('no-such-id');
+    assert('4. toggleActive missing → null', missing === null);
+
+    await w12.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 workers: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ workers.js skipped'); totalTests += 4; }
 log('');
 
 /* ===== الخلاصة ===== */
