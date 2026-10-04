@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1F6D57" />
+  <meta name="description" content="تطبيق ورشة تفصيل الجلابيب — إدارة كاملة للعملاء والطلبات والمخزون." />
+
+  <!-- دعم iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ورشة الجلابيب" />
+
+  <!-- سياسة أمان المحتوى (CSP) — مشددة مسبقاً -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' https://www.gstatic.com https://apis.google.com;
+                 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+                 font-src 'self' https://fonts.gstatic.com;
+                 img-src 'self' data: blob:;
+                 connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com;
+                 worker-src 'self';
+                 manifest-src 'self';
+                 frame-ancestors 'none';
+                 object-src 'none';
+                 base-uri 'self';
+                 form-action 'self';" />
+
+  <!-- ملفات PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+
+  <!-- الخطوط: IBM Plex Sans Arabic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- الأنماط الرئيسية -->
+  <link rel="stylesheet" href="styles/main.css" />
+
+  <title>ورشة تفصيل الجلابيب</title>
+
+  <!-- أنماط مؤقتة لشاشة التحميل -->
+  <style>
+    .app-loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #F6F1E6;
+      color: #1F6D57;
+      font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+      z-index: 9999;
+    }
+    .app-loading__logo { font-size: 56px; line-height: 1; }
+    .app-loading__title { font-size: 20px; font-weight: 600; margin: 0; }
+    .app-loading__spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #E5DDD0;
+      border-top-color: #1F6D57;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    .app-loading__text { font-size: 14px; color: #2E8B6F; margin: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="app-loading" class="app-loading" role="status" aria-live="polite">
+    <div class="app-loading__logo" aria-hidden="true">🧵</div>
+    <h1 class="app-loading__title">ورشة تفصيل الجلابيب</h1>
+    <div class="app-loading__spinner" aria-hidden="true"></div>
+    <p class="app-loading__text">جارٍ التحميل…</p>
+  </div>
+
+  <div id="app" class="app" hidden></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
