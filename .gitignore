@@ -1,0 +1,19 @@
+# نظام التشغيل
+.DS_Store
+Thumbs.db
+
+# المحرر
+.vscode/
+.idea/
+*.swp
+
+# مؤقتات
+*.log
+*.tmp
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Node (احتياطاً)
+node_modules/
