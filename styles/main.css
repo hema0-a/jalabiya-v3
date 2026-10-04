@@ -6,5 +6,6 @@
    ========================================================================== */
 
 @import 'base.css';
+@import 'components.css';
 /* سيُضاف لاحقاً:
-   components.css, layout.css, themes.css, pages.css, print.css */
+   layout.css, themes.css, pages.css, print.css */
