@@ -3,6 +3,7 @@
    ==========================================================================
    يضيف دوال بحث خاصة بالعملاء: هاتف، اسم، VIP.
    كل الدوال ترجع Promise.
+   ⚠️ vip يُفلتر في JS (لا فهرس) — لأن boolean غير صالح كمفتاح IDB.
    ========================================================================== */
 
 import { createRepository } from '../repository.js';
@@ -39,10 +40,12 @@ export const customers = {
 
   /**
    * قائمة العملاء المميّزين (VIP).
+   * يُفلتر في JavaScript — لأن boolean غير صالح كمفتاح فهرس IDB.
    * @returns {Promise<Array>}
    */
   async listVIP() {
-    return base.findByIndex('by_vip', true);
+    const all = await base.list();
+    return all.filter((c) => c.vip === true);
   },
 
   /**
