@@ -7,5 +7,6 @@
 
 @import 'base.css';
 @import 'components.css';
+@import 'layout.css';
 /* سيُضاف لاحقاً:
-   layout.css, themes.css, pages.css, print.css */
+   themes.css, pages.css, print.css */
