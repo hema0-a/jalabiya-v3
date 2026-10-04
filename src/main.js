@@ -1,9 +1,8 @@
 /* ==========================================================================
-   main.js — TEST HARNESS (Phase 1 + Phase 2 schema + idb)
+   main.js — TEST HARNESS (Phase 1 + Phase 2 complete)
    ==========================================================================
-   ✅ textContent — لا يُفسّر HTML
-   ✅ Dynamic imports
-   ✅ 46 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)+idb(8)
+   ✅ 54 اختباراً
+   events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)+idb(8)+repository(8)
    ========================================================================== */
 
 const output = [];
@@ -24,27 +23,30 @@ log('🚀 main.js running');
 log('');
 
 /* --- استيراد الملفات (dynamic) --- */
-let c, ev, s, d, u, sc, idb;
-try { c   = await import('./core/config.js');   log('✅ config.js'); }
+let c, ev, s, d, u, sc, idb, repo;
+try { c    = await import('./core/config.js');     log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
-try { ev  = await import('./core/events.js');   log('✅ events.js'); }
+try { ev   = await import('./core/events.js');     log('✅ events.js'); }
 catch (e) { log('❌ events.js: ' + e.message); }
 
-try { s   = await import('./core/sanitize.js'); log('✅ sanitize.js'); }
+try { s    = await import('./core/sanitize.js');   log('✅ sanitize.js'); }
 catch (e) { log('❌ sanitize.js: ' + e.message); }
 
-try { d   = await import('./core/dom.js');      log('✅ dom.js'); }
+try { d    = await import('./core/dom.js');        log('✅ dom.js'); }
 catch (e) { log('❌ dom.js: ' + e.message); }
 
-try { u   = await import('./core/utils.js');    log('✅ utils.js'); }
+try { u    = await import('./core/utils.js');      log('✅ utils.js'); }
 catch (e) { log('❌ utils.js: ' + e.message); }
 
-try { sc  = await import('./data/schema.js');   log('✅ schema.js'); }
+try { sc   = await import('./data/schema.js');     log('✅ schema.js'); }
 catch (e) { log('❌ schema.js: ' + e.message); }
 
-try { idb = await import('./data/idb.js');      log('✅ idb.js'); }
+try { idb  = await import('./data/idb.js');        log('✅ idb.js'); }
 catch (e) { log('❌ idb.js: ' + e.message); }
+
+try { repo = await import('./data/repository.js'); log('✅ repository.js'); }
+catch (e) { log('❌ repository.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -362,7 +364,6 @@ if (idb && idb.openDB) {
     else      { log('  ❌ ' + label); }
   };
   try {
-    // تنظيف أي بيانات متبقية من تشغيل سابق
     await idb.clear('customers').catch(() => {});
 
     const db = await idb.openDB();
@@ -398,6 +399,60 @@ if (idb && idb.openDB) {
   totalPassed += passed; totalTests += total;
 } else {
   log('⚠️ idb.js skipped');
+  totalTests += 8;
+}
+log('');
+
+/* ==========================================================================
+   7. repository.js (8)
+   ========================================================================== */
+if (repo && repo.createRepository) {
+  let passed = 0;
+  const total = 8;
+  log('▶ repository.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    const customers = repo.createRepository('customers');
+    await customers.clear();
+
+    const r1 = await customers.create({ name: 'أحمد', phone: '01012345678' });
+    assert('1. create returns record with id',
+      r1 && typeof r1.id === 'string' && r1.id.length > 0);
+
+    assert('2. create sets timestamps',
+      typeof r1.createdAt === 'number' && typeof r1.updatedAt === 'number');
+
+    const r2 = await customers.create({ name: 'محمد' });
+    assert('3. unique ids', r1.id !== r2.id);
+
+    const found = await customers.find(r1.id);
+    assert('4. find returns created', found && found.name === 'أحمد');
+
+    const all = await customers.list();
+    assert('5. list returns all', Array.isArray(all) && all.length === 2);
+
+    const beforeUpdatedAt = r1.updatedAt;
+    await new Promise((res) => setTimeout(res, 10));
+    const updated = await customers.update(r1.id, { name: 'أحمد علي' });
+    assert('6. update merges + bumps updatedAt',
+      updated && updated.name === 'أحمد علي' && updated.updatedAt > beforeUpdatedAt);
+
+    const nullUpdate = await customers.update('no-such-id', { name: 'x' });
+    assert('7. update non-existent → null', nullUpdate === null);
+
+    await customers.remove(r1.id);
+    const afterRemove = await customers.find(r1.id);
+    assert('8. remove works', afterRemove === undefined);
+
+    await customers.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 repository: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ repository.js skipped');
   totalTests += 8;
 }
 log('');
