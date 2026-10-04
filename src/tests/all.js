@@ -1,23 +1,24 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   122 اختباراً:
+   127 اختباراً:
    events(7) + sanitize(7) + dom(8) + utils(10) + schema(6)
    + idb(8) + repository(8) + customers(8) + orders(6) + payments(5)
    + inventory(5) + workers(4) + settings(6) + appointments(6)
    + expenses(5) + trash(7)
    + pin-crypto(8) + auth(8)
+   + toast(5)
    ========================================================================== */
 
 const output = [];
 const render = () => {
   let pre = document.getElementById('__diag');
   if (!pre) {
-    document.body.innerHTML = '';
+    const container = document.getElementById('tests-container') || document.body;
     pre = document.createElement('pre');
     pre.id = '__diag';
-    pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:100vh;box-sizing:border-box';
-    document.body.appendChild(pre);
+    pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:200px;box-sizing:border-box';
+    container.appendChild(pre);
   }
   pre.textContent = output.join('\n');
 };
@@ -28,7 +29,7 @@ log('');
 
 let c, ev, s, d, u, sc, idb, repo;
 let cust, ord, pay, inv, wrk, stg, apt, exp, trs;
-let pc, au;
+let pc, au, tos;
 
 try { c    = await import('../core/config.js');              log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
@@ -86,6 +87,9 @@ catch (e) { log('❌ security/pin-crypto.js: ' + e.message); }
 
 try { au   = await import('../security/auth.js');            log('✅ security/auth.js'); }
 catch (e) { log('❌ security/auth.js: ' + e.message); }
+
+try { tos  = await import('../ui/toast.js');                 log('✅ ui/toast.js'); }
+catch (e) { log('❌ ui/toast.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -960,47 +964,39 @@ if (au && au.auth) {
     else      { log('  ❌ ' + label); }
   };
   try {
-    /* --- 1. حالة نظيفة --- */
     auth.reset();
     assert('1. hasPin false initially', auth.hasPin() === false);
 
-    /* --- 2. تعيين PIN --- */
     await auth.setPinAndSave('1234');
     assert('2. setPinAndSave → hasPin true', auth.hasPin() === true);
 
-    /* --- 3. فتح صحيح + جلسة --- */
     auth.clearSession();
     const ok = await auth.unlock('1234');
     assert('3. unlock correct → success + session',
       ok.success === true && auth.getSession() !== null);
 
-    /* --- 4. PIN خطأ → wrong-pin + attempts=1 --- */
     auth.clearSession();
     auth._resetAttempts();
     const bad = await auth.unlock('9999');
     assert('4. wrong pin → wrong-pin + attempts=1',
       bad.success === false && bad.reason === 'wrong-pin' && auth.getAttempts() === 1);
 
-    /* --- 5. القفل بعد maxPinAttempts --- */
     auth._resetAttempts();
     for (let i = 0; i < c.LIMITS.maxPinAttempts; i++) {
       await auth.unlock('9999');
     }
     assert('5. locked after max attempts', auth.isLocked() === true);
 
-    /* --- 6. unlock مرفوض أثناء القفل --- */
     const blocked = await auth.unlock('1234');
     assert('6. unlock blocked when locked',
       blocked.success === false && blocked.reason === 'locked');
 
-    /* --- 7. changePin يتطلب القديم الصحيح --- */
     auth._resetAttempts();
     const wrongOld = await auth.changePin('0000', '5555');
     const rightOld = await auth.changePin('1234', '5555');
     assert('7. changePin requires correct old pin',
       wrongOld === false && rightOld === true);
 
-    /* --- 8. reset يصفّر كل شيء --- */
     auth.reset();
     assert('8. reset clears pin + session + attempts',
       auth.hasPin() === false &&
@@ -1010,6 +1006,43 @@ if (au && au.auth) {
   log('📊 auth: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ auth.js skipped'); totalTests += 8; }
+log('');
+
+/* ===== 19. toast.js (5) ===== */
+if (tos && tos.toast) {
+  const toast = tos.toast;
+  let passed = 0;
+  const total = 5;
+  log('▶ toast.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    toast.clear();
+
+    const r1 = toast.success('اختبار نجاح');
+    const c1 = document.getElementById('toast-container');
+    assert('1. toast.success adds node to container',
+      c1 && c1.contains(r1.node));
+
+    assert('2. toast.success has correct class',
+      r1.node.classList.contains('toast--success'));
+
+    toast.danger('خطر');
+    assert('3. container holds multiple toasts',
+      c1.children.length >= 2);
+
+    const hasText = r1.node.textContent.includes('اختبار نجاح');
+    assert('4. toast shows message text', hasText);
+
+    toast.clear();
+    assert('5. toast.clear empties container',
+      c1.children.length === 0);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 toast: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ toast.js skipped'); totalTests += 5; }
 log('');
 
 /* ===== الخلاصة ===== */
