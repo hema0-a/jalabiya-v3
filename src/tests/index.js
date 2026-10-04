@@ -10,5 +10,6 @@ import './modules/repos.test.js';
 import './modules/security.test.js';
 import './modules/ui.test.js';
 import './modules/pages.test.js';
+import './modules/orders.test.js';
 
 export { runAll, register } from './registry.js';
