@@ -12,4 +12,4 @@ https://hema0-a.github.io/jalabiya-v3/
 - GitHub Pages للاستضافة
 
 ## 📋 الحالة
-🚧 قيد التطوير — المرحلة 1: الأساس
+🚧 قيد التطوير — المرحلة 5: UI Core + App Shell
