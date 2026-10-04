@@ -136,18 +136,22 @@ export const FIRESTORE_PATHS = {
 
 /* --- 8. مفاتيح localStorage --- */
 export const STORAGE_KEYS = {
+  // --- مفاتيح V2 (للترحيل) ---
   V2_DB:              'jalabiya_v2_db',
   V2_SETTINGS:        'jalabiya_v2_settings',
   V2_SESSION:         'jalabiya_v2_session',
   V2_FAILED_ATTEMPTS: 'jalabiya_v2_failed_attempts',
   V2_AUTO_BACKUPS:    'jalabiya_v2_auto_backups',
 
+  // --- مفاتيح V3 ---
   V3_THEME:           'jalabiya_v3_theme',
   V3_SESSION:         'jalabiya_v3_session',
   V3_PIN_HASH:        'jalabiya_v3_pin_hash',
   V3_PIN_SALT:        'jalabiya_v3_pin_salt',
   V3_LAST_SYNC:       'jalabiya_v3_last_sync',
   V3_MIGRATED:        'jalabiya_v3_migrated',
+  V3_FAILED_ATTEMPTS: 'jalabiya_v3_failed_attempts',
+  V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
 };
 
 /* --- 9. الحدود القصوى (MAX limits) --- */
