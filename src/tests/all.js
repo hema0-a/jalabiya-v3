@@ -1,13 +1,13 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   127 اختباراً:
+   132 اختباراً:
    events(7) + sanitize(7) + dom(8) + utils(10) + schema(6)
    + idb(8) + repository(8) + customers(8) + orders(6) + payments(5)
    + inventory(5) + workers(4) + settings(6) + appointments(6)
    + expenses(5) + trash(7)
    + pin-crypto(8) + auth(8)
-   + toast(5)
+   + toast(5) + modal(5)
    ========================================================================== */
 
 const output = [];
@@ -29,7 +29,7 @@ log('');
 
 let c, ev, s, d, u, sc, idb, repo;
 let cust, ord, pay, inv, wrk, stg, apt, exp, trs;
-let pc, au, tos;
+let pc, au, tos, mdl;
 
 try { c    = await import('../core/config.js');              log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
@@ -90,6 +90,9 @@ catch (e) { log('❌ security/auth.js: ' + e.message); }
 
 try { tos  = await import('../ui/toast.js');                 log('✅ ui/toast.js'); }
 catch (e) { log('❌ ui/toast.js: ' + e.message); }
+
+try { mdl  = await import('../ui/modal.js');                 log('✅ ui/modal.js'); }
+catch (e) { log('❌ ui/modal.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -1043,6 +1046,72 @@ if (tos && tos.toast) {
   log('📊 toast: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ toast.js skipped'); totalTests += 5; }
+log('');
+
+/* ===== 20. modal.js (5) ===== */
+if (mdl && mdl.modal) {
+  const { modal } = mdl;
+  let passed = 0;
+  const total = 5;
+  log('▶ modal.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    modal.closeAll();
+
+    /* 1. modal.open → backdrop in DOM */
+    const h1 = modal.open({ title: 'عنوان', body: 'محتوى' });
+    assert('1. modal.open adds backdrop to body',
+      document.body.contains(h1.node) &&
+      h1.node.classList.contains('modal-backdrop'));
+
+    /* 2. title renders inside */
+    const titleEl = h1.node.querySelector('.modal__title');
+    assert('2. modal renders title',
+      titleEl !== null && titleEl.textContent === 'عنوان');
+
+    /* 3. close removes from DOM */
+    h1.close();
+    assert('3. modal.close removes from DOM',
+      !document.body.contains(h1.node));
+
+    /* 4. confirm → true */
+    const p4 = modal.confirm({
+      title: 'حذف',
+      message: 'هل أنت متأكد؟',
+      confirmText: 'نعم',
+      cancelText: 'لا',
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const backdrop4 = document.querySelector('.modal-backdrop');
+    const confirmBtn = backdrop4
+      ? backdrop4.querySelector('[data-action="confirm"]')
+      : null;
+    if (confirmBtn) confirmBtn.click();
+    const r4 = await p4;
+    assert('4. confirm resolves true on confirm click', r4 === true);
+
+    /* 5. confirm → false on cancel */
+    const p5 = modal.confirm({
+      title: 'حذف',
+      message: 'هل أنت متأكد؟',
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const backdrop5 = document.querySelector('.modal-backdrop');
+    const cancelBtn = backdrop5
+      ? backdrop5.querySelector('[data-action="cancel"]')
+      : null;
+    if (cancelBtn) cancelBtn.click();
+    const r5 = await p5;
+    assert('5. confirm resolves false on cancel click', r5 === false);
+
+    modal.closeAll();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 modal: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ modal.js skipped'); totalTests += 5; }
 log('');
 
 /* ===== الخلاصة ===== */
