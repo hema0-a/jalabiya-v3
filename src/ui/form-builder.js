@@ -20,6 +20,7 @@ import { el } from '../core/dom.js';
 function readInputValue(input) {
   if (input.type === 'checkbox') return input.checked;
   if (input.type === 'number') {
+    if (input.value === '') return '';
     const n = Number(input.value);
     return isNaN(n) ? '' : n;
   }
@@ -72,7 +73,6 @@ function buildField(field) {
       input.appendChild(optEl);
     });
   } else if (type === 'checkbox') {
-    /* checkbox بـ toggle switch */
     const checkboxInput = el('input', {
       type: 'checkbox',
       className: 'toggle__input',
@@ -86,7 +86,6 @@ function buildField(field) {
       track,
       el('span', { className: 'toggle__label', text: label }),
     ]);
-    /* نُخزّن مرجع الـ input داخل الـ wrapper */
     wrap.__input = checkboxInput;
     wrap.__fieldName = name;
     return wrap;
@@ -172,8 +171,7 @@ export function createForm(options = {}) {
         (f.type === 'checkbox' && v === false);
       if (isEmpty) {
         errors[f.name] = 'هذا الحقل مطلوب';
-        const wrap = wraps.find((w) => w.__fieldName === f.name);
-        if (wrap && inp.classList) inp.classList.add('input--error');
+        if (inp.classList) inp.classList.add('input--error');
       } else if (inp.classList) {
         inp.classList.remove('input--error');
       }
@@ -198,7 +196,6 @@ export function createForm(options = {}) {
     });
   }
 
-  /* منع الإرسال الافتراضي (لا نستخدم <form action>) */
   formNode.addEventListener('submit', (e) => e.preventDefault());
 
   return {
