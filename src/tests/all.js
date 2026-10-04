@@ -1,9 +1,9 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   82 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
+   94 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
               +idb(8)+repository(8)+customers(8)+orders(6)+payments(5)
-              +inventory(5)+workers(4)
+              +inventory(5)+workers(4)+settings(6)+appointments(6)
    ========================================================================== */
 
 const output = [];
@@ -23,45 +23,51 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk;
-try { c    = await import('../core/config.js');          log('✅ config.js'); }
+let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk, stg, apt;
+try { c    = await import('../core/config.js');              log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
-try { ev   = await import('../core/events.js');          log('✅ events.js'); }
+try { ev   = await import('../core/events.js');              log('✅ events.js'); }
 catch (e) { log('❌ events.js: ' + e.message); }
 
-try { s    = await import('../core/sanitize.js');        log('✅ sanitize.js'); }
+try { s    = await import('../core/sanitize.js');            log('✅ sanitize.js'); }
 catch (e) { log('❌ sanitize.js: ' + e.message); }
 
-try { d    = await import('../core/dom.js');             log('✅ dom.js'); }
+try { d    = await import('../core/dom.js');                 log('✅ dom.js'); }
 catch (e) { log('❌ dom.js: ' + e.message); }
 
-try { u    = await import('../core/utils.js');           log('✅ utils.js'); }
+try { u    = await import('../core/utils.js');               log('✅ utils.js'); }
 catch (e) { log('❌ utils.js: ' + e.message); }
 
-try { sc   = await import('../data/schema.js');          log('✅ schema.js'); }
+try { sc   = await import('../data/schema.js');              log('✅ schema.js'); }
 catch (e) { log('❌ schema.js: ' + e.message); }
 
-try { idb  = await import('../data/idb.js');             log('✅ idb.js'); }
+try { idb  = await import('../data/idb.js');                 log('✅ idb.js'); }
 catch (e) { log('❌ idb.js: ' + e.message); }
 
-try { repo = await import('../data/repository.js');      log('✅ repository.js'); }
+try { repo = await import('../data/repository.js');          log('✅ repository.js'); }
 catch (e) { log('❌ repository.js: ' + e.message); }
 
-try { cust = await import('../data/repos/customers.js'); log('✅ repos/customers.js'); }
+try { cust = await import('../data/repos/customers.js');     log('✅ repos/customers.js'); }
 catch (e) { log('❌ repos/customers.js: ' + e.message); }
 
-try { ord  = await import('../data/repos/orders.js');    log('✅ repos/orders.js'); }
+try { ord  = await import('../data/repos/orders.js');        log('✅ repos/orders.js'); }
 catch (e) { log('❌ repos/orders.js: ' + e.message); }
 
-try { pay  = await import('../data/repos/payments.js');  log('✅ repos/payments.js'); }
+try { pay  = await import('../data/repos/payments.js');      log('✅ repos/payments.js'); }
 catch (e) { log('❌ repos/payments.js: ' + e.message); }
 
-try { inv  = await import('../data/repos/inventory.js'); log('✅ repos/inventory.js'); }
+try { inv  = await import('../data/repos/inventory.js');     log('✅ repos/inventory.js'); }
 catch (e) { log('❌ repos/inventory.js: ' + e.message); }
 
-try { wrk  = await import('../data/repos/workers.js');   log('✅ repos/workers.js'); }
+try { wrk  = await import('../data/repos/workers.js');       log('✅ repos/workers.js'); }
 catch (e) { log('❌ repos/workers.js: ' + e.message); }
+
+try { stg  = await import('../data/repos/settings.js');      log('✅ repos/settings.js'); }
+catch (e) { log('❌ repos/settings.js: ' + e.message); }
+
+try { apt  = await import('../data/repos/appointments.js');  log('✅ repos/appointments.js'); }
+catch (e) { log('❌ repos/appointments.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -657,6 +663,113 @@ if (wrk && wrk.workers) {
   log('📊 workers: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ workers.js skipped'); totalTests += 4; }
+log('');
+
+/* ===== 13. settings.js (6) ===== */
+if (stg && stg.settings) {
+  const s13 = stg.settings;
+  let passed = 0;
+  const total = 6;
+  log('▶ settings.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await s13.clear();
+
+    const defaults = await s13.get();
+    assert('1. get returns defaults when empty',
+      defaults && defaults.appearance && defaults.appearance.theme === 'classic');
+
+    const saved = await s13.save({
+      workshop: { name: 'ورشة الأمل', phone: '01012345678' },
+      appearance: { theme: 'ocean' },
+    });
+    assert('2. save returns record + id=main',
+      saved && saved.id === 'main' && typeof saved.updatedAt === 'number');
+
+    const after = await s13.get();
+    assert('3. get after save reflects data',
+      after.workshop.name === 'ورشة الأمل' && after.appearance.theme === 'ocean');
+
+    assert('4. get merges missing keys with defaults',
+      after.workshop.address === '' && after.display.darkMode === false);
+
+    const updated = await s13.update({ workshop: { name: 'ورشة النور' } });
+    assert('5. update shallow-merges workshop',
+      updated.workshop.name === 'ورشة النور' && updated.workshop.phone === '01012345678');
+
+    await s13.clear();
+    const reset = await s13.get();
+    assert('6. clear resets to defaults',
+      reset.workshop.name === '' && reset.appearance.theme === 'classic');
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 settings: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ settings.js skipped'); totalTests += 6; }
+log('');
+
+/* ===== 14. appointments.js (6) ===== */
+if (apt && apt.appointments) {
+  const a14 = apt.appointments;
+  let passed = 0;
+  const total = 6;
+  log('▶ appointments.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await a14.clear();
+
+    const now = Date.now();
+    const todayStart = new Date();
+    todayStart.setHours(12, 0, 0, 0);
+
+    const a1 = await a14.create({
+      customerId: 'c1',
+      orderId: 'o1',
+      date: now + 86400000,
+      status: 'scheduled',
+    });
+    await a14.create({
+      customerId: 'c1',
+      orderId: 'o2',
+      date: now + 3 * 86400000,
+      status: 'scheduled',
+    });
+    await a14.create({
+      customerId: 'c2',
+      orderId: 'o3',
+      date: now - 86400000,
+      status: 'done',
+    });
+
+    const byCust = await a14.findByCustomer('c1');
+    assert('1. findByCustomer returns 2', byCust.length === 2);
+
+    const byOrd = await a14.findByOrder('o1');
+    assert('2. findByOrder returns 1', byOrd.length === 1 && byOrd[0].id === a1.id);
+
+    const scheduled = await a14.listByStatus('scheduled');
+    assert('3. listByStatus scheduled → 2', scheduled.length === 2);
+
+    const upcoming = await a14.getUpcoming(7);
+    assert('4. getUpcoming excludes past', upcoming.length === 2);
+
+    const today = await a14.getToday();
+    assert('5. getToday returns array (0+ items)', Array.isArray(today));
+
+    await a14.remove(a1.id);
+    const after = await a14.find(a1.id);
+    assert('6. remove works', after === undefined);
+
+    await a14.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 appointments: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ appointments.js skipped'); totalTests += 6; }
 log('');
 
 /* ===== الخلاصة ===== */
