@@ -108,7 +108,7 @@ function buildHomePage() {
       }, '⚠️ تحذير'),
       el('button', {
         className: 'btn btn--danger',
-        onClick: () => toast.fail ? toast.fail('فشل') : toast.danger('فشل في حفظ الطلب'),
+        onClick: () => toast.danger('فشل في حفظ الطلب'),
       }, '❌ خطأ'),
       el('button', {
         className: 'btn btn--secondary',
