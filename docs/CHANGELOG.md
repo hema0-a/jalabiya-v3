@@ -7,16 +7,65 @@
 
 ## [Unreleased]
 
-### قيد التطوير — المرحلة 6
-- صفحة العملاء (CRUD كامل + بحث + VIP)
-- صفحة الطلبات (كانبان + فلاتر)
-- لوحة المعلومات (KPIs حقيقية)
+### قيد التطوير — المرحلة 7
+- صفحة الدفعات (payments)
+- صفحة المخزون (inventory)
+- صفحة العمال (workers)
+- صفحة المصروفات (expenses)
+- صفحة التقارير (reports)
 
 ### مخطط لاحقاً
-- المرحلة 7: الصفحات الثانوية (inventory, workers, expenses, reports)
 - المرحلة 8: الإعدادات الاحترافية (13 قسماً)
 - المرحلة 9: Firebase Sync
 - المرحلة 10: PWA (manifest, service worker, icons)
+
+---
+
+## [0.4.0] — 2026-10-05 — Phase 6 Complete
+
+### أُضيف
+
+**الصفحات الأساسية (Pages):**
+- `src/pages/customers.js` — صفحة العملاء (CRUD + بحث فوري + VIP + سلة محذوفات)
+- `src/pages/orders.js` — صفحة الطلبات (CRUD + فلاتر بالحالة + تقدّم الحالة)
+- `src/pages/dashboard.js` — لوحة المعلومات (KPIs حقيقية من IndexedDB)
+
+**اختبارات الصفحات:**
+- `src/tests/modules/pages.test.js` — 8 اختبارات (customers)
+- `src/tests/modules/orders.test.js` — 8 اختبارات (orders)
+- `src/tests/modules/dashboard.test.js` — 8 اختبارات (dashboard)
+
+### تغيّر
+
+- `src/main.js` — إضافة Dashboard كصفحة "الرئيسية" الحقيقية
+- `src/tests/index.js` — إضافة 3 وحدات اختبار جديدة
+
+### الميزات
+
+**صفحة العملاء:**
+- إضافة/تعديل/حذف (بـ modal + form)
+- بحث فوري (اسم أو هاتف، غير حساس لحالة الأحرف)
+- تبديل حالة VIP
+- الحذف ينقل إلى سلة المحذوفات (restorable)
+- إحصائيات: الإجمالي + عدد VIP
+
+**صفحة الطلبات:**
+- إضافة/تعديل/حذف طلب
+- ربط بعميل من قائمة منسدلة
+- 5 حالات: pending → in_progress → ready → delivered / cancelled
+- زر "▶️ التالي" للانتقال بين الحالات
+- فلاتر تفاعلية مع عدّاد لكل حالة
+- إحصائيات: الإجمالي، النشط، الجاهز، مجموع المبالغ
+
+**لوحة المعلومات:**
+- ترحيب حسب وقت اليوم (صباح/مساء)
+- 4 KPIs: العملاء، الطلبات النشطة، إيرادات الشهر، مواعيد اليوم
+- قسم "طلبات مستحقة خلال 7 أيام"
+- قسم "مواعيد اليوم"
+- قسم "أحدث 5 عملاء"
+
+### الاختبارات
+- **168 اختباراً** في 25 وحدة — كلها ناجحة ✅
 
 ---
 
@@ -29,47 +78,38 @@
 - `src/security/auth.js` — مصادقة، قفل بالمحاولات، جلسات
 
 **مكونات الواجهة (UI Components):**
-- `src/ui/toast.js` — إشعارات قصيرة (success, warning, danger, info)
-- `src/ui/modal.js` — نوافذ منبثقة + confirm (Promise-based)
+- `src/ui/toast.js` — إشعارات قصيرة
+- `src/ui/modal.js` — نوافذ منبثقة + confirm
 - `src/ui/controls.js` — Toggle + Color Picker + Slider
-- `src/ui/form-builder.js` — نماذج ديناميكية (9 أنواع حقول)
-- `src/ui/sidebar.js` — قائمة جانبية (10 عناصر)
-- `src/ui/topbar.js` — شريط علوي (عنوان + أزرار ديناميكية)
-- `src/ui/layout.js` — App Shell (Sidebar + Topbar + Content + Overlay)
+- `src/ui/form-builder.js` — نماذج ديناميكية
+- `src/ui/sidebar.js` — قائمة جانبية
+- `src/ui/topbar.js` — شريط علوي
+- `src/ui/layout.js` — App Shell
 
-**طبقة الأنماط (Styles):**
-- `styles/components.css` — 14 مكون واجهة (buttons, cards, toasts, modal, toggle, slider, ...)
-- `styles/layout.css` — App Shell + Sidebar + Topbar + responsive
+**طبقة الأنماط:**
+- `styles/components.css` — 14 مكون واجهة
+- `styles/layout.css` — App Shell + responsive
 
-**بنية الاختبارات (Test Registry Pattern):**
-- `src/tests/registry.js` — سجل اختبارات (register + runAll)
-- `src/tests/index.js` — قائمة الوحدات (Entry Point)
-- `src/tests/modules/core.test.js` — 32 اختباراً
-- `src/tests/modules/data.test.js` — 22 اختباراً
-- `src/tests/modules/repos.test.js` — 52 اختباراً
-- `src/tests/modules/security.test.js` — 16 اختباراً
-- `src/tests/modules/ui.test.js` — 22 اختباراً
+**بنية الاختبارات:**
+- `src/tests/registry.js` — سجل اختبارات (Registry Pattern)
+- `src/tests/index.js` — قائمة الوحدات
+- 5 وحدات اختبار (core, data, repos, security, ui)
 
 ### تغيّر
-
-**البنية:**
-- إعادة تنظيم الاختبارات من ملف واحد ضخم (~900 سطر) إلى 5 وحدات
-- `main.js` أصبح يستخدم App Shell + Dynamic imports
-- إلغاء شاشة التحميل (`#app-loading`) نهائياً
-- `index.html` يُظهر `#app` فوراً مع نص placeholder
+- إعادة تنظيم الاختبارات من ملف واحد إلى 5 وحدات
+- إلغاء شاشة التحميل نهائياً
+- `main.js` يستخدم App Shell + Dynamic imports
 
 ### الأمان
-- SHA-256 + Salt عشوائي (16 بايت) لتشفير PIN
-- قفل تلقائي بعد 5 محاولات فاشلة (30 ثانية)
-- جلسات بمدة قابلة للتخصيص (24 ساعة افتراضياً)
+- SHA-256 + Salt عشوائي (16 بايت)
+- قفل تلقائي بعد 5 محاولات فاشلة
+- جلسات (24 ساعة افتراضياً)
 
 ### الاختبارات
-- **144 اختباراً** في 22 وحدة — كلها ناجحة ✅
-- إضافة `Registry Pattern` لتقليل حجم التعديلات المستقبلية
+- **144 اختباراً** ✅
 
 ### إصلاحات
-- `form-builder.js`: `Number('')` → 0 خطأ (يُعود الآن `''` للحقول الفارغة)
-- إعادة هيكلة كاملة لملفات الاختبارات (تحسين الأداء والصيانة)
+- `form-builder.js`: `Number('')` → 0 خطأ
 
 ---
 
@@ -77,56 +117,43 @@
 
 ### أُضيف
 
-**طبقة البيانات (Data Layer):**
-- `src/data/schema.js` — تعريف 10 مخازن + 24 فهرساً + دالة تحقق
-- `src/data/idb.js` — غلاف Promise لـ IndexedDB + دعم Migrations
-- `src/data/repository.js` — مصنع مستودعات عام (CRUD موحّد)
+**طبقة البيانات:**
+- `src/data/schema.js` — 10 مخازن + 24 فهرساً + تحقق
+- `src/data/idb.js` — غلاف Promise + Migrations
+- `src/data/repository.js` — CRUD عام
 
-**المستودعات المتخصصة (9):**
-- `src/data/repos/customers.js` — بحث بالهاتف، اسم، VIP
-- `src/data/repos/orders.js` — فلترة بالحالة، المستحق قريباً، إحصائيات
-- `src/data/repos/payments.js` — مجموع بالطلب/العميل
-- `src/data/repos/inventory.js` — بحث بالفئة، تنبيه نقص، تعديل كمية
-- `src/data/repos/workers.js` — العمال النشطون، تبديل التفعيل
-- `src/data/repos/settings.js` — سجل واحد + deep merge
-- `src/data/repos/appointments.js` — مواعيد اليوم، القادمة
-- `src/data/repos/expenses.js` — مجموع بالفئة/الفترة
-- `src/data/repos/trash.js` — نقل، استرجاع، تقليم تلقائي
+**10 مستودعات:** customers, orders, payments, inventory, workers, settings, appointments, expenses, trash.
 
 ### تغيّر
-- `src/core/config.js` — ترقية DB version من 1 إلى 2 + مفاتيح تخزين جديدة
+- `src/core/config.js` — DB version 1 → 2
 
 ### الأمان
 - إصلاح ثغرة `data:image/svg+xml` في `sanitizeUrl`
 - إصلاح خطأ IDB: `boolean` غير صالح كمفاتيح فهرس
 
 ### الاختبارات
-- **122 اختباراً** — كلها ناجحة ✅
+- **122 اختباراً** ✅
 
 ---
 
 ## [0.1.0] — 2026-10-04 — Phase 1 Complete
 
 ### أُضيف
-- `index.html` — هيكل التطبيق + CSP مشدد (12 توجيهاً)
+- `index.html` — هيكل + CSP مشدد (12 توجيهاً)
 - `styles/base.css` — Reset + Variables + Typography + Animations
-- `styles/main.css` — مُجمِّع الأنماط (Aggregator)
-- `src/core/config.js` — ثوابت المشروع
-- `src/core/events.js` — EventBus (Pub/Sub)
-- `src/core/sanitize.js` — خط الدفاع ضد XSS
-- `src/core/dom.js` — أدوات DOM آمنة
-- `src/core/utils.js` — Validators + Formatters + Timing + agoPhrase
+- `styles/main.css` — مُجمِّع
+- `src/core/config.js`, `events.js`, `sanitize.js`, `dom.js`, `utils.js`
 
 ### الأمان
-- CSP مشدد بـ 12 توجيهاً (frame-ancestors, object-src, base-uri, form-action)
+- CSP مشدد بـ 12 توجيهاً
 - رفض `data:image/svg` في sanitizeUrl
-- escapeHtml / escapeAttr قبل أي إدراج في DOM
+- escapeHtml / escapeAttr
 
 ---
 
 ## [0.0.1] — 2026-10-04 — Bootstrap
 
 ### أُضيف
-- إنشاء المستودع `jalabiya-v3` على GitHub (Public)
+- إنشاء المستودع `jalabiya-v3`
 - تفعيل GitHub Pages
 - `README.md`, `.gitignore`, `docs/TODO.md`
