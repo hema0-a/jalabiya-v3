@@ -1,9 +1,9 @@
 /* ==========================================================================
-   main.js — DIAGNOSTIC + TESTS (Hybrid v2)
+   main.js — TEST HARNESS (Phase 1 + Phase 2 schema)
    ==========================================================================
-   ✅ يستخدم textContent بدل innerHTML — يعرض كل الرموز حرفياً.
-   ✅ Dynamic imports — لا تعلّق شاشة التحميل.
-   ✅ 32 اختباراً موزّعة على 4 ملفات.
+   ✅ textContent — لا يُفسّر HTML
+   ✅ Dynamic imports
+   ✅ 38 اختباراً: events(7) + sanitize(7) + dom(8) + utils(10) + schema(6)
    ========================================================================== */
 
 const output = [];
@@ -16,7 +16,6 @@ const render = () => {
     pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;min-height:100vh;box-sizing:border-box';
     document.body.appendChild(pre);
   }
-  // textContent — لا يُفسّر HTML، يعرض كل شيء حرفياً
   pre.textContent = output.join('\n');
 };
 const log = (msg) => { output.push(msg); render(); };
@@ -24,11 +23,8 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-/* ==========================================================================
-   استيراد الملفات (dynamic — لتفادي مشاكل static imports)
-   ========================================================================== */
-let c, ev, s, d, u;
-
+/* --- استيراد الملفات (dynamic) --- */
+let c, ev, s, d, u, sc;
 try { c  = await import('./core/config.js');   log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -44,13 +40,15 @@ catch (e) { log('❌ dom.js: ' + e.message); }
 try { u  = await import('./core/utils.js');    log('✅ utils.js'); }
 catch (e) { log('❌ utils.js: ' + e.message); }
 
-log('');
+try { sc = await import('./data/schema.js');   log('✅ schema.js'); }
+catch (e) { log('❌ schema.js: ' + e.message); }
 
+log('');
 let totalPassed = 0;
 let totalTests = 0;
 
 /* ==========================================================================
-   1. events.js (7 اختبارات)
+   1. events.js (7)
    ========================================================================== */
 if (ev && ev.events) {
   const events = ev.events;
@@ -112,7 +110,7 @@ if (ev && ev.events) {
 log('');
 
 /* ==========================================================================
-   2. sanitize.js (7 اختبارات)
+   2. sanitize.js (7)
    ========================================================================== */
 if (s && s.escapeHtml) {
   let passed = 0;
@@ -170,7 +168,7 @@ if (s && s.escapeHtml) {
 log('');
 
 /* ==========================================================================
-   3. dom.js (8 اختبارات)
+   3. dom.js (8)
    ========================================================================== */
 if (d && d.el) {
   let passed = 0;
@@ -227,7 +225,7 @@ if (d && d.el) {
 log('');
 
 /* ==========================================================================
-   4. utils.js (10 اختبارات)
+   4. utils.js (10)
    ========================================================================== */
 if (u && u.isEgyptPhone) {
   let passed = 0;
@@ -292,9 +290,66 @@ if (u && u.isEgyptPhone) {
 log('');
 
 /* ==========================================================================
+   5. schema.js (6)
+   ========================================================================== */
+if (sc && sc.SCHEMA) {
+  let passed = 0;
+  const total = 6;
+  log('▶ schema.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    const schemaKeys = Object.keys(sc.SCHEMA);
+    assert('1. SCHEMA has 10 stores', schemaKeys.length === 10);
+
+    let validOk = true;
+    try { sc.validateSchema(); }
+    catch (e) { validOk = false; log('    err: ' + e.message); }
+    assert('2. validateSchema passes', validOk);
+
+    let keyPathsOk = true;
+    Object.values(sc.SCHEMA).forEach((store) => {
+      if (store.keyPath !== 'id' || store.autoIncrement !== false) {
+        keyPathsOk = false;
+      }
+    });
+    assert('3. keyPath=id + autoIncrement=false', keyPathsOk);
+
+    let indexesOk = true;
+    Object.values(sc.SCHEMA).forEach((store) => {
+      if (!Array.isArray(store.indexes)) { indexesOk = false; return; }
+      store.indexes.forEach((i) => {
+        if (!i.name || !i.keyPath || typeof i.unique !== 'boolean') {
+          indexesOk = false;
+        }
+      });
+    });
+    assert('4. indexes have valid shape', indexesOk);
+
+    let noDup = true;
+    Object.values(sc.SCHEMA).forEach((store) => {
+      const names = store.indexes.map((i) => i.name);
+      if (new Set(names).size !== names.length) noDup = false;
+    });
+    assert('5. no duplicate index names', noDup);
+
+    const idsOk = sc.SETTINGS_ID === 'main';
+    const namesOk = Array.isArray(sc.STORE_NAMES) && sc.STORE_NAMES.length === 10;
+    assert('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 schema: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ schema.js skipped');
+  totalTests += 6;
+}
+log('');
+
+/* ==========================================================================
    الخلاصة
    ========================================================================== */
 log('━━━━━━━━━━━━━━━━━━━━━━━━');
 log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
-
 console.log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
