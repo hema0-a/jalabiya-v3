@@ -1,9 +1,9 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router
    ==========================================================================
-   1. يستورد الأدوات
-   2. يبني App Shell (Sidebar + Topbar)
-   3. يستدعي renderPage() عند التبديل بين الصفحات
+   صفحة "الرئيسية" = Dashboard حقيقي (KPIs من البيانات).
+   صفحة "الاختبارات" = تشغيل كل الوحدات.
+   باقي الصفحات = قيد التطوير.
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -22,7 +22,8 @@ function showError(title, err) {
 }
 
 /* --- الاستيرادات --- */
-let el, toast, createLayout, testsIndex, customersPage, ordersPage;
+let el, toast, createLayout, testsIndex;
+let customersPage, ordersPage, dashboardPage;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -30,6 +31,7 @@ try {
   testsIndex = await import('./tests/index.js');
   ({ customersPage } = await import('./pages/customers.js'));
   ({ ordersPage } = await import('./pages/orders.js'));
+  ({ dashboardPage } = await import('./pages/dashboard.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -84,79 +86,6 @@ app.appendChild(layout.node);
 /* ==========================================================================
    الصفحات
    ========================================================================== */
-
-function buildHomePage() {
-  const wrap = el('div', {});
-
-  wrap.appendChild(el('div', { className: 'card', style: { marginBottom: '16px' } }, [
-    el('div', { className: 'card__header' }, [
-      el('h3', { className: 'card__title' }, '🎨 تجربة المكونات'),
-    ]),
-    el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0 0 16px 0' },
-    }, 'اضغط أي زر لعرض الإشعار:'),
-    el('div', {
-      style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
-    }, [
-      el('button', {
-        className: 'btn btn--primary',
-        onClick: () => toast.success('تم حفظ البيانات بنجاح'),
-      }, '✅ نجاح'),
-      el('button', {
-        className: 'btn btn--accent',
-        onClick: () => toast.warning('المخزون على وشك الانتهاء'),
-      }, '⚠️ تحذير'),
-      el('button', {
-        className: 'btn btn--danger',
-        onClick: () => toast.danger('فشل في حفظ الطلب'),
-      }, '❌ خطأ'),
-      el('button', {
-        className: 'btn btn--secondary',
-        onClick: () => toast.info('آخر مزامنة قبل 3 دقائق'),
-      }, 'ℹ️ معلومة'),
-    ]),
-  ]));
-
-  wrap.appendChild(el('div', { className: 'card', style: { marginBottom: '16px' } }, [
-    el('div', { className: 'card__header' }, [
-      el('h3', { className: 'card__title' }, '🏷️ الشارات'),
-    ]),
-    el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, [
-      el('span', { className: 'badge badge--success' }, 'مكتمل'),
-      el('span', { className: 'badge badge--warning' }, 'قيد التنفيذ'),
-      el('span', { className: 'badge badge--danger' }, 'متأخر'),
-      el('span', { className: 'badge badge--info' }, 'جديد'),
-      el('span', { className: 'badge badge--accent' }, 'VIP'),
-    ]),
-  ]));
-
-  wrap.appendChild(el('div', {
-    style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
-  }, [
-    el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, '👥'),
-      el('span', { className: 'stat__value' }, '0'),
-      el('span', { className: 'stat__label' }, 'عملاء'),
-    ]),
-    el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, '📦'),
-      el('span', { className: 'stat__value' }, '0'),
-      el('span', { className: 'stat__label' }, 'طلبات نشطة'),
-    ]),
-    el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, '💰'),
-      el('span', { className: 'stat__value' }, '0 ج.م'),
-      el('span', { className: 'stat__label' }, 'إيرادات الشهر'),
-    ]),
-    el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, '📅'),
-      el('span', { className: 'stat__value' }, '0'),
-      el('span', { className: 'stat__label' }, 'مواعيد اليوم'),
-    ]),
-  ]));
-
-  return wrap;
-}
 
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
@@ -225,8 +154,12 @@ async function renderPage(id) {
   }
   currentPage = null;
 
+  /* الرئيسية = Dashboard */
   if (id === 'home') {
-    layout.setContent(buildHomePage());
+    const container = el('div', {});
+    layout.setContent(container);
+    await dashboardPage.render(container);
+    currentPage = dashboardPage;
     return;
   }
 
