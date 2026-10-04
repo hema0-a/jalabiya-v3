@@ -1,10 +1,12 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   106 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
-              +idb(8)+repository(8)+customers(8)+orders(6)+payments(5)
-              +inventory(5)+workers(4)+settings(6)+appointments(6)
-              +expenses(5)+trash(7)
+   122 اختباراً:
+   events(7) + sanitize(7) + dom(8) + utils(10) + schema(6)
+   + idb(8) + repository(8) + customers(8) + orders(6) + payments(5)
+   + inventory(5) + workers(4) + settings(6) + appointments(6)
+   + expenses(5) + trash(7)
+   + pin-crypto(8) + auth(8)
    ========================================================================== */
 
 const output = [];
@@ -24,7 +26,10 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-let c, ev, s, d, u, sc, idb, repo, cust, ord, pay, inv, wrk, stg, apt, exp, trs;
+let c, ev, s, d, u, sc, idb, repo;
+let cust, ord, pay, inv, wrk, stg, apt, exp, trs;
+let pc, au;
+
 try { c    = await import('../core/config.js');              log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -75,6 +80,12 @@ catch (e) { log('❌ repos/expenses.js: ' + e.message); }
 
 try { trs  = await import('../data/repos/trash.js');         log('✅ repos/trash.js'); }
 catch (e) { log('❌ repos/trash.js: ' + e.message); }
+
+try { pc   = await import('../security/pin-crypto.js');      log('✅ security/pin-crypto.js'); }
+catch (e) { log('❌ security/pin-crypto.js: ' + e.message); }
+
+try { au   = await import('../security/auth.js');            log('✅ security/auth.js'); }
+catch (e) { log('❌ security/auth.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -828,7 +839,6 @@ if (trs && trs.trash) {
     else      { log('  ❌ ' + label); }
   };
   try {
-    /* 1. addToTrash — metadata */
     await t16.clear();
     const t1 = await t16.addToTrash('customers', { id: 'orig-1', name: 'أحمد' });
     assert('1. addToTrash creates record with metadata',
@@ -837,13 +847,11 @@ if (trs && trs.trash) {
       t1.data && t1.data.name === 'أحمد' &&
       typeof t1.deletedAt === 'number');
 
-    /* 2. listByStore — يفلتر صحيحاً */
     await t16.addToTrash('orders', { id: 'orig-2' });
     await t16.addToTrash('customers', { id: 'orig-3' });
     const byStore = await t16.listByStore('customers');
     assert('2. listByStore filters by originalStore', byStore.length === 2);
 
-    /* 3. listRecent — ترتيب تنازلي + limit */
     await t16.clear();
     await t16.create({ originalStore: 'x', originalId: 'a', data: { id: 'a' }, deletedAt: 100 });
     await t16.create({ originalStore: 'x', originalId: 'b', data: { id: 'b' }, deletedAt: 300 });
@@ -852,7 +860,6 @@ if (trs && trs.trash) {
     assert('3. listRecent sorts desc + limits',
       recent.length === 2 && recent[0].deletedAt === 300 && recent[1].deletedAt === 200);
 
-    /* 4. restore — يعيد + يحذف من السلة */
     await t16.clear();
     await idb.clear('customers');
     await idb.put('customers', { id: 'restore-me', name: 'فاطمة' });
@@ -866,11 +873,9 @@ if (trs && trs.trash) {
       backInStore && backInStore.name === 'فاطمة' &&
       goneFromTrash === undefined);
 
-    /* 5. restore — معرّف غير موجود → null */
     const nullRestore = await t16.restore('no-such-id');
     assert('5. restore missing → null', nullRestore === null);
 
-    /* 6. prune — لا يحذف عند عدم تجاوز الحد */
     await t16.clear();
     for (let i = 0; i < 5; i++) {
       await t16.create({ originalStore: 'x', originalId: String(i), data: {}, deletedAt: i });
@@ -879,7 +884,6 @@ if (trs && trs.trash) {
     const countNoOp = await t16.count();
     assert('6. prune no-op when below limit', removedNoOp === 0 && countNoOp === 5);
 
-    /* 7. prune — يحذف الزائد بالأقدم أولاً (مع تعديل مؤقت للحد) */
     await t16.clear();
     const origMax = c.LIMITS.maxTrashItems;
     try {
@@ -901,6 +905,111 @@ if (trs && trs.trash) {
   log('📊 trash: ' + passed + '/' + total);
   totalPassed += passed; totalTests += total;
 } else { log('⚠️ trash.js skipped'); totalTests += 7; }
+log('');
+
+/* ===== 17. pin-crypto.js (8) ===== */
+if (pc && pc.generateSalt) {
+  let passed = 0;
+  const total = 8;
+  log('▶ pin-crypto.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    const salt1 = pc.generateSalt();
+    assert('1. generateSalt → 32 hex chars',
+      typeof salt1 === 'string' && salt1.length === 32 && /^[0-9a-f]+$/.test(salt1));
+
+    const salt2 = pc.generateSalt();
+    assert('2. generateSalt unique', salt1 !== salt2);
+
+    const h1 = await pc.hashPin('1234', salt1);
+    assert('3. hashPin → 64 hex chars',
+      typeof h1 === 'string' && h1.length === 64 && /^[0-9a-f]+$/.test(h1));
+
+    const h1b = await pc.hashPin('1234', salt1);
+    assert('4. hashPin deterministic', h1 === h1b);
+
+    const h2 = await pc.hashPin('1234', salt2);
+    assert('5. hashPin different salt → different hash', h1 !== h2);
+
+    const v1 = await pc.verifyPin('1234', h1, salt1);
+    assert('6. verifyPin correct → true', v1 === true);
+
+    const v2 = await pc.verifyPin('9999', h1, salt1);
+    assert('7. verifyPin wrong pin → false', v2 === false);
+
+    const v3 = await pc.verifyPin(null, null, null);
+    const v4 = await pc.verifyPin('1234', null, salt1);
+    assert('8. verifyPin null args → false', v3 === false && v4 === false);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 pin-crypto: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ pin-crypto.js skipped'); totalTests += 8; }
+log('');
+
+/* ===== 18. auth.js (8) ===== */
+if (au && au.auth) {
+  const auth = au.auth;
+  let passed = 0;
+  const total = 8;
+  log('▶ auth.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    /* --- 1. حالة نظيفة --- */
+    auth.reset();
+    assert('1. hasPin false initially', auth.hasPin() === false);
+
+    /* --- 2. تعيين PIN --- */
+    await auth.setPinAndSave('1234');
+    assert('2. setPinAndSave → hasPin true', auth.hasPin() === true);
+
+    /* --- 3. فتح صحيح + جلسة --- */
+    auth.clearSession();
+    const ok = await auth.unlock('1234');
+    assert('3. unlock correct → success + session',
+      ok.success === true && auth.getSession() !== null);
+
+    /* --- 4. PIN خطأ → wrong-pin + attempts=1 --- */
+    auth.clearSession();
+    auth._resetAttempts();
+    const bad = await auth.unlock('9999');
+    assert('4. wrong pin → wrong-pin + attempts=1',
+      bad.success === false && bad.reason === 'wrong-pin' && auth.getAttempts() === 1);
+
+    /* --- 5. القفل بعد maxPinAttempts --- */
+    auth._resetAttempts();
+    for (let i = 0; i < c.LIMITS.maxPinAttempts; i++) {
+      await auth.unlock('9999');
+    }
+    assert('5. locked after max attempts', auth.isLocked() === true);
+
+    /* --- 6. unlock مرفوض أثناء القفل --- */
+    const blocked = await auth.unlock('1234');
+    assert('6. unlock blocked when locked',
+      blocked.success === false && blocked.reason === 'locked');
+
+    /* --- 7. changePin يتطلب القديم الصحيح --- */
+    auth._resetAttempts();
+    const wrongOld = await auth.changePin('0000', '5555');
+    const rightOld = await auth.changePin('1234', '5555');
+    assert('7. changePin requires correct old pin',
+      wrongOld === false && rightOld === true);
+
+    /* --- 8. reset يصفّر كل شيء --- */
+    auth.reset();
+    assert('8. reset clears pin + session + attempts',
+      auth.hasPin() === false &&
+      auth.getSession() === null &&
+      auth.getAttempts() === 0);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 auth: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ auth.js skipped'); totalTests += 8; }
 log('');
 
 /* ===== الخلاصة ===== */
