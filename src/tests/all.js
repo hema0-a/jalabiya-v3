@@ -1,9 +1,8 @@
 /* ==========================================================================
    all.js — جميع اختبارات المشروع
    ==========================================================================
-   يُستورَد من main.js. يشغّل الاختبارات ويعرض النتائج على الصفحة.
-   62 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
-              +idb(8)+repository(8)+customers(8)
+   73 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)
+              +idb(8)+repository(8)+customers(8)+orders(6)+payments(5)
    ========================================================================== */
 
 const output = [];
@@ -23,8 +22,7 @@ const log = (msg) => { output.push(msg); render(); };
 log('🚀 main.js running');
 log('');
 
-/* --- استيراد الملفات (dynamic) --- */
-let c, ev, s, d, u, sc, idb, repo, cust;
+let c, ev, s, d, u, sc, idb, repo, cust, ord, pay;
 try { c    = await import('../core/config.js');          log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
@@ -52,13 +50,17 @@ catch (e) { log('❌ repository.js: ' + e.message); }
 try { cust = await import('../data/repos/customers.js'); log('✅ repos/customers.js'); }
 catch (e) { log('❌ repos/customers.js: ' + e.message); }
 
+try { ord  = await import('../data/repos/orders.js');    log('✅ repos/orders.js'); }
+catch (e) { log('❌ repos/orders.js: ' + e.message); }
+
+try { pay  = await import('../data/repos/payments.js');  log('✅ repos/payments.js'); }
+catch (e) { log('❌ repos/payments.js: ' + e.message); }
+
 log('');
 let totalPassed = 0;
 let totalTests = 0;
 
-/* ==========================================================================
-   1. events.js (7)
-   ========================================================================== */
+/* ===== 1. events.js (7) ===== */
 if (ev && ev.events) {
   const events = ev.events;
   let passed = 0;
@@ -115,9 +117,7 @@ if (ev && ev.events) {
 } else { log('⚠️ events.js skipped'); totalTests += 7; }
 log('');
 
-/* ==========================================================================
-   2. sanitize.js (7)
-   ========================================================================== */
+/* ===== 2. sanitize.js (7) ===== */
 if (s && s.escapeHtml) {
   let passed = 0;
   const total = 7;
@@ -170,9 +170,7 @@ if (s && s.escapeHtml) {
 } else { log('⚠️ sanitize.js skipped'); totalTests += 7; }
 log('');
 
-/* ==========================================================================
-   3. dom.js (8)
-   ========================================================================== */
+/* ===== 3. dom.js (8) ===== */
 if (d && d.el) {
   let passed = 0;
   const total = 8;
@@ -224,9 +222,7 @@ if (d && d.el) {
 } else { log('⚠️ dom.js skipped'); totalTests += 8; }
 log('');
 
-/* ==========================================================================
-   4. utils.js (10)
-   ========================================================================== */
+/* ===== 4. utils.js (10) ===== */
 if (u && u.isEgyptPhone) {
   let passed = 0;
   const total = 10;
@@ -286,9 +282,7 @@ if (u && u.isEgyptPhone) {
 } else { log('⚠️ utils.js skipped'); totalTests += 10; }
 log('');
 
-/* ==========================================================================
-   5. schema.js (6)
-   ========================================================================== */
+/* ===== 5. schema.js (6) ===== */
 if (sc && sc.SCHEMA) {
   let passed = 0;
   const total = 6;
@@ -341,9 +335,7 @@ if (sc && sc.SCHEMA) {
 } else { log('⚠️ schema.js skipped'); totalTests += 6; }
 log('');
 
-/* ==========================================================================
-   6. idb.js (8)
-   ========================================================================== */
+/* ===== 6. idb.js (8) ===== */
 if (idb && idb.openDB) {
   let passed = 0;
   const total = 8;
@@ -388,9 +380,7 @@ if (idb && idb.openDB) {
 } else { log('⚠️ idb.js skipped'); totalTests += 8; }
 log('');
 
-/* ==========================================================================
-   7. repository.js (8)
-   ========================================================================== */
+/* ===== 7. repository.js (8) ===== */
 if (repo && repo.createRepository) {
   let passed = 0;
   const total = 8;
@@ -439,9 +429,7 @@ if (repo && repo.createRepository) {
 } else { log('⚠️ repository.js skipped'); totalTests += 8; }
 log('');
 
-/* ==========================================================================
-   8. customers.js (8)
-   ========================================================================== */
+/* ===== 8. customers.js (8) ===== */
 if (cust && cust.customers) {
   const c8 = cust.customers;
   let passed = 0;
@@ -489,9 +477,107 @@ if (cust && cust.customers) {
 } else { log('⚠️ customers.js skipped'); totalTests += 8; }
 log('');
 
-/* ==========================================================================
-   الخلاصة
-   ========================================================================== */
+/* ===== 9. orders.js (6) ===== */
+if (ord && ord.orders) {
+  const o9 = ord.orders;
+  let passed = 0;
+  const total = 6;
+  log('▶ orders.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await o9.clear();
+
+    const o1 = await o9.create({
+      customerId: 'c1',
+      status: 'pending',
+      dueDate: Date.now() + 86400000,
+      amount: 500,
+    });
+    await o9.create({
+      customerId: 'c1',
+      status: 'in_progress',
+      dueDate: Date.now() + 172800000,
+      amount: 700,
+    });
+    await o9.create({
+      customerId: 'c2',
+      status: 'delivered',
+      amount: 300,
+    });
+
+    const byCust = await o9.findByCustomer('c1');
+    assert('1. findByCustomer returns 2', byCust.length === 2);
+
+    const byStatus = await o9.listByStatus('pending');
+    assert('2. listByStatus pending', byStatus.length === 1 && byStatus[0].id === o1.id);
+
+    const active = await o9.getActive();
+    assert('3. getActive excludes delivered', active.length === 2);
+
+    const dueSoon = await o9.getDueSoon(3);
+    assert('4. getDueSoon finds upcoming', dueSoon.length === 2);
+
+    const stats = await o9.getStats();
+    assert('5. getStats counts',
+      stats.total === 3 &&
+      stats.pending === 1 &&
+      stats.inProgress === 1 &&
+      stats.delivered === 1);
+
+    await o9.remove(o1.id);
+    const after = await o9.find(o1.id);
+    assert('6. remove works', after === undefined);
+
+    await o9.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 orders: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ orders.js skipped'); totalTests += 6; }
+log('');
+
+/* ===== 10. payments.js (5) ===== */
+if (pay && pay.payments) {
+  const p10 = pay.payments;
+  let passed = 0;
+  const total = 5;
+  log('▶ payments.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    await p10.clear();
+
+    await p10.create({ orderId: 'o1', customerId: 'c1', amount: 200 });
+    await p10.create({ orderId: 'o1', customerId: 'c1', amount: 300 });
+    await p10.create({ orderId: 'o2', customerId: 'c2', amount: 150 });
+
+    const byOrder = await p10.findByOrder('o1');
+    assert('1. findByOrder returns 2', byOrder.length === 2);
+
+    const byCust = await p10.findByCustomer('c1');
+    assert('2. findByCustomer returns 2', byCust.length === 2);
+
+    const sumOrder = await p10.sumByOrder('o1');
+    assert('3. sumByOrder = 500', sumOrder === 500);
+
+    const sumCust = await p10.sumByCustomer('c1');
+    assert('4. sumByCustomer = 500', sumCust === 500);
+
+    const sumEmpty = await p10.sumByOrder('no-such');
+    assert('5. sumByOrder missing = 0', sumEmpty === 0);
+
+    await p10.clear();
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 payments: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else { log('⚠️ payments.js skipped'); totalTests += 5; }
+log('');
+
+/* ===== الخلاصة ===== */
 log('━━━━━━━━━━━━━━━━━━━━━━━━');
 log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
 console.log('🏁 TOTAL: ' + totalPassed + '/' + totalTests + ' tests passed');
