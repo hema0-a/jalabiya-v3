@@ -1,0 +1,223 @@
+/* ==========================================================================
+   layout.css — هيكل التطبيق (App Shell + Sidebar + Topbar)
+   ==========================================================================
+   يستخدم متغيرات من base.css.
+   يُستورَد من main.css بعد components.css.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. APP SHELL
+   ========================================================================== */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.app-shell__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.app-shell__content {
+  flex: 1;
+  padding: var(--space-m);
+  overflow-x: hidden;
+}
+
+/* Overlay خلف القائمة الجانبية (للموبايل) */
+.app-shell__overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: calc(var(--z-sidebar) - 1);
+  animation: fadeIn var(--duration-normal) var(--ease-out) both;
+}
+.app-shell--sidebar-open .app-shell__overlay { display: block; }
+
+/* ==========================================================================
+   2. SIDEBAR
+   ========================================================================== */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--duration-slow) var(--ease-out);
+  z-index: var(--z-sidebar);
+}
+
+.sidebar__header {
+  padding: var(--space-m);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.sidebar__logo {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-m);
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+  flex-shrink: 0;
+}
+.sidebar__title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+  line-height: 1.2;
+  margin: 0;
+}
+.sidebar__subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-light);
+  margin: 2px 0 0 0;
+}
+
+.sidebar__nav {
+  flex: 1;
+  padding: var(--space-s);
+  overflow-y: auto;
+}
+
+.sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding: var(--space-s) var(--space-m);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+  user-select: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: right;
+  font-family: inherit;
+}
+.sidebar__item:hover {
+  background: rgba(31, 109, 87, 0.08);
+}
+.sidebar__item--active {
+  background: var(--color-primary);
+  color: #fff;
+}
+.sidebar__item--active:hover {
+  background: var(--color-primary);
+}
+.sidebar__icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.sidebar__label { flex: 1; }
+
+.sidebar__footer {
+  padding: var(--space-s);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-light);
+  text-align: center;
+}
+
+/* ==========================================================================
+   3. TOPBAR
+   ========================================================================== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-topbar);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-s) var(--space-m);
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-height: 56px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.topbar__menu {
+  display: none;
+  width: 40px; height: 40px;
+  border-radius: var(--radius-m);
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  font-size: 22px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.topbar__menu:hover { background: rgba(31, 109, 87, 0.08); }
+
+.topbar__title {
+  flex: 1;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* ==========================================================================
+   4. RESPONSIVE
+   ========================================================================== */
+
+/* موبايل/تابلت صغير (< 768px): السايدبار يصبح Drawer */
+@media (max-width: 767px) {
+  .app-shell__main {
+    width: 100%;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0; right: 0;
+    height: 100vh;
+    transform: translateX(100%);
+    box-shadow: var(--shadow-l);
+    width: 280px;
+  }
+  .app-shell--sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+  .topbar__menu {
+    display: flex;
+  }
+}
+
+/* تابلت/ديسكتوب (≥ 768px): السايدبار ثابت */
+@media (min-width: 768px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .app-shell__overlay { display: none !important; }
+}
+
+/* شاشات كبيرة: عرض أقصى للمحتوى */
+@media (min-width: 1024px) {
+  .app-shell__content {
+    padding: var(--space-l);
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
