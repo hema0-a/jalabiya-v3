@@ -5,7 +5,7 @@
    كل الدوال ترجع Promise — لا callbacks.
    ========================================================================== */
 
-import { DB_CONFIG } from '../core/config.js';
+import { DB_CONFIG, STORES } from '../core/config.js';
 import { SCHEMA, validateSchema } from './schema.js';
 
 /* --- النسخة الوحيدة من القاعدة (Singleton) --- */
@@ -39,6 +39,26 @@ export function openDB() {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
+      const tx = event.target.transaction;
+      const oldVersion = event.oldVersion;
+
+      /* --- الترقيات (Migrations) --- */
+
+      // v1 → v2: حذف فهارس boolean غير صالحة في IDB
+      if (oldVersion >= 1 && oldVersion < 2) {
+        // customers.by_vip
+        if (db.objectStoreNames.contains(STORES.CUSTOMERS)) {
+          const s = tx.objectStore(STORES.CUSTOMERS);
+          if (s.indexNames.contains('by_vip')) s.deleteIndex('by_vip');
+        }
+        // workers.by_active
+        if (db.objectStoreNames.contains(STORES.WORKERS)) {
+          const s = tx.objectStore(STORES.WORKERS);
+          if (s.indexNames.contains('by_active')) s.deleteIndex('by_active');
+        }
+      }
+
+      /* --- إنشاء المخازن والفهارس الناقصة --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
         const store = db.createObjectStore(storeName, {
@@ -53,7 +73,6 @@ export function openDB() {
 
     request.onsuccess = () => {
       dbInstance = request.result;
-      // إعادة فتح تلقائي عند إغلاق غير متوقع (مثلاً تبويب آخر يطلب ترقية)
       dbInstance.onclose = () => { dbInstance = null; };
       resolve(dbInstance);
     };
@@ -140,6 +159,7 @@ export async function count(storeName) {
 
 /**
  * البحث عبر فهرس.
+ * ⚠️ القيمة يجب أن تكون من أنواع IDB الصالحة: string / number / Date / Array.
  * @param {string} storeName
  * @param {string} indexName
  * @param {*} value
