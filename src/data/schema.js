@@ -3,6 +3,7 @@
    ==========================================================================
    يُستورَد من idb.js لإنشاء قاعدة البيانات.
    لا يحتوي على منطق تنفيذي — فقط وصف البنية.
+   ⚠️ لا تُستخدم boolean كمفاتيح فهرس — IDB لا يقبلها.
    ========================================================================== */
 
 import { STORES } from '../core/config.js';
@@ -23,6 +24,7 @@ export const STORE_NAMES = Object.values(STORES);
      - keyPath: 'id' (جميع السجلات تُولّد بـ uid())
      - autoIncrement: false (نتحكم في المعرّفات)
      - indexes: قائمة الفهارس للبحث السريع
+   ⚠️ أنواع المفاتيح المسموحة: string / number / Date / Array
    ========================================================================== */
 
 export const SCHEMA = {
@@ -34,7 +36,6 @@ export const SCHEMA = {
       idx('by_name',      'name'),
       idx('by_phone',     'phone'),
       idx('by_createdAt', 'createdAt'),
-      idx('by_vip',       'vip'),
     ],
   },
 
@@ -76,8 +77,7 @@ export const SCHEMA = {
     keyPath: 'id',
     autoIncrement: false,
     indexes: [
-      idx('by_name',   'name'),
-      idx('by_active', 'active'),
+      idx('by_name', 'name'),
     ],
   },
 
