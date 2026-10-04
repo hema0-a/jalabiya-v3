@@ -22,13 +22,14 @@ function showError(title, err) {
 }
 
 /* --- الاستيرادات --- */
-let el, toast, createLayout, testsIndex, customersPage;
+let el, toast, createLayout, testsIndex, customersPage, ordersPage;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
   testsIndex = await import('./tests/index.js');
   ({ customersPage } = await import('./pages/customers.js'));
+  ({ ordersPage } = await import('./pages/orders.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -48,7 +49,7 @@ const SIDEBAR_ITEMS = [
   { id: 'tests',        icon: '🧪', label: 'الاختبارات' },
 ];
 
-/* --- الصفحة الحالية (لتنظيفها عند المغادرة) --- */
+/* --- الصفحة الحالية --- */
 let currentPage = null;
 
 /* --- إنشاء App Shell --- */
@@ -84,9 +85,6 @@ app.appendChild(layout.node);
    الصفحات
    ========================================================================== */
 
-/**
- * صفحة الرئيسية — Demo UI.
- */
 function buildHomePage() {
   const wrap = el('div', {});
 
@@ -110,7 +108,7 @@ function buildHomePage() {
       }, '⚠️ تحذير'),
       el('button', {
         className: 'btn btn--danger',
-        onClick: () => toast.danger('فشل في حفظ الطلب'),
+        onClick: () => toast.fail ? toast.fail('فشل') : toast.danger('فشل في حفظ الطلب'),
       }, '❌ خطأ'),
       el('button', {
         className: 'btn btn--secondary',
@@ -160,9 +158,6 @@ function buildHomePage() {
   return wrap;
 }
 
-/**
- * صفحة placeholder.
- */
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
     el('div', { className: 'empty-state__icon' }, icon),
@@ -171,9 +166,6 @@ function buildPlaceholderPage(title, icon) {
   ]);
 }
 
-/**
- * صفحة الاختبارات.
- */
 async function buildTestsPage() {
   const wrap = el('div', {});
   const pre = el('pre', {
@@ -223,17 +215,11 @@ async function buildTestsPage() {
   return wrap;
 }
 
-/**
- * عرض صفحة حسب معرّفها.
- * @param {string} id
- */
 async function renderPage(id) {
   const item = SIDEBAR_ITEMS.find((i) => i.id === id);
-  if (item) {
-    layout.setTitle(item.label);
-  }
+  if (item) layout.setTitle(item.label);
 
-  /* تنظيف الصفحة السابقة إن كانت تدعم destroy */
+  /* تنظيف الصفحة السابقة */
   if (currentPage && typeof currentPage.destroy === 'function') {
     try { currentPage.destroy(); } catch (e) { console.error(e); }
   }
@@ -257,8 +243,15 @@ async function renderPage(id) {
     return;
   }
 
+  if (id === 'orders') {
+    const container = el('div', {});
+    layout.setContent(container);
+    await ordersPage.render(container);
+    currentPage = ordersPage;
+    return;
+  }
+
   const labels = {
-    orders:       ['الطلبات',   '📦'],
     payments:     ['الدفعات',   '💰'],
     inventory:    ['المخزون',   '🧵'],
     workers:      ['العمال',    '👷'],
