@@ -1,9 +1,9 @@
 /* ==========================================================================
-   main.js — TEST HARNESS (Phase 1 + Phase 2 schema)
+   main.js — TEST HARNESS (Phase 1 + Phase 2 schema + idb)
    ==========================================================================
    ✅ textContent — لا يُفسّر HTML
    ✅ Dynamic imports
-   ✅ 38 اختباراً: events(7) + sanitize(7) + dom(8) + utils(10) + schema(6)
+   ✅ 46 اختباراً: events(7)+sanitize(7)+dom(8)+utils(10)+schema(6)+idb(8)
    ========================================================================== */
 
 const output = [];
@@ -24,24 +24,27 @@ log('🚀 main.js running');
 log('');
 
 /* --- استيراد الملفات (dynamic) --- */
-let c, ev, s, d, u, sc;
-try { c  = await import('./core/config.js');   log('✅ config.js'); }
+let c, ev, s, d, u, sc, idb;
+try { c   = await import('./core/config.js');   log('✅ config.js'); }
 catch (e) { log('❌ config.js: ' + e.message); }
 
-try { ev = await import('./core/events.js');   log('✅ events.js'); }
+try { ev  = await import('./core/events.js');   log('✅ events.js'); }
 catch (e) { log('❌ events.js: ' + e.message); }
 
-try { s  = await import('./core/sanitize.js'); log('✅ sanitize.js'); }
+try { s   = await import('./core/sanitize.js'); log('✅ sanitize.js'); }
 catch (e) { log('❌ sanitize.js: ' + e.message); }
 
-try { d  = await import('./core/dom.js');      log('✅ dom.js'); }
+try { d   = await import('./core/dom.js');      log('✅ dom.js'); }
 catch (e) { log('❌ dom.js: ' + e.message); }
 
-try { u  = await import('./core/utils.js');    log('✅ utils.js'); }
+try { u   = await import('./core/utils.js');    log('✅ utils.js'); }
 catch (e) { log('❌ utils.js: ' + e.message); }
 
-try { sc = await import('./data/schema.js');   log('✅ schema.js'); }
+try { sc  = await import('./data/schema.js');   log('✅ schema.js'); }
 catch (e) { log('❌ schema.js: ' + e.message); }
+
+try { idb = await import('./data/idb.js');      log('✅ idb.js'); }
+catch (e) { log('❌ idb.js: ' + e.message); }
 
 log('');
 let totalPassed = 0;
@@ -344,6 +347,58 @@ if (sc && sc.SCHEMA) {
 } else {
   log('⚠️ schema.js skipped');
   totalTests += 6;
+}
+log('');
+
+/* ==========================================================================
+   6. idb.js (8)
+   ========================================================================== */
+if (idb && idb.openDB) {
+  let passed = 0;
+  const total = 8;
+  log('▶ idb.js tests');
+  const assert = (label, cond) => {
+    if (cond) { log('  ✅ ' + label); passed++; }
+    else      { log('  ❌ ' + label); }
+  };
+  try {
+    // تنظيف أي بيانات متبقية من تشغيل سابق
+    await idb.clear('customers').catch(() => {});
+
+    const db = await idb.openDB();
+    assert('1. openDB returns DB', db && typeof db.name === 'string');
+
+    await idb.put('customers', { id: 'test-1', name: 'أحمد', phone: '01012345678' });
+    const got = await idb.get('customers', 'test-1');
+    assert('2. put + get round-trip', got && got.name === 'أحمد');
+
+    const all = await idb.getAll('customers');
+    assert('3. getAll returns array', Array.isArray(all) && all.length === 1);
+
+    const cnt = await idb.count('customers');
+    assert('4. count === 1', cnt === 1);
+
+    await idb.put('customers', { id: 'test-2', name: 'محمد', phone: '01111111111' });
+    const byPhone = await idb.getByIndex('customers', 'by_phone', '01111111111');
+    assert('5. getByIndex finds by phone',
+      Array.isArray(byPhone) && byPhone.length === 1 && byPhone[0].name === 'محمد');
+
+    await idb.remove('customers', 'test-1');
+    const afterRemove = await idb.get('customers', 'test-1');
+    assert('6. remove deletes record', afterRemove === undefined);
+
+    await idb.clear('customers');
+    const afterClear = await idb.count('customers');
+    assert('7. clear empties store', afterClear === 0);
+
+    const nothing = await idb.get('customers', 'no-such-id');
+    assert('8. get missing → undefined', nothing === undefined);
+  } catch (e) { log('  ❌ group failed: ' + e.message); }
+  log('📊 idb: ' + passed + '/' + total);
+  totalPassed += passed; totalTests += total;
+} else {
+  log('⚠️ idb.js skipped');
+  totalTests += 8;
 }
 log('');
 
