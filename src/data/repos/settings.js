@@ -2,7 +2,7 @@
    settings.js — مستودع الإعدادات
    ==========================================================================
    سجل واحد فقط (id='main'). يدمج المحفوظ مع الافتراضي عند القراءة.
-   لا يستخدم Repository العام — لأنه مخزن سجل واحد.
+   update() يعمل deep merge للمفاتيح من المستوى الأول.
    ========================================================================== */
 
 import { STORES, DEFAULT_SETTINGS } from '../../core/config.js';
@@ -59,13 +59,30 @@ export const settings = {
   },
 
   /**
-   * تحديث جزئي (دمج سطحي) + حفظ.
+   * تحديث جزئي — يدمج بعمق لكل مفتاح من المستوى الأول.
+   * مثال: update({ workshop: { name: 'X' } }) يحفظ name ويبقي phone/address.
    * @param {Object} patch
    * @returns {Promise<Object>}
    */
   async update(patch) {
     const current = await settings.get();
-    const merged = { ...current, ...patch };
+    const merged = { ...current };
+
+    Object.keys(patch).forEach((key) => {
+      const cur = current[key];
+      const pat = patch[key];
+      const bothPlainObjects =
+        cur && pat &&
+        typeof cur === 'object' && typeof pat === 'object' &&
+        !Array.isArray(cur) && !Array.isArray(pat);
+
+      if (bothPlainObjects) {
+        merged[key] = { ...cur, ...pat };
+      } else {
+        merged[key] = pat;
+      }
+    });
+
     return settings.save(merged);
   },
 
