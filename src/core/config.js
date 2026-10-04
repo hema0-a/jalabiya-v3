@@ -23,7 +23,7 @@ export const APP_CONFIG = {
 /* --- 2. إعدادات IndexedDB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 1,
+  version: 2,        // v2: حذف فهارس boolean غير صالحة (by_vip, by_active)
 };
 
 /* --- 3. أسماء المخازن (Stores) --- */
