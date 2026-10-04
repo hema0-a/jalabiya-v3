@@ -1,47 +1,71 @@
 /* ==========================================================================
    main.js — نقطة الدخول + Demo UI (المرحلة 5)
    ==========================================================================
-   1. يُخفي شاشة التحميل ويُظهر #app
-   2. يبني واجهة تجريبية تُظهر المكونات (Toast حالياً)
-   3. يستورد ملف الاختبارات ديناميكياً ويعرض النتائج في #tests-container
+   ✅ Dynamic imports — لا تُعلّق شاشة التحميل إن فشل أي ملف.
+   ✅ يعرض أي خطأ على الشاشة مباشرة (بدل صمت مطبق).
    ========================================================================== */
 
-import { el } from './core/dom.js';
-import { toast } from './ui/toast.js';
-
-/* --- 1. إظهار التطبيق --- */
+/* --- إظهار التطبيق فوراً (حتى لو فشل أي استيراد) --- */
 const loading = document.getElementById('app-loading');
 const app = document.getElementById('app');
 if (loading) loading.hidden = true;
 if (app) app.hidden = false;
 
-/* --- 2. بناء الـ Demo UI --- */
+/* --- عرض خطأ على الشاشة --- */
+function showError(title, err) {
+  const msg = (err && err.message) ? err.message : String(err);
+  const stack = (err && err.stack) ? err.stack : '';
+  if (!app) return;
+  app.innerHTML = '';
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#2a0000;color:#ff8080;min-height:100vh;box-sizing:border-box';
+  pre.textContent = '❌ ' + title + '\n\n' + msg + '\n\n' + stack;
+  app.appendChild(pre);
+}
+
+/* --- استيراد الأدوات --- */
+let el, toast;
+try {
+  ({ el } = await import('./core/dom.js'));
+} catch (e) {
+  showError('Failed to load core/dom.js', e);
+  throw e;
+}
+try {
+  ({ toast } = await import('./ui/toast.js'));
+} catch (e) {
+  showError('Failed to load ui/toast.js', e);
+  throw e;
+}
+
+/* --- بناء الـ Demo UI --- */
 function buildDemo() {
   if (!app) return;
 
   /* Header */
   const header = el('header', {
     style: {
-      background: 'linear-gradient(135deg, var(--color-primary-light), var(--color-primary))',
+      background: 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
       color: '#fff',
-      padding: 'var(--space-l) var(--space-m)',
-      borderRadius: '0 0 var(--radius-xl) var(--radius-xl)',
+      padding: '24px 16px',
+      borderRadius: '0 0 16px 16px',
       textAlign: 'center',
-      marginBottom: 'var(--space-l)',
+      marginBottom: '24px',
     },
   }, [
     el('div', { style: { fontSize: '42px', lineHeight: '1' } }, '🧵'),
     el('h1', {
       style: {
         color: '#fff',
-        fontSize: 'var(--font-size-xl)',
-        margin: 'var(--space-s) 0 0 0',
+        fontSize: '22px',
+        margin: '8px 0 0 0',
+        fontWeight: '600',
       },
     }, 'ورشة تفصيل الجلابيب'),
     el('p', {
       style: {
-        fontSize: 'var(--font-size-sm)',
-        margin: 'var(--space-xs) 0 0 0',
+        fontSize: '13px',
+        margin: '4px 0 0 0',
         opacity: '0.9',
       },
     }, 'نسخة تجريبية — المرحلة 5: UI Core'),
@@ -49,13 +73,14 @@ function buildDemo() {
 
   /* Demo Section */
   const demoSection = el('section', {
-    style: { padding: '0 var(--space-m)', marginBottom: 'var(--space-l)' },
+    style: { padding: '0 16px', marginBottom: '24px' },
   }, [
     el('h2', {
       style: {
-        fontSize: 'var(--font-size-lg)',
-        color: 'var(--color-primary-dark)',
-        margin: '0 0 var(--space-m) 0',
+        fontSize: '18px',
+        color: '#123C2F',
+        margin: '0 0 16px 0',
+        fontWeight: '600',
       },
     }, '🎨 تجربة المكونات'),
 
@@ -65,16 +90,16 @@ function buildDemo() {
       ]),
       el('p', {
         style: {
-          fontSize: 'var(--font-size-sm)',
-          color: 'var(--color-primary-light)',
-          margin: '0 0 var(--space-m) 0',
+          fontSize: '13px',
+          color: '#2E8B6F',
+          margin: '0 0 16px 0',
         },
-      }, 'اضغط أي زر لعرض الإشعار في أسفل الشاشة:'),
+      }, 'اضغط أي زر لعرض الإشعار أسفل الشاشة:'),
       el('div', {
         style: {
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: 'var(--space-s)',
+          gap: '8px',
         },
       }, [
         el('button', {
@@ -91,12 +116,10 @@ function buildDemo() {
         }, '❌ خطأ'),
         el('button', {
           className: 'btn btn--secondary',
-          onClick: () => toast.info('معلومة: آخر مزامنة قبل 3 دقائق'),
+          onClick: () => toast.info('آخر مزامنة قبل 3 دقائق'),
         }, 'ℹ️ معلومة'),
       ]),
-      el('div', {
-        style: { marginTop: 'var(--space-s)' },
-      }, [
+      el('div', { style: { marginTop: '8px' } }, [
         el('button', {
           className: 'btn btn--ghost btn--block',
           onClick: () => { toast.clear(); toast.info('تم مسح الإشعارات'); },
@@ -104,11 +127,11 @@ function buildDemo() {
       ]),
     ]),
 
-    el('div', { className: 'card', style: { marginTop: 'var(--space-m)' } }, [
+    el('div', { className: 'card', style: { marginTop: '16px' } }, [
       el('div', { className: 'card__header' }, [
         el('h3', { className: 'card__title' }, 'Badges — الشارات'),
       ]),
-      el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--space-s)' } }, [
+      el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, [
         el('span', { className: 'badge badge--success' }, 'مكتمل'),
         el('span', { className: 'badge badge--warning' }, 'قيد التنفيذ'),
         el('span', { className: 'badge badge--danger' }, 'متأخر'),
@@ -120,20 +143,21 @@ function buildDemo() {
 
   /* Stats Demo */
   const statsSection = el('section', {
-    style: { padding: '0 var(--space-m)', marginBottom: 'var(--space-l)' },
+    style: { padding: '0 16px', marginBottom: '24px' },
   }, [
     el('h2', {
       style: {
-        fontSize: 'var(--font-size-lg)',
-        color: 'var(--color-primary-dark)',
-        margin: '0 0 var(--space-m) 0',
+        fontSize: '18px',
+        color: '#123C2F',
+        margin: '0 0 16px 0',
+        fontWeight: '600',
       },
     }, '📊 إحصائيات (تجريبية)'),
     el('div', {
       style: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: 'var(--space-s)',
+        gap: '8px',
       },
     }, [
       el('div', { className: 'stat' }, [
@@ -162,31 +186,31 @@ function buildDemo() {
   /* Tests Section — قابل للطي */
   const testsSection = el('section', {
     style: {
-      padding: '0 var(--space-m)',
-      marginBottom: 'var(--space-xl)',
+      padding: '0 16px',
+      marginBottom: '32px',
     },
   }, [
     el('details', {
       style: {
-        background: 'var(--color-surface)',
-        borderRadius: 'var(--radius-l)',
-        padding: 'var(--space-m)',
-        boxShadow: 'var(--shadow-s)',
+        background: '#FFFFFF',
+        borderRadius: '12px',
+        padding: '16px',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
       },
     }, [
       el('summary', {
         style: {
           cursor: 'pointer',
           fontWeight: '600',
-          color: 'var(--color-primary-dark)',
-          fontSize: 'var(--font-size-base)',
-          padding: 'var(--space-xs) 0',
+          color: '#123C2F',
+          fontSize: '16px',
+          padding: '4px 0',
           userSelect: 'none',
         },
       }, '🧪 نتائج الاختبارات (اضغط للعرض)'),
       el('div', {
         id: 'tests-container',
-        style: { marginTop: 'var(--space-m)' },
+        style: { marginTop: '16px' },
       }),
     ]),
   ]);
@@ -197,13 +221,21 @@ function buildDemo() {
   app.appendChild(testsSection);
 }
 
-/* --- 3. البناء ثم الاختبار --- */
-buildDemo();
+/* --- البناء ثم الاختبار --- */
+try {
+  buildDemo();
+} catch (e) {
+  showError('Failed to build Demo UI', e);
+  throw e;
+}
 
 try {
   await import('./tests/all.js');
 } catch (err) {
   const tc = document.getElementById('tests-container') || document.body;
-  tc.textContent = '❌ Failed to load tests: ' + err.message;
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'font-family:monospace;font-size:12px;white-space:pre-wrap;color:#c00;background:#fff;padding:8px;border-radius:6px';
+  pre.textContent = '❌ Failed to load tests:\n' + (err.message || String(err)) + '\n\n' + (err.stack || '');
+  tc.appendChild(pre);
   console.error(err);
 }
