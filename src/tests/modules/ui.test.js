@@ -140,3 +140,61 @@ register('controls.js', async (t) => {
   await t.test('6. slider onChange fires with new value',
     sliderVal === 75);
 });
+/* ===== form-builder.js (6) ===== */
+register('form-builder.js', async (t) => {
+  const { createForm } = await import('../../ui/form-builder.js');
+
+  /* 1. createForm builds fields */
+  const f1 = createForm({
+    fields: [
+      { name: 'name', label: 'الاسم', type: 'text' },
+      { name: 'phone', label: 'الهاتف', type: 'tel' },
+      { name: 'vip', label: 'VIP', type: 'checkbox' },
+    ],
+  });
+  await t.test('1. createForm builds fields',
+    f1.node instanceof HTMLElement &&
+    f1.node.querySelectorAll('.field').length === 2 &&
+    f1.node.querySelectorAll('.toggle').length === 1);
+
+  /* 2. getValues with initial values */
+  const f2 = createForm({
+    fields: [
+      { name: 'name', type: 'text' },
+      { name: 'age', type: 'number' },
+      { name: 'vip', type: 'checkbox' },
+    ],
+    values: { name: 'أحمد', age: 30, vip: true },
+  });
+  const v2 = f2.getValues();
+  await t.test('2. getValues returns typed values',
+    v2.name === 'أحمد' && v2.age === 30 && v2.vip === true);
+
+  /* 3. setValues updates DOM */
+  f2.setValues({ name: 'محمد', age: 25, vip: false });
+  const v3 = f2.getValues();
+  await t.test('3. setValues updates DOM',
+    v3.name === 'محمد' && v3.age === 25 && v3.vip === false);
+
+  /* 4. validate detects required empty */
+  const f4 = createForm({
+    fields: [
+      { name: 'name', type: 'text', required: true },
+    ],
+  });
+  const val4 = f4.validate();
+  await t.test('4. validate detects required empty',
+    val4.valid === false && 'name' in val4.errors);
+
+  /* 5. validate passes with required filled */
+  f4.setValues({ name: 'أحمد' });
+  const val5 = f4.validate();
+  await t.test('5. validate passes when required filled',
+    val5.valid === true && Object.keys(val5.errors).length === 0);
+
+  /* 6. reset clears fields */
+  f2.reset();
+  const v6 = f2.getValues();
+  await t.test('6. reset clears all fields',
+    v6.name === '' && v6.age === '' && v6.vip === false);
+});
