@@ -1,9 +1,9 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell (المرحلة 5)
+   main.js — نقطة الدخول + App Shell + Router
    ==========================================================================
-   1. يستورد الأدوات والمكونات
-   2. يبني App Shell بـ Sidebar + Topbar
-   3. يستورد ويشغّل الاختبارات
+   1. يستورد الأدوات
+   2. يبني App Shell (Sidebar + Topbar)
+   3. يستدعي renderPage() عند التبديل بين الصفحات
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -22,12 +22,13 @@ function showError(title, err) {
 }
 
 /* --- الاستيرادات --- */
-let el, toast, createLayout, testsIndex;
+let el, toast, createLayout, testsIndex, customersPage;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
   testsIndex = await import('./tests/index.js');
+  ({ customersPage } = await import('./pages/customers.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -46,6 +47,9 @@ const SIDEBAR_ITEMS = [
   { id: 'reports',      icon: '📊', label: 'التقارير' },
   { id: 'tests',        icon: '🧪', label: 'الاختبارات' },
 ];
+
+/* --- الصفحة الحالية (لتنظيفها عند المغادرة) --- */
+let currentPage = null;
 
 /* --- إنشاء App Shell --- */
 const layout = createLayout({
@@ -157,9 +161,7 @@ function buildHomePage() {
 }
 
 /**
- * صفحة placeholder لقسم قيد الإنشاء.
- * @param {string} title
- * @param {string} icon
+ * صفحة placeholder.
  */
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
@@ -231,6 +233,12 @@ async function renderPage(id) {
     layout.setTitle(item.label);
   }
 
+  /* تنظيف الصفحة السابقة إن كانت تدعم destroy */
+  if (currentPage && typeof currentPage.destroy === 'function') {
+    try { currentPage.destroy(); } catch (e) { console.error(e); }
+  }
+  currentPage = null;
+
   if (id === 'home') {
     layout.setContent(buildHomePage());
     return;
@@ -241,8 +249,15 @@ async function renderPage(id) {
     return;
   }
 
+  if (id === 'customers') {
+    const container = el('div', {});
+    layout.setContent(container);
+    await customersPage.render(container);
+    currentPage = customersPage;
+    return;
+  }
+
   const labels = {
-    customers:    ['العملاء',   '👥'],
     orders:       ['الطلبات',   '📦'],
     payments:     ['الدفعات',   '💰'],
     inventory:    ['المخزون',   '🧵'],
