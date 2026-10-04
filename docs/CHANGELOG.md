@@ -7,13 +7,69 @@
 
 ## [Unreleased]
 
-### قيد التطوير
-- المرحلة 5: UI Core (toast, modal, controls, form-builder, layout, sidebar, topbar)
-- المرحلة 6: الصفحات الأساسية (dashboard, customers, orders)
-- المرحلة 7: الصفحات الثانوية
+### قيد التطوير — المرحلة 6
+- صفحة العملاء (CRUD كامل + بحث + VIP)
+- صفحة الطلبات (كانبان + فلاتر)
+- لوحة المعلومات (KPIs حقيقية)
+
+### مخطط لاحقاً
+- المرحلة 7: الصفحات الثانوية (inventory, workers, expenses, reports)
 - المرحلة 8: الإعدادات الاحترافية (13 قسماً)
 - المرحلة 9: Firebase Sync
 - المرحلة 10: PWA (manifest, service worker, icons)
+
+---
+
+## [0.3.0] — 2026-10-05 — Phase 5 Complete
+
+### أُضيف
+
+**طبقة الأمان (Security Layer):**
+- `src/security/pin-crypto.js` — SHA-256 + Salt (WebCrypto)
+- `src/security/auth.js` — مصادقة، قفل بالمحاولات، جلسات
+
+**مكونات الواجهة (UI Components):**
+- `src/ui/toast.js` — إشعارات قصيرة (success, warning, danger, info)
+- `src/ui/modal.js` — نوافذ منبثقة + confirm (Promise-based)
+- `src/ui/controls.js` — Toggle + Color Picker + Slider
+- `src/ui/form-builder.js` — نماذج ديناميكية (9 أنواع حقول)
+- `src/ui/sidebar.js` — قائمة جانبية (10 عناصر)
+- `src/ui/topbar.js` — شريط علوي (عنوان + أزرار ديناميكية)
+- `src/ui/layout.js` — App Shell (Sidebar + Topbar + Content + Overlay)
+
+**طبقة الأنماط (Styles):**
+- `styles/components.css` — 14 مكون واجهة (buttons, cards, toasts, modal, toggle, slider, ...)
+- `styles/layout.css` — App Shell + Sidebar + Topbar + responsive
+
+**بنية الاختبارات (Test Registry Pattern):**
+- `src/tests/registry.js` — سجل اختبارات (register + runAll)
+- `src/tests/index.js` — قائمة الوحدات (Entry Point)
+- `src/tests/modules/core.test.js` — 32 اختباراً
+- `src/tests/modules/data.test.js` — 22 اختباراً
+- `src/tests/modules/repos.test.js` — 52 اختباراً
+- `src/tests/modules/security.test.js` — 16 اختباراً
+- `src/tests/modules/ui.test.js` — 22 اختباراً
+
+### تغيّر
+
+**البنية:**
+- إعادة تنظيم الاختبارات من ملف واحد ضخم (~900 سطر) إلى 5 وحدات
+- `main.js` أصبح يستخدم App Shell + Dynamic imports
+- إلغاء شاشة التحميل (`#app-loading`) نهائياً
+- `index.html` يُظهر `#app` فوراً مع نص placeholder
+
+### الأمان
+- SHA-256 + Salt عشوائي (16 بايت) لتشفير PIN
+- قفل تلقائي بعد 5 محاولات فاشلة (30 ثانية)
+- جلسات بمدة قابلة للتخصيص (24 ساعة افتراضياً)
+
+### الاختبارات
+- **144 اختباراً** في 22 وحدة — كلها ناجحة ✅
+- إضافة `Registry Pattern` لتقليل حجم التعديلات المستقبلية
+
+### إصلاحات
+- `form-builder.js`: `Number('')` → 0 خطأ (يُعود الآن `''` للحقول الفارغة)
+- إعادة هيكلة كاملة لملفات الاختبارات (تحسين الأداء والصيانة)
 
 ---
 
@@ -37,22 +93,15 @@
 - `src/data/repos/expenses.js` — مجموع بالفئة/الفترة
 - `src/data/repos/trash.js` — نقل، استرجاع، تقليم تلقائي
 
-**طبقة الأمان (Security Layer):**
-- `src/security/pin-crypto.js` — SHA-256 + Salt عشوائي (WebCrypto)
-- `src/security/auth.js` — مصادقة، قفل بالمحاولات، جلسات
-
 ### تغيّر
 - `src/core/config.js` — ترقية DB version من 1 إلى 2 + مفاتيح تخزين جديدة
-- `src/tests/all.js` — إعادة هيكلة (اختبارات في ملف منفصل)
-- `src/main.js` — نسخة رقيقة تستورد ملف الاختبارات
 
 ### الأمان
-- إصلاح ثغرة `data:image/svg+xml` في `sanitizeUrl` (SVG يُنفّذ سكربتات عند فتحه كـ document)
-- إصلاح خطأ IDB: `boolean` غير صالح كمفاتيح فهرس (by_vip, by_active)
-- تشفير PIN بـ SHA-256 + Salt آمن تشفيرياً
+- إصلاح ثغرة `data:image/svg+xml` في `sanitizeUrl`
+- إصلاح خطأ IDB: `boolean` غير صالح كمفاتيح فهرس
 
 ### الاختبارات
-- **122 اختباراً** موزعة على 18 مجموعة — كلها ناجحة ✅
+- **122 اختباراً** — كلها ناجحة ✅
 
 ---
 
@@ -62,12 +111,11 @@
 - `index.html` — هيكل التطبيق + CSP مشدد (12 توجيهاً)
 - `styles/base.css` — Reset + Variables + Typography + Animations
 - `styles/main.css` — مُجمِّع الأنماط (Aggregator)
-- `src/core/config.js` — ثوابت المشروع (181 سطر)
-- `src/core/events.js` — EventBus (Pub/Sub) مع 7 اختبارات
-- `src/core/sanitize.js` — خط الدفاع ضد XSS مع 16 حالة URL
-- `src/core/dom.js` — أدوات DOM آمنة (el, qs, on, ...)
+- `src/core/config.js` — ثوابت المشروع
+- `src/core/events.js` — EventBus (Pub/Sub)
+- `src/core/sanitize.js` — خط الدفاع ضد XSS
+- `src/core/dom.js` — أدوات DOM آمنة
 - `src/core/utils.js` — Validators + Formatters + Timing + agoPhrase
-- `src/main.js` — نقطة الدخول
 
 ### الأمان
 - CSP مشدد بـ 12 توجيهاً (frame-ancestors, object-src, base-uri, form-action)
