@@ -1,7 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   v4: إضافة 3 مخازن (commitments, commitmentPayments, savingsGoals).
+   v5: إضافة مخزن houseExpenses.
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
@@ -91,7 +91,6 @@ export const SCHEMA = {
       idx('by_customerId', 'customerId'),
     ],
   },
-  /* --- جديد v4 --- */
   [STORES.COMMITMENTS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
@@ -110,6 +109,15 @@ export const SCHEMA = {
   [STORES.SAVINGS_GOALS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v5 --- */
+  [STORES.HOUSE_EXPENSES]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_category', 'category'),
+      idx('by_date', 'date'),
       idx('by_createdAt', 'createdAt'),
     ],
   },
