@@ -151,7 +151,8 @@ export const STORAGE_KEYS = {
   V3_LAST_SYNC:       'jalabiya_v3_last_sync',
   V3_MIGRATED:        'jalabiya_v3_migrated',
   V3_FAILED_ATTEMPTS: 'jalabiya_v3_failed_attempts',
-  V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
+    V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
+  V3_OFFLINE_QUEUE:   'jalabiya_v3_offline_queue',
 };
 
 /* --- 9. الحدود القصوى (MAX limits) --- */
