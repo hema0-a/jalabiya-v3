@@ -1,7 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   v3: إضافة مخزن portfolio.
+   v4: إضافة 3 مخازن (commitments, commitmentPayments, savingsGoals).
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
@@ -83,13 +83,34 @@ export const SCHEMA = {
       idx('by_entityId', 'entityId'),
     ],
   },
-  /* --- جديد v3 --- */
   [STORES.PORTFOLIO]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_createdAt', 'createdAt'),
       idx('by_category', 'category'),
       idx('by_customerId', 'customerId'),
+    ],
+  },
+  /* --- جديد v4 --- */
+  [STORES.COMMITMENTS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_category', 'category'),
+      idx('by_frequency', 'frequency'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  [STORES.COMMITMENT_PAYMENTS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_commitmentId', 'commitmentId'),
+      idx('by_date', 'date'),
+    ],
+  },
+  [STORES.SAVINGS_GOALS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_createdAt', 'createdAt'),
     ],
   },
 };
