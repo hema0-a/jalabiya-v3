@@ -5,70 +5,65 @@
 
 ---
 
-## [Unreleased]
+## [1.0.0] — 2026-10-05 — Official Release 🎉
 
-### قيد التطوير — المرحلة 10
-- PWA (manifest + service worker + icons)
-- تثبيت على الجوال + عمل offline كامل
+**الإصدار الرسمي الأول من V3 — مكتمل وجاهز للاستخدام.**
+
+### ملخص
+
+- **44 ملف** موزعة على 5 طبقات
+- **189 اختباراً** — كلها ناجحة
+- **10 مخازن** في IndexedDB
+- **10 مستودعات** متخصصة
+- **7 مكونات UI**
+- **9 صفحات** كاملة
+- **13 قسماً** في الإعدادات
+- **4 ملفات** في طبقة Sync
+- **PWA** قابل للتثبيت + يعمل offline
+
+### أُضيف في المرحلة 10 (PWA)
+
+**PWA Setup:**
+- `manifest.json` — بيانات التطبيق + 4 أيقونات (192 PNG, 512 PNG x2 maskable/any, SVG)
+- `sw.js` — Service Worker (Network-first للـ HTML، Cache-first للـ static)
+- `assets/icons/icon.svg` — أيقونة خضراء ببكرة خيط
+- `assets/icons/icon-192.png` — أيقونة 192x192
+- `assets/icons/icon-512.png` — أيقونة 512x512
+- `src/main.js` — تسجيل Service Worker
+
+**الميزات:**
+- تثبيت كتطبيق PWA على الجوال
+- العمل offline بالكامل بعد أول تحميل
+- أيقونات native على شاشة الجوال
+- عرض standalone (بدون شريط المتصفح)
+- اختصارات سريعة (3 shortcuts)
+
+### تغيّر
+- `manifest.json` — إضافة `id: "/jalabiya-v3/"` لمنع التعارض مع V2
+- `manifest.json` — PNG icons بدلاً من SVG فقط (متوافق مع Chrome Android)
+
+### إصلاحات
+- تصحيح `id` في manifest — يمنع "already installed" عند التثبيت
+
+### الاختبارات
+- **189 اختباراً** في 27 وحدة — كلها ناجحة ✅
 
 ---
 
 ## [0.7.0] — 2026-10-05 — Phase 9 Complete
 
 ### أُضيف
+- `src/sync/firebase-config.js` — تحميل Lazy لـ Firebase SDK
+- `src/sync/auth-sync.js` — مصادقة Email/Password
+- `src/sync/firestore-sync.js` — Push/Pull/Apply
+- `src/sync/offline-queue.js` — طابور العمليات
+- قسم "المزامنة السحابية" في الإعدادات
 
-**طبقة المزامنة (Sync Layer):**
-- `src/sync/firebase-config.js` — تحميل Firebase SDK (Lazy) + تحقق من الإعدادات
-- `src/sync/auth-sync.js` — مصادقة Email/Password + ترجمة أخطاء عربية
-- `src/sync/firestore-sync.js` — Push/Pull/Apply كامل
-- `src/sync/offline-queue.js` — طابور العمليات أثناء عدم الاتصال
-
-### تغيّر
-
-- `src/core/config.js` — إضافة `V3_OFFLINE_QUEUE` لمفاتيح التخزين
-- `src/pages/settings/sections-system.js` — قسم المزامنة يعمل فعلياً (نموذج دخول + رفع/تنزيل/خروج)
-
-### الميزات
-
-**firebase-config.js:**
-- تحميل Lazy لـ Firebase SDK 10.12.0 من CDN
-- لا يُحمَّل حتى يُستخدَم فعلاً
-- تحقق من اكتمال الإعدادات + إرجاع المفاتيح الناقصة
-- Singleton (يُهيَّأ مرة واحدة)
-
-**auth-sync.js:**
-- تسجيل دخول Email/Password
-- تسجيل خروج
-- مراقبة تغيّر الحالة (onAuthStateChanged)
-- ترجمة رسائل Firebase إلى العربية
-
-**firestore-sync.js:**
-- Push: رفع كل البيانات المحلية (8 مخازن)
-- Pull: قراءة snapshot من السحابة
-- Apply: دمج snapshot في IndexedDB
-- المسار: `users_v3/{uid}/data/main`
-- البنية: `{ stores: { customers: [...], orders: [...], ... }, updatedAt }`
-
-**offline-queue.js:**
-- إضافة عمليات (add)
-- قراءة + حذف (list, remove, size)
-- معالجة الطابور (process) — يحاول كل عملية ويحذف الناجح
-- حد أقصى 500 عملية
-- التخزين في localStorage
-
-**قسم المزامنة السحابية:**
-- إذا Firebase غير مُهيّأ → رسالة صفراء توضيحية
-- إذا لم يُسجَّل المستخدم → نموذج تسجيل دخول
-- إذا مسجَّل → بطاقة خضراء + آخر مزامنة + 3 أزرار (رفع، تنزيل، خروج)
-- مؤشر حالة الإنترنت (متصل/غير متصل)
+### ملاحظة
+- Firebase config فارغ حالياً (`apiKey: ''`) — المزامنة تحتاج بيانات حقيقية
 
 ### الاختبارات
-- **189 اختباراً** — لا تغيير (لا اختبارات جديدة في هذه المرحلة)
-
-### ملاحظة مهمة
-- Firebase غير مُهيّأ حالياً (`FIREBASE_CONFIG.apiKey = ''`)
-- المزامنة لن تعمل فعلياً حتى يتم وضع بيانات مشروع Firebase في `config.js`
-- الكود جاهز للاستخدام بمجرد إضافة الإعدادات
+- **189 اختباراً** ✅
 
 ---
 
