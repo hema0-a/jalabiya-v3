@@ -25,22 +25,25 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 3,
+  version: 4,
 };
 
 /* --- 4. Stores --- */
 export const STORES = {
-  CUSTOMERS:    'customers',
-  ORDERS:       'orders',
-  PAYMENTS:     'payments',
-  INVENTORY:    'inventory',
-  WORKERS:      'workers',
-  EXPENSES:     'expenses',
-  APPOINTMENTS: 'appointments',
-  SETTINGS:     'settings',
-  TRASH:        'trash',
-  ACTIVITY:     'activity',
-  PORTFOLIO:    'portfolio',
+  CUSTOMERS:           'customers',
+  ORDERS:              'orders',
+  PAYMENTS:            'payments',
+  INVENTORY:           'inventory',
+  WORKERS:             'workers',
+  EXPENSES:            'expenses',
+  APPOINTMENTS:        'appointments',
+  SETTINGS:            'settings',
+  TRASH:               'trash',
+  ACTIVITY:            'activity',
+  PORTFOLIO:           'portfolio',
+  COMMITMENTS:         'commitments',
+  COMMITMENT_PAYMENTS: 'commitmentPayments',
+  SAVINGS_GOALS:       'savingsGoals',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
@@ -55,7 +58,29 @@ export const PORTFOLIO_CATEGORIES = [
   { id: 'other',      label: 'أخرى',           icon: '📷' },
 ];
 
-/* --- 6. المناسبات --- */
+/* --- 6. تصنيفات الالتزامات (8) --- */
+export const COMMITMENT_CATEGORIES = [
+  { id: 'rent',        label: 'إيجار',       icon: '🏠' },
+  { id: 'installment', label: 'قسط',         icon: '💳' },
+  { id: 'bill',        label: 'فاتورة',       icon: '🧾' },
+  { id: 'saving',      label: 'ادخار',       icon: '🏦' },
+  { id: 'insurance',   label: 'تأمين',       icon: '🛡️' },
+  { id: 'school',      label: 'تعليم',       icon: '🎓' },
+  { id: 'loan',        label: 'سداد قرض',    icon: '💵' },
+  { id: 'other',       label: 'أخرى',        icon: '📌' },
+];
+
+/* --- 7. دوريات الالتزامات (6) --- */
+export const COMMITMENT_FREQUENCIES = [
+  { id: 'monthly',     label: 'شهري',        icon: '📅' },
+  { id: 'quarterly',   label: 'كل 3 شهور',   icon: '📆' },
+  { id: 'semi_annual', label: 'كل 6 شهور',   icon: '🗓️' },
+  { id: 'annual',      label: 'سنوي',        icon: '🎯' },
+  { id: 'weekly',      label: 'أسبوعي',      icon: '📊' },
+  { id: 'once',        label: 'مرة واحدة',   icon: '1️⃣' },
+];
+
+/* --- 8. المناسبات --- */
 export const DEFAULT_OCCASIONS = [
   { id: 'ramadan',      name: 'رمضان',                 month: 3, day: 1,  icon: '🌙', alertDays: 30, recurring: true, enabled: true },
   { id: 'eid-fitr',     name: 'عيد الفطر',             month: 4, day: 10, icon: '🎉', alertDays: 21, recurring: true, enabled: true },
@@ -66,7 +91,7 @@ export const DEFAULT_OCCASIONS = [
   { id: 'mothers-day',  name: 'عيد الأم',              month: 3, day: 21, icon: '💐', alertDays: 14, recurring: true, enabled: true },
 ];
 
-/* --- 7. خلفيات --- */
+/* --- 9. خلفيات --- */
 export const BACKGROUNDS = [
   { id: 'none',      name: 'بدون' },
   { id: 'fabric',    name: 'قماش' },
@@ -75,14 +100,14 @@ export const BACKGROUNDS = [
   { id: 'paper',     name: 'ورقي' },
 ];
 
-/* --- 8. أنماط أيقونات --- */
+/* --- 10. أنماط أيقونات --- */
 export const ICON_STYLES = [
   { id: 'default',        name: 'افتراضي' },
   { id: 'colored-badges', name: 'شارات ملونة' },
   { id: 'line',           name: 'خطي بسيط' },
 ];
 
-/* --- 9. خطوط --- */
+/* --- 11. خطوط --- */
 export const FONT_FAMILIES = [
   { id: 'ibm-plex',   name: 'IBM Plex Sans Arabic', font: "'IBM Plex Sans Arabic', system-ui" },
   { id: 'cairo',      name: 'Cairo',                font: "'Cairo', system-ui" },
@@ -91,7 +116,7 @@ export const FONT_FAMILIES = [
   { id: 'noto-kufi',  name: 'Noto Kufi Arabic',     font: "'Noto Kufi Arabic', system-ui" },
 ];
 
-/* --- 10. أحجام خطوط --- */
+/* --- 12. أحجام خطوط --- */
 export const FONT_SIZES = [
   { id: 'small',  name: 'صغير',      factor: 0.9  },
   { id: 'normal', name: 'متوسط',     factor: 1.0  },
@@ -99,7 +124,7 @@ export const FONT_SIZES = [
   { id: 'xlarge', name: 'كبير جداً', factor: 1.25 },
 ];
 
-/* --- 11. أيام الأسبوع --- */
+/* --- 13. أيام الأسبوع --- */
 export const WEEKDAYS = [
   { id: 0, name: 'الأحد' },
   { id: 1, name: 'الاثنين' },
@@ -110,7 +135,7 @@ export const WEEKDAYS = [
   { id: 6, name: 'السبت' },
 ];
 
-/* --- 12. الإعدادات الافتراضية --- */
+/* --- 14. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
   appearance: {
@@ -153,7 +178,7 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
-/* --- 13. الثيمات --- */
+/* --- 15. الثيمات --- */
 export const THEMES = [
   { id: 'classic',  name: 'كلاسيكي',   emoji: '🟢', primary: '#1F6D57', accent: '#B8863B', bg: '#F6F1E6' },
   { id: 'modern',   name: 'عصري',      emoji: '🔵', primary: '#1565C0', accent: '#4FC3F7', bg: '#F5F8FC' },
@@ -166,7 +191,7 @@ export const THEMES = [
   { id: 'ocean',    name: 'أزرق بحري', emoji: '🌊', primary: '#0D47A1', accent: '#26C6DA', bg: '#E8F4F8' },
 ];
 
-/* --- 14. Firebase --- */
+/* --- 16. Firebase --- */
 export const FIREBASE_CONFIG = {
   apiKey: '', authDomain: '', projectId: '',
   storageBucket: '', messagingSenderId: '', appId: '',
@@ -177,7 +202,7 @@ export const FIRESTORE_PATHS = {
   dataMain: 'data/main',
 };
 
-/* --- 15. localStorage keys --- */
+/* --- 17. localStorage keys --- */
 export const STORAGE_KEYS = {
   V2_DB: 'jalabiya_v2_db',
   V2_SETTINGS: 'jalabiya_v2_settings',
@@ -197,7 +222,7 @@ export const STORAGE_KEYS = {
   V3_CALENDAR_FILTER: 'jalabiya_v3_calendar_filter',
 };
 
-/* --- 16. الحدود القصوى --- */
+/* --- 18. الحدود القصوى --- */
 export const LIMITS = {
   maxActivityLog: 500,
   maxTrashItems: 200,
@@ -216,7 +241,7 @@ export const LIMITS = {
   imageMaxDimensionPx: 1600,
 };
 
-/* --- 17. المزامنة --- */
+/* --- 19. المزامنة --- */
 export const SYNC_CONFIG = {
   debounceMs: 30000,
   maxRetries: 3,
