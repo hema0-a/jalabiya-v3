@@ -53,6 +53,7 @@ async function loadPageModule(pageId) {
       case 'pricing-calculator': return await import('./pages/pricing-calculator.js');
       case 'financial-center':   return await import('./pages/financial-center.js');
       case 'kpis':               return await import('./pages/kpis.js');
+      case 'portfolio':          return await import('./pages/portfolio.js');
       case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
@@ -121,6 +122,7 @@ const MODULE_EXPORT_MAP = {
   'pricing-calculator': 'pricingCalculatorPage',
   'financial-center':   'financialCenterPage',
   'kpis':               'kpisPage',
+  'portfolio':          'portfolioPage',
 };
 
 let currentPage = null;
@@ -194,7 +196,6 @@ async function buildTestsPage(testsIndex) {
 }
 
 const PLACEHOLDER_PAGES = {
-  'portfolio':    ['معرض الأعمال', '📸'],
   'referrals':    ['الإحالات', '🤝'],
   'commitments':  ['الالتزامات', '💳'],
   'house-expenses': ['مصاريف البيت', '🏠'],
