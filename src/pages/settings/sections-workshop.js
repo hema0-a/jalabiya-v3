@@ -1,10 +1,16 @@
 /* ==========================================================================
-   sections-workshop.js — أقسام: معلومات الورشة، المظهر، أوضاع العرض
+   sections-workshop.js — أقسام الورشة (6)
+   ==========================================================================
+   معلومات الورشة، المظهر، الخلفيات، الأيقونات، الخطوط، أوضاع العرض
    ========================================================================== */
 
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
-import { THEMES, DEFAULT_SETTINGS } from '../../core/config.js';
+import { toast } from '../../ui/toast.js';
+import {
+  THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES,
+  FONT_FAMILIES, FONT_SIZES,
+} from '../../core/config.js';
 
 /* ==========================================================================
    1. معلومات الورشة
@@ -16,7 +22,6 @@ const workshopInfoSection = {
   async render(body, currentSettings, saveFn) {
     const ws = currentSettings.workshop || {};
 
-    /* حقل نصي */
     function textField(label, key, placeholder = '') {
       const inp = el('input', {
         className: 'input',
@@ -38,7 +43,7 @@ const workshopInfoSection = {
     body.appendChild(textField('رقم الهاتف', 'phone', '01xxxxxxxxx'));
     body.appendChild(textField('رقم WhatsApp', 'whatsapp', '+20xxxxxxxxxx'));
 
-    /* الشعار (رفع) */
+    /* الشعار */
     const logoPreview = el('div', {
       style: {
         width: '80px', height: '80px', borderRadius: '12px',
@@ -67,8 +72,7 @@ const workshopInfoSection = {
       el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, [
         logoPreview,
         el('button', {
-          className: 'btn btn--secondary',
-          type: 'button',
+          className: 'btn btn--secondary', type: 'button',
           onClick: () => logoInput.click(),
         }, '📁 اختر صورة'),
         logoInput,
@@ -78,7 +82,7 @@ const workshopInfoSection = {
 };
 
 /* ==========================================================================
-   2. المظهر والتخصيص
+   2. المظهر والتخصيص (الثيمات + الألوان)
    ========================================================================== */
 const appearanceSection = {
   id: 'appearance',
@@ -105,7 +109,6 @@ const appearanceSection = {
               backgroundColor: th.bg,
             },
           });
-          /* تحديث فوري */
           document.documentElement.style.setProperty('--color-primary', th.primary);
           document.documentElement.style.setProperty('--color-accent', th.accent);
           document.documentElement.style.setProperty('--color-bg', th.bg);
@@ -126,7 +129,7 @@ const appearanceSection = {
       themesGrid,
     ]));
 
-    /* Color pickers */
+    /* Color Pickers */
     const primaryPicker = createColorPicker({
       value: ap.primaryColor || '#1F6D57',
       onChange: (v) => {
@@ -151,11 +154,10 @@ const appearanceSection = {
       accentPicker,
     ]));
 
-    /* زر استعادة الافتراضي */
+    /* استعادة */
     body.appendChild(el('div', { className: 'settings-actions' }, [
       el('button', {
-        className: 'btn btn--ghost',
-        type: 'button',
+        className: 'btn btn--ghost', type: 'button',
         onClick: () => {
           const def = DEFAULT_SETTINGS.appearance;
           saveFn({ appearance: def });
@@ -169,7 +171,203 @@ const appearanceSection = {
 };
 
 /* ==========================================================================
-   3. أوضاع العرض
+   3. الخلفيات الإبداعية (5)
+   ========================================================================== */
+const backgroundsSection = {
+  id: 'backgrounds',
+  icon: '🖼️',
+  title: 'الخلفيات الإبداعية',
+  async render(body, currentSettings, saveFn) {
+    const ap = currentSettings.appearance || {};
+    const current = ap.backgroundPattern || 'none';
+
+    const grid = el('div', {
+      style: {
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px',
+      },
+    });
+
+    function applyBackground(id) {
+      /* إزالة كل الخلفيات السابقة */
+      document.body.classList.remove('bg-fabric', 'bg-sewing', 'bg-geometric', 'bg-paper');
+      if (id !== 'none') document.body.classList.add('bg-' + id);
+    }
+
+    BACKGROUNDS.forEach((bg) => {
+      const isActive = current === bg.id;
+
+      /* معاينة مصغرة */
+      const previewStyle = {
+        width: '100%', height: '48px', borderRadius: '6px',
+        background: '#F6F1E6', border: '1px solid #E5DDD0',
+        marginBottom: '4px', position: 'relative', overflow: 'hidden',
+      };
+      if (bg.id === 'fabric') previewStyle.backgroundImage = 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.08) 4px, rgba(0,0,0,0.08) 5px)';
+      if (bg.id === 'sewing') previewStyle.backgroundImage = 'repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(31,109,87,0.15) 10px, rgba(31,109,87,0.15) 11px)';
+      if (bg.id === 'geometric') {
+        previewStyle.backgroundImage = 'radial-gradient(circle at 1px 1px, rgba(31,109,87,0.2) 1.5px, transparent 0)';
+        previewStyle.backgroundSize = '12px 12px';
+      }
+      if (bg.id === 'paper') previewStyle.backgroundImage = 'repeating-linear-gradient(0deg, transparent, transparent 12px, rgba(0,0,0,0.06) 12px, rgba(0,0,0,0.06) 13px)';
+
+      const btn = el('button', {
+        type: 'button',
+        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
+        'data-bg': bg.id,
+        onClick: () => {
+          saveFn({ appearance: { ...ap, backgroundPattern: bg.id } });
+          applyBackground(bg.id);
+          /* إعادة رسم القسم */
+          const parent = grid.parentNode;
+          parent.innerHTML = '';
+          backgroundsSection.render(parent, { ...currentSettings, appearance: { ...ap, backgroundPattern: bg.id } }, saveFn);
+        },
+      }, [
+        el('div', { style: previewStyle }),
+        el('span', { className: 'settings-theme-card__name' }, bg.name),
+      ]);
+      grid.appendChild(btn);
+    });
+
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'نمط الخلفية'),
+      grid,
+      el('div', { className: 'settings-field__hint' }, 'يُطبَّق على خلفية التطبيق بالكامل — مستقل عن الثيم'),
+    ]));
+  },
+};
+
+/* ==========================================================================
+   4. أنماط الأيقونات (3)
+   ========================================================================== */
+const iconsSection = {
+  id: 'icons',
+  icon: '✨',
+  title: 'أنماط الأيقونات',
+  async render(body, currentSettings, saveFn) {
+    const ap = currentSettings.appearance || {};
+    const current = ap.iconStyle || 'default';
+
+    const grid = el('div', {
+      style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' },
+    });
+
+    function applyIconStyle(id) {
+      document.body.classList.remove('icons-colored-badges', 'icons-line');
+      if (id === 'colored-badges') document.body.classList.add('icons-colored-badges');
+      if (id === 'line') document.body.classList.add('icons-line');
+    }
+
+    ICON_STYLES.forEach((st) => {
+      const isActive = current === st.id;
+      const btn = el('button', {
+        type: 'button',
+        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
+        'data-icon': st.id,
+        onClick: () => {
+          saveFn({ appearance: { ...ap, iconStyle: st.id } });
+          applyIconStyle(st.id);
+          const parent = grid.parentNode;
+          parent.innerHTML = '';
+          iconsSection.render(parent, { ...currentSettings, appearance: { ...ap, iconStyle: st.id } }, saveFn);
+        },
+      }, [
+        el('span', { style: { fontSize: '24px', lineHeight: '1', marginBottom: '4px' } }, '👥'),
+        el('span', { className: 'settings-theme-card__name' }, st.name),
+      ]);
+      grid.appendChild(btn);
+    });
+
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'نمط الأيقونات'),
+      grid,
+      el('div', { className: 'settings-field__hint' }, 'يُطبَّق على أيقونات السايدبار والبطاقات'),
+    ]));
+  },
+};
+
+/* ==========================================================================
+   5. الخطوط (5 خطوط + 4 أحجام)
+   ========================================================================== */
+const fontsSection = {
+  id: 'fonts',
+  icon: '🔤',
+  title: 'الخطوط',
+  async render(body, currentSettings, saveFn) {
+    const dp = currentSettings.display || {};
+
+    /* --- اختيار الخط --- */
+    const fontGrid = el('div', {
+      style: { display: 'flex', flexDirection: 'column', gap: '6px' },
+    });
+
+    FONT_FAMILIES.forEach((f) => {
+      const isActive = (dp.fontFamily || 'ibm-plex') === f.id;
+      const btn = el('button', {
+        type: 'button',
+        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
+        'data-font': f.id,
+        style: {
+          flexDirection: 'row',
+          justifyContent: 'flex-start',
+          gap: '12px',
+          padding: '10px 12px',
+          textAlign: 'right',
+        },
+        onClick: () => {
+          saveFn({ display: { ...dp, fontFamily: f.id } });
+          document.documentElement.setAttribute('data-font', f.id);
+          const parent = fontGrid.parentNode;
+          parent.innerHTML = '';
+          fontsSection.render(parent, { ...currentSettings, display: { ...dp, fontFamily: f.id } }, saveFn);
+        },
+      }, [
+        el('span', { style: { fontFamily: f.font, fontSize: '18px', fontWeight: '600' } }, 'أ'),
+        el('span', { style: { fontFamily: f.font, fontSize: '15px' } }, f.name),
+        el('span', { style: { fontFamily: f.font, fontSize: '13px', color: '#666' } }, 'ورشة الجلابيب'),
+      ]);
+      fontGrid.appendChild(btn);
+    });
+
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'نوع الخط'),
+      fontGrid,
+    ]));
+
+    /* --- حجم الخط --- */
+    const sizeGrid = el('div', {
+      style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' },
+    });
+
+    FONT_SIZES.forEach((sz) => {
+      const isActive = (dp.fontSize || 'normal') === sz.id;
+      const btn = el('button', {
+        type: 'button',
+        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
+        'data-size': sz.id,
+        onClick: () => {
+          saveFn({ display: { ...dp, fontSize: sz.id } });
+          document.documentElement.setAttribute('data-size', sz.id);
+          const parent = sizeGrid.parentNode;
+          parent.innerHTML = '';
+          fontsSection.render(parent, { ...currentSettings, display: { ...dp, fontSize: sz.id } }, saveFn);
+        },
+      }, [
+        el('span', { style: { fontSize: (16 * sz.factor) + 'px', lineHeight: '1' } }, 'أ'),
+        el('span', { className: 'settings-theme-card__name' }, sz.name),
+      ]);
+      sizeGrid.appendChild(btn);
+    });
+
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'حجم الخط'),
+      sizeGrid,
+    ]));
+  },
+};
+
+/* ==========================================================================
+   6. أوضاع العرض
    ========================================================================== */
 const displaySection = {
   id: 'display',
@@ -178,7 +376,6 @@ const displaySection = {
   async render(body, currentSettings, saveFn) {
     const dp = currentSettings.display || {};
 
-    /* Toggle helper */
     function toggleRow(label, key, hint = '') {
       const t = createToggle({
         label,
@@ -198,26 +395,6 @@ const displaySection = {
     body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast'));
     body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل'));
     body.appendChild(toggleRow('وضع العميل 👁️', 'clientMode', 'إخفاء الأرقام والإحصائيات'));
-
-    /* حجم الخط */
-    const fontSelect = el('select', { className: 'select' });
-    [
-      ['small', 'صغير'],
-      ['medium', 'متوسط'],
-      ['large', 'كبير'],
-      ['xlarge', 'كبير جداً'],
-    ].forEach(([v, l]) => {
-      const o = el('option', { value: v }, l);
-      if (dp.fontSize === v) o.selected = true;
-      fontSelect.appendChild(o);
-    });
-    fontSelect.addEventListener('change', () => {
-      saveFn({ display: { ...dp, fontSize: fontSelect.value } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'حجم الخط'),
-      fontSelect,
-    ]));
   },
 };
 
@@ -225,8 +402,8 @@ const displaySection = {
 export const WORKSHOP_SECTIONS = [
   workshopInfoSection,
   appearanceSection,
+  backgroundsSection,
+  iconsSection,
+  fontsSection,
   displaySection,
 ];
-
-/* --- استيراد مؤجل لـ toast --- */
-import { toast } from '../../ui/toast.js';
