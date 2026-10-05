@@ -2,7 +2,7 @@
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
    v3: إضافة مخزن portfolio.
-   ⚠️ لا تُستخدم boolean كمفاتيح فهرس — IDB لا يقبلها.
+   ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
 import { STORES } from '../core/config.js';
@@ -14,105 +14,81 @@ export const STORE_NAMES = Object.values(STORES);
 
 export const SCHEMA = {
   [STORES.CUSTOMERS]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
-      idx('by_name',      'name'),
-      idx('by_phone',     'phone'),
+      idx('by_name', 'name'),
+      idx('by_phone', 'phone'),
       idx('by_createdAt', 'createdAt'),
     ],
   },
-
   [STORES.ORDERS]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_customerId', 'customerId'),
-      idx('by_status',     'status'),
-      idx('by_createdAt',  'createdAt'),
-      idx('by_dueDate',    'dueDate'),
+      idx('by_status', 'status'),
+      idx('by_createdAt', 'createdAt'),
+      idx('by_dueDate', 'dueDate'),
     ],
   },
-
   [STORES.PAYMENTS]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
-      idx('by_orderId',    'orderId'),
+      idx('by_orderId', 'orderId'),
       idx('by_customerId', 'customerId'),
-      idx('by_createdAt',  'createdAt'),
+      idx('by_createdAt', 'createdAt'),
     ],
   },
-
   [STORES.INVENTORY]: {
-    keyPath: 'id',
-    autoIncrement: false,
-    indexes: [
-      idx('by_name',     'name'),
-      idx('by_category', 'category'),
-    ],
-  },
-
-  [STORES.WORKERS]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_name', 'name'),
+      idx('by_category', 'category'),
     ],
   },
-
+  [STORES.WORKERS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [idx('by_name', 'name')],
+  },
   [STORES.EXPENSES]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_category', 'category'),
-      idx('by_date',     'date'),
+      idx('by_date', 'date'),
     ],
   },
-
   [STORES.APPOINTMENTS]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_customerId', 'customerId'),
-      idx('by_orderId',    'orderId'),
-      idx('by_date',       'date'),
-      idx('by_status',     'status'),
+      idx('by_orderId', 'orderId'),
+      idx('by_date', 'date'),
+      idx('by_status', 'status'),
     ],
   },
-
   [STORES.SETTINGS]: {
-    keyPath: 'id',
-    autoIncrement: false,
-    indexes: [],
+    keyPath: 'id', autoIncrement: false, indexes: [],
   },
-
   [STORES.TRASH]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_originalStore', 'originalStore'),
-      idx('by_deletedAt',     'deletedAt'),
+      idx('by_deletedAt', 'deletedAt'),
     ],
   },
-
   [STORES.ACTIVITY]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
-      idx('by_type',      'type'),
+      idx('by_type', 'type'),
       idx('by_timestamp', 'timestamp'),
-      idx('by_entityId',  'entityId'),
+      idx('by_entityId', 'entityId'),
     ],
   },
-
-  /* --- جديد في v3 --- */
+  /* --- جديد v3 --- */
   [STORES.PORTFOLIO]: {
-    keyPath: 'id',
-    autoIncrement: false,
+    keyPath: 'id', autoIncrement: false,
     indexes: [
-      idx('by_createdAt',  'createdAt'),
-      idx('by_category',   'category'),
+      idx('by_createdAt', 'createdAt'),
+      idx('by_category', 'category'),
       idx('by_customerId', 'customerId'),
     ],
   },
@@ -124,10 +100,8 @@ export const SCHEMA = {
 export function validateSchema() {
   const schemaKeys = Object.keys(SCHEMA).sort();
   const storeValues = Object.values(STORES).sort();
-
   const missing = storeValues.filter((s) => !schemaKeys.includes(s));
   const extra = schemaKeys.filter((s) => !storeValues.includes(s));
-
   if (missing.length || extra.length) {
     const parts = [];
     if (missing.length) parts.push('missing: ' + missing.join(', '));
