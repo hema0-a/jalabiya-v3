@@ -1,21 +1,14 @@
 /* ==========================================================================
-   idb.js — غلاف IndexedDB (Promise-based wrapper)
+   idb.js — غلاف IndexedDB (Promise-based)
    ==========================================================================
-   المسؤول الوحيد عن التعامل المباشر مع IndexedDB.
-   كل الدوال ترجع Promise — لا callbacks.
+   Migration v2 → v3: إضافة مخزن portfolio فقط — لا لمس للمخازن الأخرى.
    ========================================================================== */
 
 import { DB_CONFIG, STORES } from '../core/config.js';
 import { SCHEMA, validateSchema } from './schema.js';
 
-/* --- النسخة الوحيدة من القاعدة (Singleton) --- */
 let dbInstance = null;
 
-/**
- * تغليف IDBRequest في Promise.
- * @param {IDBRequest} request
- * @returns {Promise<*>}
- */
 function wrap(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -23,11 +16,6 @@ function wrap(request) {
   });
 }
 
-/**
- * فتح قاعدة البيانات (أو إرجاع النسخة المفتوحة).
- * يُنشئ المخازن والفهارس عند أول فتح أو عند ترقية الإصدار.
- * @returns {Promise<IDBDatabase>}
- */
 export function openDB() {
   return new Promise((resolve, reject) => {
     if (dbInstance) return resolve(dbInstance);
@@ -42,23 +30,32 @@ export function openDB() {
       const tx = event.target.transaction;
       const oldVersion = event.oldVersion;
 
-      /* --- الترقيات (Migrations) --- */
-
-      // v1 → v2: حذف فهارس boolean غير صالحة في IDB
+      /* --- Migration v1 → v2: حذف فهارس boolean --- */
       if (oldVersion >= 1 && oldVersion < 2) {
-        // customers.by_vip
         if (db.objectStoreNames.contains(STORES.CUSTOMERS)) {
           const s = tx.objectStore(STORES.CUSTOMERS);
           if (s.indexNames.contains('by_vip')) s.deleteIndex('by_vip');
         }
-        // workers.by_active
         if (db.objectStoreNames.contains(STORES.WORKERS)) {
           const s = tx.objectStore(STORES.WORKERS);
           if (s.indexNames.contains('by_active')) s.deleteIndex('by_active');
         }
       }
 
-      /* --- إنشاء المخازن والفهارس الناقصة --- */
+      /* --- Migration v2 → v3: إضافة portfolio فقط --- */
+      if (oldVersion >= 2 && oldVersion < 3) {
+        if (!db.objectStoreNames.contains(STORES.PORTFOLIO)) {
+          const store = db.createObjectStore(STORES.PORTFOLIO, {
+            keyPath: 'id',
+            autoIncrement: false,
+          });
+          store.createIndex('by_createdAt', 'createdAt');
+          store.createIndex('by_category', 'category');
+          store.createIndex('by_customerId', 'customerId');
+        }
+      }
+
+      /* --- إنشاء المخازن والفهارس الناقصة (عند oldVersion = 0) --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
         const store = db.createObjectStore(storeName, {
@@ -82,97 +79,47 @@ export function openDB() {
   });
 }
 
-/**
- * فتح transaction على مخزن واحد (قراءة أو كتابة).
- * @param {string} storeName
- * @param {IDBTransactionMode} [mode='readonly']
- * @returns {Promise<IDBObjectStore>}
- */
 async function getStore(storeName, mode = 'readonly') {
   const db = await openDB();
   const tx = db.transaction(storeName, mode);
   return tx.objectStore(storeName);
 }
 
-/**
- * إضافة أو تحديث سجل.
- * @param {string} storeName
- * @param {Object} value — يجب أن يحتوي على id
- * @returns {Promise<string>} المعرّف
- */
 export async function put(storeName, value) {
   const store = await getStore(storeName, 'readwrite');
   return wrap(store.put(value));
 }
 
-/**
- * قراءة سجل بواسطة المعرّف.
- * @param {string} storeName
- * @param {string} id
- * @returns {Promise<Object|undefined>}
- */
 export async function get(storeName, id) {
   const store = await getStore(storeName);
   return wrap(store.get(id));
 }
 
-/**
- * قراءة كل السجلات من مخزن.
- * @param {string} storeName
- * @returns {Promise<Array>}
- */
 export async function getAll(storeName) {
   const store = await getStore(storeName);
   return wrap(store.getAll());
 }
 
-/**
- * حذف سجل بواسطة المعرّف.
- * @param {string} storeName
- * @param {string} id
- * @returns {Promise<void>}
- */
 export async function remove(storeName, id) {
   const store = await getStore(storeName, 'readwrite');
   return wrap(store.delete(id));
 }
 
-/**
- * حذف كل السجلات من مخزن.
- * @param {string} storeName
- * @returns {Promise<void>}
- */
 export async function clear(storeName) {
   const store = await getStore(storeName, 'readwrite');
   return wrap(store.clear());
 }
 
-/**
- * عدّ السجلات في مخزن.
- * @param {string} storeName
- * @returns {Promise<number>}
- */
 export async function count(storeName) {
   const store = await getStore(storeName);
   return wrap(store.count());
 }
 
-/**
- * البحث عبر فهرس.
- * ⚠️ القيمة يجب أن تكون من أنواع IDB الصالحة: string / number / Date / Array.
- * @param {string} storeName
- * @param {string} indexName
- * @param {*} value
- * @returns {Promise<Array>}
- */
 export async function getByIndex(storeName, indexName, value) {
   const store = await getStore(storeName);
   return wrap(store.index(indexName).getAll(value));
 }
 
-/**
- * إغلاق القاعدة (للاستخدام في الاختبار أو الصيانة).
- */
 export function closeDB() {
   if (dbInstance) {
     dbInstance.close();
