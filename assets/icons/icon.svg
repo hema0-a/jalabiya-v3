@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- خلفية دائرية بتدرج أخضر -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2E8B6F"/>
+      <stop offset="100%" stop-color="#1F6D57"/>
+    </linearGradient>
+    <linearGradient id="bobbin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D4A55C"/>
+      <stop offset="100%" stop-color="#B8863B"/>
+    </linearGradient>
+    <linearGradient id="thread" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- خلفية -->
+  <rect width="512" height="512" rx="110" ry="110" fill="url(#bg)"/>
+
+  <!-- بكرة الخيط — الجزء العلوي (خشبي) -->
+  <ellipse cx="256" cy="160" rx="90" ry="20" fill="url(#bobbin)"/>
+  <rect x="166" y="150" width="180" height="18" fill="url(#bobbin)"/>
+
+  <!-- جسم الخيط (أزرق) -->
+  <rect x="180" y="168" width="152" height="176" rx="6" fill="url(#thread)"/>
+
+  <!-- خطوط الخيط الأفقية -->
+  <g stroke="#0D47A1" stroke-width="3" opacity="0.35">
+    <line x1="184" y1="195" x2="328" y2="195"/>
+    <line x1="184" y1="220" x2="328" y2="220"/>
+    <line x1="184" y1="245" x2="328" y2="245"/>
+    <line x1="184" y1="270" x2="328" y2="270"/>
+    <line x1="184" y1="295" x2="328" y2="295"/>
+    <line x1="184" y1="320" x2="328" y2="320"/>
+  </g>
+
+  <!-- خيط خارج من البكرة -->
+  <path d="M 200 168 Q 130 220 145 320 Q 160 400 220 420"
+        fill="none" stroke="#4FC3F7" stroke-width="6"
+        stroke-linecap="round" opacity="0.9"/>
+
+  <!-- الجزء السفلي من البكرة -->
+  <rect x="166" y="344" width="180" height="18" fill="url(#bobbin)"/>
+  <ellipse cx="256" cy="362" rx="90" ry="20" fill="url(#bobbin)"/>
+
+  <!-- إبرة صغيرة على يمين -->
+  <g transform="translate(400,340) rotate(35)">
+    <rect x="-3" y="-40" width="6" height="80" rx="3" fill="#E0E0E0"/>
+    <ellipse cx="0" cy="-40" rx="4" ry="6" fill="none" stroke="#E0E0E0" stroke-width="2"/>
+    <circle cx="0" cy="35" r="2.5" fill="#B8863B"/>
+  </g>
+</svg>
