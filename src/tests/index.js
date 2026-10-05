@@ -17,5 +17,6 @@ import './modules/pricing.test.js';
 import './modules/financial.test.js';
 import './modules/kpis.test.js';
 import './modules/portfolio.test.js';
+import './modules/commitments.test.js';
 
 export { runAll, register } from './registry.js';
