@@ -17,13 +17,18 @@ export const APP_CONFIG = {
   phoneCountryCode: '+20',
 };
 
-/* --- 2. إعدادات IndexedDB --- */
+/* --- 2. ثوابت التاريخ العربي --- */
+export const DAY_NAMES_SHORT = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+export const DAY_NAMES_FULL  = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
+/* --- 3. إعدادات IndexedDB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
   version: 2,
 };
 
-/* --- 3. أسماء المخازن --- */
+/* --- 4. أسماء المخازن --- */
 export const STORES = {
   CUSTOMERS:    'customers',
   ORDERS:       'orders',
@@ -37,7 +42,7 @@ export const STORES = {
   ACTIVITY:     'activity',
 };
 
-/* --- 4. المناسبات الافتراضية (7) --- */
+/* --- 5. المناسبات الافتراضية (7) --- */
 export const DEFAULT_OCCASIONS = [
   { id: 'ramadan',      name: 'رمضان',                 month: 3, day: 1,  icon: '🌙', alertDays: 30, recurring: true, enabled: true },
   { id: 'eid-fitr',     name: 'عيد الفطر',             month: 4, day: 10, icon: '🎉', alertDays: 21, recurring: true, enabled: true },
@@ -48,7 +53,7 @@ export const DEFAULT_OCCASIONS = [
   { id: 'mothers-day',  name: 'عيد الأم',              month: 3, day: 21, icon: '💐', alertDays: 14, recurring: true, enabled: true },
 ];
 
-/* --- 5. الخلفيات الإبداعية (5) --- */
+/* --- 6. الخلفيات الإبداعية (5) --- */
 export const BACKGROUNDS = [
   { id: 'none',      name: 'بدون' },
   { id: 'fabric',    name: 'قماش' },
@@ -57,14 +62,14 @@ export const BACKGROUNDS = [
   { id: 'paper',     name: 'ورقي' },
 ];
 
-/* --- 6. أنماط الأيقونات (3) --- */
+/* --- 7. أنماط الأيقونات (3) --- */
 export const ICON_STYLES = [
   { id: 'default',        name: 'افتراضي' },
   { id: 'colored-badges', name: 'شارات ملونة' },
   { id: 'line',           name: 'خطي بسيط' },
 ];
 
-/* --- 7. الخطوط (5) --- */
+/* --- 8. الخطوط (5) --- */
 export const FONT_FAMILIES = [
   { id: 'ibm-plex',   name: 'IBM Plex Sans Arabic', font: "'IBM Plex Sans Arabic', system-ui" },
   { id: 'cairo',      name: 'Cairo',                font: "'Cairo', system-ui" },
@@ -73,7 +78,7 @@ export const FONT_FAMILIES = [
   { id: 'noto-kufi',  name: 'Noto Kufi Arabic',     font: "'Noto Kufi Arabic', system-ui" },
 ];
 
-/* --- 8. أحجام الخطوط (4) --- */
+/* --- 9. أحجام الخطوط (4) --- */
 export const FONT_SIZES = [
   { id: 'small',  name: 'صغير',       factor: 0.9  },
   { id: 'normal', name: 'متوسط',      factor: 1.0  },
@@ -81,7 +86,18 @@ export const FONT_SIZES = [
   { id: 'xlarge', name: 'كبير جداً',  factor: 1.25 },
 ];
 
-/* --- 9. الإعدادات الافتراضية (19 قسماً) --- */
+/* --- 10. أيام الأسبوع (لـ يوم الإجازة) --- */
+export const WEEKDAYS = [
+  { id: 0, name: 'الأحد' },
+  { id: 1, name: 'الاثنين' },
+  { id: 2, name: 'الثلاثاء' },
+  { id: 3, name: 'الأربعاء' },
+  { id: 4, name: 'الخميس' },
+  { id: 5, name: 'الجمعة' },
+  { id: 6, name: 'السبت' },
+];
+
+/* --- 11. الإعدادات الافتراضية (21 قسماً) --- */
 export const DEFAULT_SETTINGS = {
   /* 1. معلومات الورشة */
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
@@ -92,8 +108,8 @@ export const DEFAULT_SETTINGS = {
     primaryColor: '#1F6D57',
     accentColor: '#B8863B',
     backgroundColor: '#F6F1E6',
-    backgroundPattern: 'none',      // none | fabric | sewing | geometric | paper
-    iconStyle: 'default',           // default | colored-badges | line
+    backgroundPattern: 'none',
+    iconStyle: 'default',
   },
 
   /* 4. أوضاع العرض */
@@ -102,8 +118,8 @@ export const DEFAULT_SETTINGS = {
     highContrast: false,
     compactMode: false,
     clientMode: false,
-    fontSize: 'normal',             // small | normal | large | xlarge
-    fontFamily: 'ibm-plex',         // ibm-plex | cairo | tajawal | almarai | noto-kufi
+    fontSize: 'normal',
+    fontFamily: 'ibm-plex',
   },
 
   /* 5. حقول المقاسات */
@@ -139,10 +155,11 @@ export const DEFAULT_SETTINGS = {
     alertOnProductLow: true,
   },
 
-  /* 10. الحد اليومي */
+  /* 10. الحد اليومي + يوم الإجازة */
   dailyLimit: {
     dailyOrderLimit: 700,
     fabricPickupAlertDays: 2,
+    dayOffWeekday: 0,               // 0=الأحد, 1=الاثنين, ..., 6=السبت
   },
 
   /* 11. تجميع الطلبات المتشابهة */
@@ -193,7 +210,7 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
-/* --- 10. الثيمات الجاهزة (9) --- */
+/* --- 12. الثيمات الجاهزة (9) --- */
 export const THEMES = [
   { id: 'classic',  name: 'كلاسيكي',   emoji: '🟢', primary: '#1F6D57', accent: '#B8863B', bg: '#F6F1E6' },
   { id: 'modern',   name: 'عصري',      emoji: '🔵', primary: '#1565C0', accent: '#4FC3F7', bg: '#F5F8FC' },
@@ -206,7 +223,7 @@ export const THEMES = [
   { id: 'ocean',    name: 'أزرق بحري', emoji: '🌊', primary: '#0D47A1', accent: '#26C6DA', bg: '#E8F4F8' },
 ];
 
-/* --- 11. إعدادات Firebase --- */
+/* --- 13. إعدادات Firebase --- */
 export const FIREBASE_CONFIG = {
   apiKey: '',
   authDomain: '',
@@ -216,13 +233,13 @@ export const FIREBASE_CONFIG = {
   appId: '',
 };
 
-/* --- 12. مسار بيانات V3 --- */
+/* --- 14. مسار بيانات V3 --- */
 export const FIRESTORE_PATHS = {
   base: 'users_v3',
   dataMain: 'data/main',
 };
 
-/* --- 13. مفاتيح localStorage --- */
+/* --- 15. مفاتيح localStorage --- */
 export const STORAGE_KEYS = {
   V2_DB:              'jalabiya_v2_db',
   V2_SETTINGS:        'jalabiya_v2_settings',
@@ -241,7 +258,7 @@ export const STORAGE_KEYS = {
   V3_OFFLINE_QUEUE:   'jalabiya_v3_offline_queue',
 };
 
-/* --- 14. الحدود القصوى --- */
+/* --- 16. الحدود القصوى --- */
 export const LIMITS = {
   maxActivityLog:  500,
   maxTrashItems:   200,
@@ -254,7 +271,7 @@ export const LIMITS = {
   saveDebounceMs:  300,
 };
 
-/* --- 15. إعدادات المزامنة --- */
+/* --- 17. إعدادات المزامنة --- */
 export const SYNC_CONFIG = {
   debounceMs:     30000,
   maxRetries:     3,
