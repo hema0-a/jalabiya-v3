@@ -1,0 +1,132 @@
+/* ==========================================================================
+   themes.css — الخلفيات الإبداعية + أنماط الأيقونات + الخطوط
+   ==========================================================================
+   يُستورَد من main.css.
+   يُطبَّق عبر body.bg-*, body.icons-*, :root[data-font="*"].
+   ========================================================================== */
+
+/* ==========================================================================
+   1. الخلفيات الإبداعية (5)
+   ========================================================================== */
+
+/* default: بدون خلفية — اللون من --color-bg */
+
+/* نسيج قماش */
+body.bg-fabric {
+  background-color: var(--color-bg);
+  background-image:
+    repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(0,0,0,0.03) 8px, rgba(0,0,0,0.03) 9px),
+    repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(0,0,0,0.03) 8px, rgba(0,0,0,0.03) 9px);
+}
+
+/* نمط خياطة */
+body.bg-sewing {
+  background-color: var(--color-bg);
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 20px,
+    rgba(31, 109, 87, 0.06) 20px,
+    rgba(31, 109, 87, 0.06) 22px
+  );
+}
+
+/* هندسي */
+body.bg-geometric {
+  background-color: var(--color-bg);
+  background-image: radial-gradient(circle at 1px 1px, rgba(31, 109, 87, 0.10) 1.5px, transparent 0);
+  background-size: 24px 24px;
+}
+
+/* ورقي */
+body.bg-paper {
+  background-color: var(--color-bg);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 30px,
+    rgba(0, 0, 0, 0.04) 30px,
+    rgba(0, 0, 0, 0.04) 31px
+  );
+}
+
+/* ==========================================================================
+   2. أنماط الأيقونات (3)
+   ========================================================================== */
+
+/* default: بدون تغيير */
+
+/* شارات ملونة */
+body.icons-colored-badges .sidebar__icon,
+body.icons-colored-badges .stat__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-m);
+  background: rgba(31, 109, 87, 0.10);
+  color: var(--color-primary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+body.icons-colored-badges .stat__icon {
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+}
+
+/* خطي بسيط */
+body.icons-line .sidebar__icon,
+body.icons-line .stat__icon {
+  font-size: 14px;
+  opacity: 0.75;
+  line-height: 1;
+}
+body.icons-line .stat__icon {
+  font-size: 20px;
+  opacity: 0.85;
+}
+
+/* ==========================================================================
+   3. الخطوط (5) — عبر data-font على html
+   ========================================================================== */
+
+html[data-font="ibm-plex"]  { --font-family-active: 'IBM Plex Sans Arabic', system-ui, sans-serif; }
+html[data-font="cairo"]     { --font-family-active: 'Cairo', system-ui, sans-serif; }
+html[data-font="tajawal"]   { --font-family-active: 'Tajawal', system-ui, sans-serif; }
+html[data-font="almarai"]   { --font-family-active: 'Almarai', system-ui, sans-serif; }
+html[data-font="noto-kufi"] { --font-family-active: 'Noto Kufi Arabic', system-ui, sans-serif; }
+
+html[data-font] body {
+  font-family: var(--font-family-active);
+}
+
+/* ==========================================================================
+   4. أحجام الخطوط (4) — عبر data-size
+   ========================================================================== */
+
+html[data-size="small"]  { font-size: 14px; }
+html[data-size="normal"] { font-size: 16px; }
+html[data-size="large"]  { font-size: 18px; }
+html[data-size="xlarge"] { font-size: 20px; }
+
+/* ==========================================================================
+   5. الوضع الليلي (أساسي — للـ backgrounds)
+   ========================================================================== */
+
+body.bg-fabric,
+body.bg-sewing,
+body.bg-geometric,
+body.bg-paper {
+  background-attachment: fixed;
+}
+
+/* في الوضع الليلي، نخفف النمط */
+body.dark-mode.bg-fabric,
+body.dark-mode.bg-sewing,
+body.dark-mode.bg-geometric,
+body.dark-mode.bg-paper {
+  opacity: 1;
+}
