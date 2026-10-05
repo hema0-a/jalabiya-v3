@@ -1,7 +1,8 @@
 /* ==========================================================================
    idb.js — غلاف IndexedDB (Promise-based)
    ==========================================================================
-   Migration v2 → v3: إضافة مخزن portfolio فقط — لا لمس للمخازن الأخرى.
+   Migration v3 → v4: إضافة 3 مخازن جديدة (commitments, commitmentPayments, savingsGoals).
+   ⚠️ لا نلمس المخازن الموجودة.
    ========================================================================== */
 
 import { DB_CONFIG, STORES } from '../core/config.js';
@@ -42,12 +43,11 @@ export function openDB() {
         }
       }
 
-      /* --- Migration v2 → v3: إضافة portfolio فقط --- */
+      /* --- Migration v2 → v3: إضافة portfolio --- */
       if (oldVersion >= 2 && oldVersion < 3) {
         if (!db.objectStoreNames.contains(STORES.PORTFOLIO)) {
           const store = db.createObjectStore(STORES.PORTFOLIO, {
-            keyPath: 'id',
-            autoIncrement: false,
+            keyPath: 'id', autoIncrement: false,
           });
           store.createIndex('by_createdAt', 'createdAt');
           store.createIndex('by_category', 'category');
@@ -55,7 +55,35 @@ export function openDB() {
         }
       }
 
-      /* --- إنشاء المخازن والفهارس الناقصة (عند oldVersion = 0) --- */
+      /* --- Migration v3 → v4: إضافة 3 مخازن للالتزامات --- */
+      if (oldVersion >= 3 && oldVersion < 4) {
+        /* commitments */
+        if (!db.objectStoreNames.contains(STORES.COMMITMENTS)) {
+          const store = db.createObjectStore(STORES.COMMITMENTS, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_category', 'category');
+          store.createIndex('by_frequency', 'frequency');
+          store.createIndex('by_createdAt', 'createdAt');
+        }
+        /* commitmentPayments */
+        if (!db.objectStoreNames.contains(STORES.COMMITMENT_PAYMENTS)) {
+          const store = db.createObjectStore(STORES.COMMITMENT_PAYMENTS, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_commitmentId', 'commitmentId');
+          store.createIndex('by_date', 'date');
+        }
+        /* savingsGoals */
+        if (!db.objectStoreNames.contains(STORES.SAVINGS_GOALS)) {
+          const store = db.createObjectStore(STORES.SAVINGS_GOALS, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_createdAt', 'createdAt');
+        }
+      }
+
+      /* --- إنشاء المخازن والفهارس الناقصة (oldVersion = 0) --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
         const store = db.createObjectStore(storeName, {
