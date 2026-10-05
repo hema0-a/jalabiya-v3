@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sections-data.js — أقسام البيانات (5)
+   sections-data.js — أقسام البيانات (6)
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
@@ -76,15 +76,12 @@ const measurementFieldsSection = {
 function openFieldForm(fields, editIdx, saveFn, rebuild) {
   const isEdit = editIdx >= 0;
   const existing = isEdit ? fields[editIdx] : {};
-
   const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'اسم الحقل', value: existing.name || '' });
   const unitInput = el('input', { className: 'input', type: 'text', placeholder: 'cm', value: existing.unit || 'cm' });
-
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم الحقل *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الوحدة'), unitInput]),
   ]);
-
   const handle = modal.open({
     title: isEdit ? 'تعديل حقل' : 'إضافة حقل',
     body,
@@ -168,18 +165,15 @@ const jalabiyaTypesSection = {
 function openTypeForm(types, editIdx, saveFn, rebuild) {
   const isEdit = editIdx >= 0;
   const existing = isEdit ? types[editIdx] : {};
-
   const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'مثال: جلابية صيفي', value: existing.name || '' });
   const priceInput = el('input', { className: 'input', type: 'number', placeholder: '0', min: '0', value: existing.price || '' });
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   notesInput.value = existing.notes || '';
-
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'السعر (ج.م)'), priceInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
-
   const handle = modal.open({
     title: isEdit ? 'تعديل نوع' : 'إضافة نوع',
     body,
@@ -212,7 +206,6 @@ const inventoryLimitsSection = {
   title: 'المخزون والحدود',
   async render(body, currentSettings, saveFn) {
     const inv = currentSettings.inventory || DEFAULT_SETTINGS.inventory;
-
     const thresholdInput = el('input', {
       className: 'input', type: 'number', min: '1',
       value: String(inv.minThreshold || 5),
@@ -225,7 +218,6 @@ const inventoryLimitsSection = {
       thresholdInput,
       el('div', { className: 'settings-field__hint' }, 'عند نزول الكمية تحت هذا الرقم — يظهر تنبيه'),
     ]));
-
     const t1 = createToggle({
       label: 'تنبيه عند نقص القماش',
       checked: inv.alertOnFabricLow !== false,
@@ -235,7 +227,6 @@ const inventoryLimitsSection = {
       el('div', { className: 'settings-row__label' }, 'تنبيه عند نقص القماش'),
       t1,
     ]));
-
     const t2 = createToggle({
       label: 'تنبيه عند نقص المخزون',
       checked: inv.alertOnProductLow !== false,
@@ -257,8 +248,6 @@ const dailyLimitSection = {
   title: 'الحد اليومي + يوم الإجازة',
   async render(body, currentSettings, saveFn) {
     const dl = currentSettings.dailyLimit || DEFAULT_SETTINGS.dailyLimit;
-
-    /* --- الحد اليومي --- */
     const limitInput = el('input', {
       className: 'input', type: 'number', min: '0',
       value: String(dl.dailyOrderLimit || 700),
@@ -271,8 +260,6 @@ const dailyLimitSection = {
       limitInput,
       el('div', { className: 'settings-field__hint' }, 'تنبيه عند تجاوز هذا الرقم — لا يمنع الإضافة'),
     ]));
-
-    /* --- تنبيه استلام القماش --- */
     const pickupInput = el('input', {
       className: 'input', type: 'number', min: '0', max: '30',
       value: String(dl.fabricPickupAlertDays || 2),
@@ -285,7 +272,6 @@ const dailyLimitSection = {
       pickupInput,
     ]));
 
-    /* --- يوم الإجازة الأسبوعي --- */
     body.appendChild(el('div', {
       style: {
         marginTop: '12px', paddingTop: '12px',
@@ -333,7 +319,6 @@ const groupingSection = {
   title: 'تجميع الطلبات المتشابهة',
   async render(body, currentSettings, saveFn) {
     const gr = currentSettings.grouping || DEFAULT_SETTINGS.grouping;
-
     const mainToggle = createToggle({
       label: 'تفعيل التجميع',
       checked: gr.enabled === true,
@@ -343,7 +328,6 @@ const groupingSection = {
       el('div', { className: 'settings-row__label' }, 'تفعيل التجميع'),
       mainToggle,
     ]));
-
     const toleranceInput = el('input', {
       className: 'input', type: 'number', min: '0', max: '20',
       value: String(gr.tolerance || 2),
@@ -356,7 +340,6 @@ const groupingSection = {
       toleranceInput,
       el('div', { className: 'settings-field__hint' }, 'مثال: 2 سم تعني أن القياسات المتقاربة بحدود 2 سم تُجمَّع'),
     ]));
-
     const typeToggle = createToggle({
       label: 'نفس النوع فقط',
       checked: gr.sameTypeOnly !== false,
@@ -366,13 +349,138 @@ const groupingSection = {
       el('div', { className: 'settings-row__label' }, 'التجميع لنفس النوع فقط'),
       typeToggle,
     ]));
-
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
         background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
       },
     }, '💡 يظهر زر "🎯 تجميع" في صفحة الطلبات — يعرض الطلبات القابلة للتجميع في دفعات موحدة.'));
+  },
+};
+
+/* ==========================================================================
+   6. حاسبة التسعير (تخصيص)
+   ========================================================================== */
+const pricingCalculatorSection = {
+  id: 'pricing-calculator',
+  icon: '🧮',
+  title: 'حاسبة التسعير',
+  async render(body, currentSettings, saveFn) {
+    const pc = currentSettings.pricingCalculator || DEFAULT_SETTINGS.pricingCalculator;
+
+    /* --- Toggles لتشغيل/تعطيل الحقول --- */
+    function toggleRow(label, key, hint = '') {
+      const t = createToggle({
+        label,
+        checked: pc[key] !== false,
+        onChange: (v) => saveFn({ pricingCalculator: { ...pc, [key]: v } }),
+      });
+      return el('div', { className: 'settings-row' }, [
+        el('div', { style: { flex: '1' } }, [
+          el('div', { className: 'settings-row__label' }, label),
+          hint ? el('div', { className: 'settings-row__hint' }, hint) : null,
+        ]),
+        t,
+      ]);
+    }
+
+    body.appendChild(el('h4', {
+      style: { fontSize: '13px', color: '#123C2F', margin: '0 0 8px 0', fontWeight: '600' },
+    }, '📊 أقسام الحساب'));
+
+    body.appendChild(toggleRow('🧵 تفعيل حساب القماش', 'enableFabric', 'الأمتار × سعر المتر'));
+    body.appendChild(toggleRow('👷 تفعيل حساب العمال', 'enableLabor', 'الساعات × سعر الساعة'));
+    body.appendChild(toggleRow('📦 تفعيل المصاريف الإضافية', 'enableExtras', 'خيوط، أزرار، إكسسوارات'));
+    body.appendChild(toggleRow('💸 تفعيل المصاريف غير المباشرة', 'enableOverhead', 'إيجار، كهرباء، إلخ'));
+
+    /* --- هامش الربح الافتراضي --- */
+    body.appendChild(el('div', {
+      style: {
+        marginTop: '12px', paddingTop: '12px',
+        borderTop: '1px dashed rgba(31,109,87,0.15)',
+      },
+    }, [
+      el('h4', {
+        style: { fontSize: '13px', color: '#123C2F', margin: '0 0 8px 0', fontWeight: '600' },
+      }, '📈 هامش الربح'),
+    ]));
+
+    const marginInput = el('input', {
+      className: 'input', type: 'number', min: '0', max: '500',
+      value: String(pc.defaultMargin || 30),
+    });
+    marginInput.addEventListener('blur', () => {
+      saveFn({ pricingCalculator: { ...pc, defaultMargin: Number(marginInput.value) || 30 } });
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'هامش الربح الافتراضي (%)'),
+      marginInput,
+    ]));
+
+    /* --- أزرار النسب الجاهزة --- */
+    const presets = Array.isArray(pc.marginPresets) ? [...pc.marginPresets] : [20, 30, 50, 100];
+    const presetsList = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+
+    function rebuildPresets() {
+      clear(presetsList);
+      if (presets.length === 0) {
+        presetsList.appendChild(el('div', {
+          style: { fontSize: '12px', color: '#999', textAlign: 'center', padding: '8px' },
+        }, 'لا توجد نسب — أضف نسبة'));
+        return;
+      }
+      presets.forEach((p, idx) => {
+        presetsList.appendChild(el('div', {
+          style: {
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '6px 10px', background: '#F6F1E6', borderRadius: '8px',
+          },
+        }, [
+          el('span', { style: { flex: '1', fontSize: '14px', fontWeight: '500' } }, p + '%'),
+          el('button', {
+            className: 'btn btn--sm btn--danger', type: 'button',
+            onClick: () => {
+              presets.splice(idx, 1);
+              saveFn({ pricingCalculator: { ...pc, marginPresets: presets } });
+              rebuildPresets();
+            },
+          }, '🗑️'),
+        ]));
+      });
+    }
+
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'أزرار النسب الجاهزة'),
+      presetsList,
+      el('button', {
+        className: 'btn btn--secondary btn--sm', type: 'button',
+        style: { marginTop: '6px' },
+        onClick: () => {
+          const value = window.prompt('أدخل النسبة (رقم):');
+          if (value === null) return;
+          const num = Number(value);
+          if (!isFinite(num) || num < 0 || num > 500) return toast.warning('قيمة غير صالحة');
+          if (presets.includes(num)) return toast.warning('النسبة موجودة');
+          presets.push(num);
+          presets.sort((a, b) => a - b);
+          saveFn({ pricingCalculator: { ...pc, marginPresets: presets } });
+          rebuildPresets();
+        },
+      }, '➕ إضافة نسبة'),
+    ]));
+
+    rebuildPresets();
+
+    /* --- Toggles أخيرة --- */
+    body.appendChild(el('div', {
+      style: {
+        marginTop: '12px', paddingTop: '12px',
+        borderTop: '1px dashed rgba(31,109,87,0.15)',
+      },
+    }, [
+      toggleRow('💾 حفظ سجل الحسابات', 'saveHistory', 'يحفظ آخر 50 حساب في المتصفح'),
+      toggleRow('📋 تفعيل زر "إنشاء طلب"', 'enableCreateOrder', 'ينشئ طلباً مباشرة من الحساب'),
+    ]));
   },
 };
 
@@ -383,4 +491,5 @@ export const DATA_SECTIONS = [
   inventoryLimitsSection,
   dailyLimitSection,
   groupingSection,
+  pricingCalculatorSection,
 ];
