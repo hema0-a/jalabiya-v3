@@ -1,0 +1,245 @@
+/* ==========================================================================
+   settings.css — صفحة الإعدادات الاحترافية
+   ========================================================================== */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+
+/* --- البحث --- */
+.settings-search {
+  position: sticky;
+  top: 56px;
+  z-index: 5;
+  background: var(--color-bg);
+  padding-bottom: var(--space-s);
+}
+.settings-search__input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: var(--font-size-base);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-l);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-s);
+}
+.settings-search__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(31, 109, 87, 0.15);
+}
+
+/* --- التخطيط (Sidebar + Main) --- */
+.settings-layout {
+  display: flex;
+  gap: var(--space-m);
+  align-items: flex-start;
+}
+
+/* --- الفهرس الجانبي (TOC) --- */
+.settings-toc {
+  flex-shrink: 0;
+  width: 200px;
+  position: sticky;
+  top: 130px;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-l);
+  padding: var(--space-s);
+  box-shadow: var(--shadow-s);
+}
+.settings-toc__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: right;
+  font-family: inherit;
+}
+.settings-toc__item:hover { background: rgba(31, 109, 87, 0.08); }
+.settings-toc__item--active {
+  background: var(--color-primary);
+  color: #fff;
+}
+.settings-toc__icon { font-size: 16px; line-height: 1; }
+
+/* --- منطقة المحتوى --- */
+.settings-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- قسم --- */
+.settings-section {
+  background: var(--color-surface);
+  border-radius: var(--radius-l);
+  padding: var(--space-m);
+  margin-bottom: var(--space-m);
+  box-shadow: var(--shadow-s);
+  scroll-margin-top: 130px;
+}
+.settings-section__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  margin-bottom: var(--space-m);
+  padding-bottom: var(--space-s);
+  border-bottom: 1px solid var(--color-border);
+}
+.settings-section__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.settings-section__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+  margin: 0;
+  flex: 1;
+}
+.settings-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+
+/* --- صفوف الإعدادات --- */
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-m);
+  padding: var(--space-s) 0;
+}
+.settings-row__label {
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  flex: 1;
+}
+.settings-row__hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-light);
+  margin-top: 2px;
+}
+.settings-row--column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* --- حقول الإعدادات --- */
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-s) 0;
+}
+.settings-field__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-dark);
+}
+.settings-field__hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-light);
+}
+
+/* --- صف الأزرار داخل قسم --- */
+.settings-actions {
+  display: flex;
+  gap: var(--space-s);
+  justify-content: flex-end;
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-m);
+}
+
+/* --- شبكة الثيمات --- */
+.settings-themes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-s);
+}
+.settings-theme-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  background: var(--color-surface);
+  font-family: inherit;
+}
+.settings-theme-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-m); }
+.settings-theme-card--active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(31, 109, 87, 0.15);
+}
+.settings-theme-card__emoji { font-size: 24px; line-height: 1; }
+.settings-theme-card__name {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  text-align: center;
+}
+.settings-theme-card__swatch {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+.settings-theme-card__dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* --- Danger Zone --- */
+.settings-danger {
+  background: #FFEBEE;
+  border: 2px solid #C62828;
+  border-radius: var(--radius-l);
+  padding: var(--space-m);
+}
+.settings-danger .settings-section__title { color: #C62828; }
+.settings-danger .settings-section__header { border-bottom-color: #FFCDD2; }
+
+/* --- فهرس النتائج في البحث --- */
+.settings-section--hidden { display: none; }
+.settings-section mark {
+  background: #FFF59D;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 767px) {
+  .settings-layout { flex-direction: column; }
+  .settings-toc {
+    position: static;
+    width: 100%;
+    max-height: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: var(--space-s);
+  }
+  .settings-toc__item {
+    width: auto;
+    padding: 6px 10px;
+    font-size: var(--font-size-xs);
+  }
+  .settings-themes { grid-template-columns: repeat(2, 1fr); }
+}
