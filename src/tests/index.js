@@ -15,5 +15,6 @@ import './modules/dashboard.test.js';
 import './modules/pages2.test.js';
 import './modules/settings.test.js';
 import './modules/appointments-page.test.js';
+import './modules/pricing.test.js';
 
 export { runAll, register } from './registry.js';
