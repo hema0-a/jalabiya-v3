@@ -47,8 +47,8 @@ await t.test('1. SCHEMA has 11 stores', schemaKeys.length === 11);
   await t.test('5. no duplicate index names', noDup);
 
   const idsOk = SETTINGS_ID === 'main';
-  const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === 10;
-  await t.test('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
+const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === 11;
+await t.test('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
 });
 
 /* ===== idb.js (8) ===== */
