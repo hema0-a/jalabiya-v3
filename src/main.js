@@ -1,18 +1,23 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router + PWA
    ==========================================================================
-   كل الصفحات (10) موصولة — لا placeholders.
+   - لا innerHTML.
+   - استيراد ديناميكي للصفحات (Lazy Loading).
+   - Hash routing (#/page-id).
+   - السايدبار يُحدَّث عند الفتح المباشر.
    ========================================================================== */
 
 const app = document.getElementById('app');
-if (app) app.innerHTML = '';
+if (app) {
+  while (app.firstChild) app.removeChild(app.firstChild);
+}
 
 /* --- شاشة خطأ --- */
 function showError(title, err) {
   const msg = (err && err.message) ? err.message : String(err);
   const stack = (err && err.stack) ? err.stack : '';
   if (!app) return;
-  app.innerHTML = '';
+  while (app.firstChild) app.removeChild(app.firstChild);
   const pre = document.createElement('pre');
   pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#2a0000;color:#ff8080;min-height:100vh;box-sizing:border-box';
   pre.textContent = '❌ ' + title + '\n\n' + msg + '\n\n' + stack;
@@ -26,71 +31,127 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js', { scope: './' })
-      .then((reg) => {
-        console.log('[PWA] Service Worker registered:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[PWA] SW registration failed:', err);
-      });
+      .then((reg) => { console.log('[PWA] SW registered:', reg.scope); })
+      .catch((err) => { console.warn('[PWA] SW registration failed:', err); });
   });
 }
 
-/* --- الاستيرادات --- */
-let el, toast, createLayout, testsIndex;
-let customersPage, ordersPage, dashboardPage;
-let paymentsPage, inventoryPage, workersPage, expensesPage, reportsPage;
-let settingsPage, appointmentsPage;
+/* ==========================================================================
+   1. الاستيرادات الأساسية
+   ========================================================================== */
+let el, toast, createLayout;
 
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
-  testsIndex = await import('./tests/index.js');
-  ({ customersPage } = await import('./pages/customers.js'));
-  ({ ordersPage } = await import('./pages/orders.js'));
-  ({ dashboardPage } = await import('./pages/dashboard.js'));
-  ({ paymentsPage } = await import('./pages/payments.js'));
-  ({ inventoryPage } = await import('./pages/inventory.js'));
-  ({ workersPage } = await import('./pages/workers.js'));
-  ({ expensesPage } = await import('./pages/expenses.js'));
-  ({ reportsPage } = await import('./pages/reports.js'));
-  ({ settingsPage } = await import('./pages/settings/index.js'));
-  ({ appointmentsPage } = await import('./pages/appointments.js'));
 } catch (e) {
-  showError('Failed to load modules', e);
+  showError('Failed to load core modules', e);
   throw e;
 }
 
-/* --- قائمة السايدبار --- */
-const SIDEBAR_ITEMS = [
-  { id: 'home',         icon: '🏠', label: 'الرئيسية' },
-  { id: 'customers',    icon: '👥', label: 'العملاء' },
-  { id: 'orders',       icon: '📦', label: 'الطلبات' },
-  { id: 'payments',     icon: '💰', label: 'الدفعات' },
-  { id: 'inventory',    icon: '🧵', label: 'المخزون' },
-  { id: 'workers',      icon: '👷', label: 'العمال' },
-  { id: 'expenses',     icon: '🧾', label: 'المصروفات' },
-  { id: 'appointments', icon: '📅', label: 'المواعيد' },
-  { id: 'reports',      icon: '📊', label: 'التقارير' },
-  { id: 'settings',     icon: '⚙️', label: 'الإعدادات' },
-  { id: 'tests',        icon: '🧪', label: 'الاختبارات' },
+/* ==========================================================================
+   2. محمّل الصفحات الديناميكي
+   ========================================================================== */
+async function loadPageModule(pageId) {
+  try {
+    switch (pageId) {
+      case 'dashboard':  return await import('./pages/dashboard.js');
+      case 'customers':  return await import('./pages/customers.js');
+      case 'orders':     return await import('./pages/orders.js');
+      case 'payments':   return await import('./pages/payments.js');
+      case 'inventory':  return await import('./pages/inventory.js');
+      case 'workers':    return await import('./pages/workers.js');
+      case 'expenses':   return await import('./pages/expenses.js');
+      case 'reports':    return await import('./pages/reports.js');
+      case 'settings':   return await import('./pages/settings/index.js');
+      case 'calendar':   return await import('./pages/appointments.js');
+      case 'tests':      return await import('./tests/index.js');
+      default:           return null;
+    }
+  } catch (e) {
+    console.warn('[Main] Page "' + pageId + '" not found — using placeholder.');
+    return null;
+  }
+}
+
+/* ==========================================================================
+   3. قائمة السايدبار — 9 أقسام، 22 عنصراً (مطابقة V2)
+   ========================================================================== */
+const SIDEBAR_SECTIONS = [
+  { title: 'الرئيسية', items: [
+    { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
+  ]},
+  { title: 'العمليات', items: [
+    { id: 'customers', icon: '👥', label: 'العملاء' },
+    { id: 'orders',    icon: '📋', label: 'الطلبات' },
+    { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
+    { id: 'payments',  icon: '💰', label: 'الدفعات' },
+  ]},
+  { title: 'إدارة الورشة', items: [
+    { id: 'inventory',          icon: '📦', label: 'المخزون' },
+    { id: 'workers',            icon: '👷', label: 'العمال' },
+    { id: 'expenses',           icon: '💸', label: 'مصروفات الورشة' },
+    { id: 'pricing-calculator', icon: '🧮', label: 'حاسبة التسعير' },
+  ]},
+  { title: 'التسويق والعرض', items: [
+    { id: 'portfolio', icon: '📸', label: 'معرض الأعمال' },
+    { id: 'referrals', icon: '🤝', label: 'الإحالات' },
+  ]},
+  { title: 'المالية الشخصية', items: [
+    { id: 'commitments',    icon: '💳', label: 'الالتزامات' },
+    { id: 'house-expenses', icon: '🏠', label: 'مصاريف البيت' },
+    { id: 'loans',          icon: '💵', label: 'القروض' },
+  ]},
+  { title: 'المواسم والمناسبات', items: [
+    { id: 'occasions', icon: '🎉', label: 'المواسم والأعياد' },
+  ]},
+  { title: 'النظام', items: [
+    { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },
+    { id: 'trash',        icon: '🗑️', label: 'سلة المحذوفات' },
+  ]},
+  { title: 'التحليل والتقارير', items: [
+    { id: 'financial-center', icon: '💰', label: 'المركز المالي' },
+    { id: 'kpis',             icon: '📊', label: 'مؤشرات الأداء' },
+    { id: 'reports',          icon: '📈', label: 'التقارير' },
+  ]},
+  { title: 'النظام المتقدم', items: [
+    { id: 'cloud-sync', icon: '☁️', label: 'المزامنة السحابية' },
+    { id: 'settings',   icon: '⚙️', label: 'الإعدادات' },
+  ]},
 ];
 
-/* --- الصفحة الحالية --- */
+const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
+
+const MODULE_EXPORT_MAP = {
+  dashboard: 'dashboardPage',
+  customers: 'customersPage',
+  orders:    'ordersPage',
+  payments:  'paymentsPage',
+  inventory: 'inventoryPage',
+  workers:   'workersPage',
+  expenses:  'expensesPage',
+  reports:   'reportsPage',
+  settings:  'settingsPage',
+  calendar:  'appointmentsPage',
+};
+
 let currentPage = null;
 
-/* --- إنشاء App Shell --- */
+/* ==========================================================================
+   4. إنشاء App Shell
+   ========================================================================== */
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
     subtitle: 'V3 — v3.0.0',
     logo: '🧵',
-    items: SIDEBAR_ITEMS,
-    activeId: 'home',
+    sections: SIDEBAR_SECTIONS,
+    activeId: 'dashboard',
     footer: '© 2026 — v3.0.0',
   },
   topbar: {
-    title: 'الرئيسية',
+    title: 'لوحة التحكم',
     actions: [
       {
         id: 'theme',
@@ -102,39 +163,43 @@ const layout = createLayout({
     showMenu: true,
   },
   onPageSelect: (id) => {
-    renderPage(id);
+    const targetHash = '#/' + id;
+    if (location.hash !== targetHash) {
+      location.hash = targetHash;
+    } else {
+      renderPage(id);
+    }
   },
 });
 
 app.appendChild(layout.node);
 
 /* ==========================================================================
-   الصفحات
+   5. الصفحات
    ========================================================================== */
+function buildPlaceholderPage(title, icon) {
+  return el('div', { className: 'empty-state' }, [
+    el('div', { className: 'empty-state__icon' }, icon),
+    el('h2', { className: 'empty-state__title', text: title }),
+    el('p', { className: 'empty-state__text' }, 'قيد البناء — سيُبنى حسب تصميم V2.'),
+  ]);
+}
 
-async function buildTestsPage() {
+async function buildTestsPage(testsIndex) {
   const wrap = el('div', {});
   const pre = el('pre', {
     style: {
-      padding: '16px',
-      margin: '0',
-      fontFamily: 'monospace',
-      direction: 'ltr',
-      textAlign: 'left',
-      fontSize: '12px',
-      lineHeight: '1.5',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-      background: '#111',
-      color: '#0f0',
-      borderRadius: '8px',
-      boxSizing: 'border-box',
+      padding: '16px', margin: '0',
+      fontFamily: 'monospace', direction: 'ltr',
+      textAlign: 'left', fontSize: '12px', lineHeight: '1.5',
+      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      background: '#111', color: '#0f0',
+      borderRadius: '8px', boxSizing: 'border-box',
     },
   });
 
   const lines = [];
   const paint = () => { pre.textContent = lines.join('\n'); };
-
   lines.push('🚀 Running tests...');
   paint();
   wrap.appendChild(pre);
@@ -145,13 +210,11 @@ async function buildTestsPage() {
       if (body) lines.push(body);
       paint();
     });
-
     lines.push('');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
     paint();
-
-    console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
+    console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests);
   } catch (err) {
     lines.push('');
     lines.push('❌ Failed: ' + (err.message || String(err)));
@@ -161,38 +224,79 @@ async function buildTestsPage() {
   return wrap;
 }
 
-async function renderRepoPage(pageModule) {
-  const container = el('div', {});
-  layout.setContent(container);
-  await pageModule.render(container);
-  currentPage = pageModule;
-}
+const PLACEHOLDER_PAGES = {
+  'pricing-calculator': ['حاسبة التسعير', '🧮'],
+  'portfolio':          ['معرض الأعمال', '📸'],
+  'referrals':          ['الإحالات', '🤝'],
+  'commitments':        ['الالتزامات', '💳'],
+  'house-expenses':     ['مصاريف البيت', '🏠'],
+  'loans':              ['القروض', '💵'],
+  'occasions':          ['المواسم والأعياد', '🎉'],
+  'activity-log':       ['سجل النشاط', '📜'],
+  'trash':              ['سلة المحذوفات', '🗑️'],
+  'financial-center':   ['المركز المالي', '💰'],
+  'kpis':               ['مؤشرات الأداء', '📊'],
+  'cloud-sync':         ['المزامنة السحابية', '☁️'],
+};
 
+/* ==========================================================================
+   6. Router
+   ========================================================================== */
 async function renderPage(id) {
-  const item = SIDEBAR_ITEMS.find((i) => i.id === id);
-  if (item) layout.setTitle(item.label);
+  const item = ALL_ITEMS.find((i) => i.id === id);
+  if (item) {
+    layout.setTitle(item.label);
+    layout.setActivePage(id);
+  }
 
   if (currentPage && typeof currentPage.destroy === 'function') {
     try { currentPage.destroy(); } catch (e) { console.error(e); }
   }
   currentPage = null;
 
-  if (id === 'home')         return renderRepoPage(dashboardPage);
-  if (id === 'customers')    return renderRepoPage(customersPage);
-  if (id === 'orders')       return renderRepoPage(ordersPage);
-  if (id === 'payments')     return renderRepoPage(paymentsPage);
-  if (id === 'inventory')    return renderRepoPage(inventoryPage);
-  if (id === 'workers')      return renderRepoPage(workersPage);
-  if (id === 'expenses')     return renderRepoPage(expensesPage);
-  if (id === 'appointments') return renderRepoPage(appointmentsPage);
-  if (id === 'reports')      return renderRepoPage(reportsPage);
-  if (id === 'settings')     return renderRepoPage(settingsPage);
-
+  /* صفحة الاختبارات (وصول عبر #/tests) */
   if (id === 'tests') {
-    layout.setContent(await buildTestsPage());
+    layout.setTitle('الاختبارات');
+    const testsMod = await loadPageModule('tests');
+    if (testsMod) {
+      layout.setContent(await buildTestsPage(testsMod));
+    } else {
+      layout.setContent(buildPlaceholderPage('الاختبارات', '🧪'));
+    }
     return;
   }
+
+  /* محاولة تحميل صفحة حقيقية */
+  const mod = await loadPageModule(id);
+  const exportName = MODULE_EXPORT_MAP[id];
+  if (mod && exportName && mod[exportName]) {
+    const container = el('div', {});
+    layout.setContent(container);
+    await mod[exportName].render(container);
+    currentPage = mod[exportName];
+    return;
+  }
+
+  /* placeholder */
+  if (PLACEHOLDER_PAGES[id]) {
+    const [title, icon] = PLACEHOLDER_PAGES[id];
+    layout.setContent(buildPlaceholderPage(title, icon));
+    return;
+  }
+
+  layout.setContent(buildPlaceholderPage('صفحة', '📄'));
 }
 
-/* --- تشغيل الصفحة الافتراضية --- */
-renderPage('home');
+function getHashPage() {
+  const hash = (location.hash || '').replace(/^#\/?/, '');
+  return hash || 'dashboard';
+}
+
+window.addEventListener('hashchange', () => {
+  renderPage(getHashPage());
+});
+
+/* ==========================================================================
+   7. تشغيل
+   ========================================================================== */
+renderPage(getHashPage());
