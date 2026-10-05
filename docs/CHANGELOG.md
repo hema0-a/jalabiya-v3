@@ -7,65 +7,89 @@
 
 ## [Unreleased]
 
-### قيد التطوير — المرحلة 7
-- صفحة الدفعات (payments)
-- صفحة المخزون (inventory)
-- صفحة العمال (workers)
-- صفحة المصروفات (expenses)
-- صفحة التقارير (reports)
+### قيد التطوير — المرحلة 8
+- صفحة الإعدادات الاحترافية (13 قسماً)
+- بحث فوري + فهرس جانبي
+- حفظ تلقائي + معاينة فورية
 
 ### مخطط لاحقاً
-- المرحلة 8: الإعدادات الاحترافية (13 قسماً)
 - المرحلة 9: Firebase Sync
 - المرحلة 10: PWA (manifest, service worker, icons)
+
+---
+
+## [0.5.0] — 2026-10-05 — Phase 7 Complete
+
+### أُضيف
+
+**5 صفحات جديدة:**
+- `src/pages/payments.js` — الدفعات (CRUD + طرائق دفع + إحصائيات الشهر)
+- `src/pages/inventory.js` — المخزون (CRUD + فلاتر بالفئة + تنبيه نقص + تعديل الكمية)
+- `src/pages/workers.js` — العمال (CRUD + تفعيل/تعطيل + رواتب)
+- `src/pages/expenses.js` — المصروفات (CRUD + فلاتر بالفترة)
+- `src/pages/reports.js` — التقارير (KPIs + رسوم بيانية بسيطة)
+
+**ملف اختبارات موحّد:**
+- `src/tests/modules/pages2.test.js` — 13 اختباراً للصفحات الجديدة
+
+### تغيّر
+
+- `src/main.js` — دمج كل الصفحات الثمانية عبر `renderRepoPage()`
+- `src/tests/index.js` — إضافة `pages2.test.js`
+
+### الميزات
+
+**صفحة الدفعات:**
+- إضافة/تعديل/حذف دفعة
+- ربط بعميل من قائمة
+- 4 طرائق دفع: نقدي، InstaPay، Vodafone Cash، أخرى
+- إحصائيات: الإجمالي + إجمالي الشهر
+
+**صفحة المخزون:**
+- إضافة/تعديل/حذف صنف
+- 5 فئات: قماش، خيوط، إكسسوارات، أدوات، أخرى
+- فلاتر تفاعلية
+- تنبيه بصري عند نقص المخزون (< 5)
+- أزرار +/- لتعديل الكمية السريع
+- إحصائيات: الأصناف + أصناف ناقصة
+
+**صفحة العمال:**
+- إضافة/تعديل/حذف عامل
+- تفعيل/تعطيل بنقرة
+- إحصائيات: الإجمالي، النشط، مجموع الرواتب
+- فلاتر: الكل، نشط، معطَّل
+
+**صفحة المصروفات:**
+- إضافة/تعديل/حذف مصروف
+- 8 فئات: قماش، خيوط، أدوات، إيجار، كهرباء، مياه، رواتب، أخرى
+- فلاتر بالفترة: الأسبوع، الشهر، السنة، الكل
+- إحصائيات: الإجمالي + عدد البنود
+
+**صفحة التقارير:**
+- 4 KPIs: الإيرادات، المصروفات، الربح، طلبات الفترة
+- رسم توزيع الطلبات (شريط بياني)
+- رسم أكثر العملاء دفعاً (Top 5)
+- فلاتر بالفترة
+
+### الاختبارات
+- **181 اختباراً** في 26 وحدة — كلها ناجحة ✅
 
 ---
 
 ## [0.4.0] — 2026-10-05 — Phase 6 Complete
 
 ### أُضيف
-
-**الصفحات الأساسية (Pages):**
-- `src/pages/customers.js` — صفحة العملاء (CRUD + بحث فوري + VIP + سلة محذوفات)
-- `src/pages/orders.js` — صفحة الطلبات (CRUD + فلاتر بالحالة + تقدّم الحالة)
-- `src/pages/dashboard.js` — لوحة المعلومات (KPIs حقيقية من IndexedDB)
-
-**اختبارات الصفحات:**
-- `src/tests/modules/pages.test.js` — 8 اختبارات (customers)
-- `src/tests/modules/orders.test.js` — 8 اختبارات (orders)
-- `src/tests/modules/dashboard.test.js` — 8 اختبارات (dashboard)
-
-### تغيّر
-
-- `src/main.js` — إضافة Dashboard كصفحة "الرئيسية" الحقيقية
-- `src/tests/index.js` — إضافة 3 وحدات اختبار جديدة
+- `src/pages/customers.js` — CRUD + بحث + VIP + سلة محذوفات
+- `src/pages/orders.js` — CRUD + فلاتر بالحالة + تقدّم الحالة
+- `src/pages/dashboard.js` — KPIs حقيقية
+- `src/tests/modules/pages.test.js`, `orders.test.js`, `dashboard.test.js`
 
 ### الميزات
-
-**صفحة العملاء:**
-- إضافة/تعديل/حذف (بـ modal + form)
-- بحث فوري (اسم أو هاتف، غير حساس لحالة الأحرف)
-- تبديل حالة VIP
-- الحذف ينقل إلى سلة المحذوفات (restorable)
-- إحصائيات: الإجمالي + عدد VIP
-
-**صفحة الطلبات:**
-- إضافة/تعديل/حذف طلب
-- ربط بعميل من قائمة منسدلة
-- 5 حالات: pending → in_progress → ready → delivered / cancelled
-- زر "▶️ التالي" للانتقال بين الحالات
-- فلاتر تفاعلية مع عدّاد لكل حالة
-- إحصائيات: الإجمالي، النشط، الجاهز، مجموع المبالغ
-
-**لوحة المعلومات:**
-- ترحيب حسب وقت اليوم (صباح/مساء)
-- 4 KPIs: العملاء، الطلبات النشطة، إيرادات الشهر، مواعيد اليوم
-- قسم "طلبات مستحقة خلال 7 أيام"
-- قسم "مواعيد اليوم"
-- قسم "أحدث 5 عملاء"
+- كل صفحة تدعم CRUD كامل + modal + toast + سلة محذوفات
+- Dashboard يعرض ترحيباً حسب الوقت + 4 KPIs + طلبات مستحقة + مواعيد اليوم
 
 ### الاختبارات
-- **168 اختباراً** في 25 وحدة — كلها ناجحة ✅
+- **168 اختباراً** ✅
 
 ---
 
@@ -73,59 +97,36 @@
 
 ### أُضيف
 
-**طبقة الأمان (Security Layer):**
-- `src/security/pin-crypto.js` — SHA-256 + Salt (WebCrypto)
-- `src/security/auth.js` — مصادقة، قفل بالمحاولات، جلسات
+**طبقة الأمان:**
+- `src/security/pin-crypto.js` — SHA-256 + Salt
+- `src/security/auth.js` — مصادقة + قفل + جلسات
 
-**مكونات الواجهة (UI Components):**
-- `src/ui/toast.js` — إشعارات قصيرة
-- `src/ui/modal.js` — نوافذ منبثقة + confirm
-- `src/ui/controls.js` — Toggle + Color Picker + Slider
-- `src/ui/form-builder.js` — نماذج ديناميكية
-- `src/ui/sidebar.js` — قائمة جانبية
-- `src/ui/topbar.js` — شريط علوي
-- `src/ui/layout.js` — App Shell
+**مكونات الواجهة (7):**
+- `src/ui/toast.js`, `modal.js`, `controls.js`, `form-builder.js`
+- `src/ui/sidebar.js`, `topbar.js`, `layout.js`
 
-**طبقة الأنماط:**
-- `styles/components.css` — 14 مكون واجهة
+**الأنماط:**
+- `styles/components.css` — 14 مكون
 - `styles/layout.css` — App Shell + responsive
 
-**بنية الاختبارات:**
-- `src/tests/registry.js` — سجل اختبارات (Registry Pattern)
-- `src/tests/index.js` — قائمة الوحدات
+**بنية الاختبارات (Registry Pattern):**
+- `src/tests/registry.js`, `index.js`
 - 5 وحدات اختبار (core, data, repos, security, ui)
 
 ### تغيّر
-- إعادة تنظيم الاختبارات من ملف واحد إلى 5 وحدات
 - إلغاء شاشة التحميل نهائياً
-- `main.js` يستخدم App Shell + Dynamic imports
-
-### الأمان
-- SHA-256 + Salt عشوائي (16 بايت)
-- قفل تلقائي بعد 5 محاولات فاشلة
-- جلسات (24 ساعة افتراضياً)
+- إعادة تنظيم الاختبارات في وحدات
 
 ### الاختبارات
 - **144 اختباراً** ✅
-
-### إصلاحات
-- `form-builder.js`: `Number('')` → 0 خطأ
 
 ---
 
 ## [0.2.0] — 2026-10-04 — Phase 2 Complete
 
 ### أُضيف
-
-**طبقة البيانات:**
-- `src/data/schema.js` — 10 مخازن + 24 فهرساً + تحقق
-- `src/data/idb.js` — غلاف Promise + Migrations
-- `src/data/repository.js` — CRUD عام
-
-**10 مستودعات:** customers, orders, payments, inventory, workers, settings, appointments, expenses, trash.
-
-### تغيّر
-- `src/core/config.js` — DB version 1 → 2
+- `src/data/schema.js`, `idb.js`, `repository.js`
+- 10 مستودعات في `src/data/repos/`
 
 ### الأمان
 - إصلاح ثغرة `data:image/svg+xml` في `sanitizeUrl`
@@ -139,15 +140,12 @@
 ## [0.1.0] — 2026-10-04 — Phase 1 Complete
 
 ### أُضيف
-- `index.html` — هيكل + CSP مشدد (12 توجيهاً)
-- `styles/base.css` — Reset + Variables + Typography + Animations
-- `styles/main.css` — مُجمِّع
+- `index.html` — CSP مشدد
+- `styles/base.css`, `main.css`
 - `src/core/config.js`, `events.js`, `sanitize.js`, `dom.js`, `utils.js`
 
-### الأمان
-- CSP مشدد بـ 12 توجيهاً
-- رفض `data:image/svg` في sanitizeUrl
-- escapeHtml / escapeAttr
+### الاختبارات
+- **39 اختباراً** ✅
 
 ---
 
