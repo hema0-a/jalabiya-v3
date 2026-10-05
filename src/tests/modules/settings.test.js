@@ -1,7 +1,7 @@
 /* ==========================================================================
    settings.test.js — اختبارات صفحة الإعدادات
    ==========================================================================
-   8 اختبارات: pages/settings
+   10 اختبارات: pages/settings (20 قسماً)
    ========================================================================== */
 
 import { register } from '../registry.js';
@@ -22,13 +22,13 @@ register('pages/settings.js', async (t) => {
     container.querySelector('.settings-search') !== null &&
     container.querySelector('.settings-layout') !== null);
 
-  /* 2. عدد الأقسام = 13 */
+  /* 2. عدد الأقسام = 20 */
   const sections = container.querySelectorAll('.settings-section');
-  await t.test('2. renders 13 sections', sections.length === 13);
+  await t.test('2. renders 20 sections', sections.length === 20);
 
-  /* 3. عدد عناصر TOC = 13 */
+  /* 3. عدد عناصر TOC = 20 */
   const tocItems = container.querySelectorAll('.settings-toc__item');
-  await t.test('3. TOC has 13 items', tocItems.length === 13);
+  await t.test('3. TOC has 20 items', tocItems.length === 20);
 
   /* 4. حقل البحث موجود */
   await t.test('4. search input exists',
@@ -54,10 +54,31 @@ register('pages/settings.js', async (t) => {
   const visibleSections = Array.from(container.querySelectorAll('.settings-section'))
     .filter((s) => !s.classList.contains('settings-section--hidden'));
   await t.test('7. search filters sections',
-    visibleSections.length > 0 && visibleSections.length < 13);
+    visibleSections.length > 0 && visibleSections.length < 20);
 
-  /* 8. destroy() يُنظّف الصفحة */
+  /* 8. جميع الأقسام الجديدة موجودة */
+  const requiredIds = [
+    'workshop', 'appearance', 'backgrounds', 'icons', 'fonts', 'display',
+    'measurements', 'jalabiya-types', 'inventory-limits', 'daily-limit', 'grouping',
+    'notifications', 'occasions', 'auto-messages', 'backup', 'cloud-sync', 'image-compression',
+    'security', 'lock-screen', 'danger-zone',
+  ];
+  const missing = requiredIds.filter(
+    (id) => container.querySelector('[data-section-id="' + id + '"]') === null
+  );
+  await t.test('8. all 20 required sections present', missing.length === 0);
+  if (missing.length > 0) {
+    t.log('    missing: ' + missing.join(', '));
+  }
+
+  /* 9. قسم منطقة الخطر له تنسيق خاص */
+  const dangerSection = container.querySelector('[data-section-id="danger-zone"]');
+  await t.test('9. danger zone has special styling',
+    dangerSection !== null &&
+    dangerSection.classList.contains('settings-danger'));
+
+  /* 10. destroy() يُنظّف الصفحة */
   settingsPage.destroy();
   await settingsRepo.clear();
-  await t.test('8. destroy clears state', true);
+  await t.test('10. destroy clears state', true);
 });
