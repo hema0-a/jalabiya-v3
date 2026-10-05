@@ -2,9 +2,7 @@
    image-compressor.js — ضغط الصور + Thumbnails
    ==========================================================================
    يستخدم Canvas API (لا مكتبات).
-   - compress(file, options): يضغط صورة.
-   - generateThumbnail(file, size): thumbnail مربّع.
-   - hashImage(file): SHA-256 للملف (منع التكرار).
+   hashImage: SHA-256 مع fallback إن لم يكن crypto.subtle متاحاً.
    ========================================================================== */
 
 import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
@@ -12,7 +10,7 @@ import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
 const MAX_INPUT_SIZE_MB = LIMITS.maxImageInputMB;
 
 /* ==========================================================================
-   1. أدوات
+   1. أدوات مساعدة
    ========================================================================== */
 function readAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -33,16 +31,27 @@ function loadImage(dataUrl) {
 }
 
 /* ==========================================================================
-   2. hash
+   2. hash (SHA-256 + fallback)
    ========================================================================== */
 
 /**
- * حساب hash SHA-256 للملف.
+ * حساب hash للملف (مع fallback إن لم يكن crypto.subtle متاحاً).
  * @param {File} file
  * @returns {Promise<string>} hex
  */
 export async function hashImage(file) {
   const buffer = await file.arrayBuffer();
+
+  /* fallback: بيئة HTTP بدون crypto.subtle */
+  if (!crypto.subtle) {
+    let hash = 0;
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < view.length; i++) {
+      hash = ((hash << 5) - hash + view[i]) | 0;
+    }
+    return 'fb_' + Math.abs(hash).toString(16);
+  }
+
   const digest = await crypto.subtle.digest('SHA-256', buffer);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -50,13 +59,13 @@ export async function hashImage(file) {
 }
 
 /* ==========================================================================
-   3. ضغط
+   3. ضغط الصورة الرئيسية
    ========================================================================== */
 
 /**
- * ضغط صورة مع الحفاظ على الأبعاد.
+ * ضغط صورة مع الحفاظ على الأبعاد المقبولة.
  * @param {File} file
- * @param {Object} [options]
+ * @param {Object} [options] - {quality, maxSizeKB, maxDimensionPx}
  * @returns {Promise<{dataUrl:string, sizeKB:number, width:number, height:number, savedPercent:number}>}
  */
 export async function compress(file, options = {}) {
@@ -113,7 +122,7 @@ export async function compress(file, options = {}) {
 }
 
 /* ==========================================================================
-   4. thumbnail
+   4. Thumbnail
    ========================================================================== */
 
 /**
