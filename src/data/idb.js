@@ -1,7 +1,7 @@
 /* ==========================================================================
    idb.js — غلاف IndexedDB (Promise-based)
    ==========================================================================
-   Migration v3 → v4: إضافة 3 مخازن جديدة (commitments, commitmentPayments, savingsGoals).
+   Migration v4 → v5: إضافة مخزن houseExpenses فقط.
    ⚠️ لا نلمس المخازن الموجودة.
    ========================================================================== */
 
@@ -55,9 +55,8 @@ export function openDB() {
         }
       }
 
-      /* --- Migration v3 → v4: إضافة 3 مخازن للالتزامات --- */
+      /* --- Migration v3 → v4: إضافة مخازن المالية الشخصية --- */
       if (oldVersion >= 3 && oldVersion < 4) {
-        /* commitments */
         if (!db.objectStoreNames.contains(STORES.COMMITMENTS)) {
           const store = db.createObjectStore(STORES.COMMITMENTS, {
             keyPath: 'id', autoIncrement: false,
@@ -66,7 +65,6 @@ export function openDB() {
           store.createIndex('by_frequency', 'frequency');
           store.createIndex('by_createdAt', 'createdAt');
         }
-        /* commitmentPayments */
         if (!db.objectStoreNames.contains(STORES.COMMITMENT_PAYMENTS)) {
           const store = db.createObjectStore(STORES.COMMITMENT_PAYMENTS, {
             keyPath: 'id', autoIncrement: false,
@@ -74,7 +72,6 @@ export function openDB() {
           store.createIndex('by_commitmentId', 'commitmentId');
           store.createIndex('by_date', 'date');
         }
-        /* savingsGoals */
         if (!db.objectStoreNames.contains(STORES.SAVINGS_GOALS)) {
           const store = db.createObjectStore(STORES.SAVINGS_GOALS, {
             keyPath: 'id', autoIncrement: false,
@@ -83,7 +80,19 @@ export function openDB() {
         }
       }
 
-      /* --- إنشاء المخازن والفهارس الناقصة (oldVersion = 0) --- */
+      /* --- Migration v4 → v5: إضافة houseExpenses --- */
+      if (oldVersion >= 4 && oldVersion < 5) {
+        if (!db.objectStoreNames.contains(STORES.HOUSE_EXPENSES)) {
+          const store = db.createObjectStore(STORES.HOUSE_EXPENSES, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_category', 'category');
+          store.createIndex('by_date', 'date');
+          store.createIndex('by_createdAt', 'createdAt');
+        }
+      }
+
+      /* --- إنشاء المخازن الناقصة (oldVersion = 0) --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
         const store = db.createObjectStore(storeName, {
