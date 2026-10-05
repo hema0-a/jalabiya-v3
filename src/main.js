@@ -1,7 +1,7 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router
    ==========================================================================
-   كل الصفحات الثمانية موصولة بـ IndexedDB عبر مستودعاتها.
+   كل الصفحات (بما فيها الإعدادات) موصولة.
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -23,6 +23,7 @@ function showError(title, err) {
 let el, toast, createLayout, testsIndex;
 let customersPage, ordersPage, dashboardPage;
 let paymentsPage, inventoryPage, workersPage, expensesPage, reportsPage;
+let settingsPage;
 
 try {
   ({ el } = await import('./core/dom.js'));
@@ -37,6 +38,7 @@ try {
   ({ workersPage } = await import('./pages/workers.js'));
   ({ expensesPage } = await import('./pages/expenses.js'));
   ({ reportsPage } = await import('./pages/reports.js'));
+  ({ settingsPage } = await import('./pages/settings/index.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -53,6 +55,7 @@ const SIDEBAR_ITEMS = [
   { id: 'expenses',     icon: '🧾', label: 'المصروفات' },
   { id: 'appointments', icon: '📅', label: 'المواعيد' },
   { id: 'reports',      icon: '📊', label: 'التقارير' },
+  { id: 'settings',     icon: '⚙️', label: 'الإعدادات' },
   { id: 'tests',        icon: '🧪', label: 'الاختبارات' },
 ];
 
@@ -151,7 +154,7 @@ async function buildTestsPage() {
 
 /**
  * عرض صفحة من مستودع الصفحات.
- * @param {Object} pageModule — كائن الصفحة (له render + destroy)
+ * @param {Object} pageModule
  */
 async function renderRepoPage(pageModule) {
   const container = el('div', {});
@@ -178,16 +181,15 @@ async function renderPage(id) {
   if (id === 'workers')     return renderRepoPage(workersPage);
   if (id === 'expenses')    return renderRepoPage(expensesPage);
   if (id === 'reports')     return renderRepoPage(reportsPage);
+  if (id === 'settings')    return renderRepoPage(settingsPage);
 
   if (id === 'tests') {
     layout.setContent(await buildTestsPage());
     return;
   }
 
-  /* صفحة placeholder (appointments) */
-  const labels = {
-    appointments: ['المواعيد', '📅'],
-  };
+  /* placeholder (appointments) */
+  const labels = { appointments: ['المواعيد', '📅'] };
   const [title, icon] = labels[id] || ['صفحة', '📄'];
   layout.setContent(buildPlaceholderPage(title, icon));
 }
