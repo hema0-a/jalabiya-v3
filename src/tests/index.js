@@ -16,5 +16,6 @@ import './modules/appointments-page.test.js';
 import './modules/pricing.test.js';
 import './modules/financial.test.js';
 import './modules/kpis.test.js';
+import './modules/portfolio.test.js';
 
 export { runAll, register } from './registry.js';
