@@ -18,7 +18,6 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-/* --- PWA --- */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
@@ -28,7 +27,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* --- الاستيرادات الأساسية --- */
 let el, toast, createLayout;
 try {
   ({ el } = await import('./core/dom.js'));
@@ -39,7 +37,6 @@ try {
   throw e;
 }
 
-/* --- محمّل الصفحات --- */
 async function loadPageModule(pageId) {
   try {
     switch (pageId) {
@@ -55,6 +52,7 @@ async function loadPageModule(pageId) {
       case 'calendar':           return await import('./pages/calendar.js');
       case 'pricing-calculator': return await import('./pages/pricing-calculator.js');
       case 'financial-center':   return await import('./pages/financial-center.js');
+      case 'kpis':               return await import('./pages/kpis.js');
       case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
@@ -64,7 +62,6 @@ async function loadPageModule(pageId) {
   }
 }
 
-/* --- السايدبار: 9 أقسام، 22 عنصراً --- */
 const SIDEBAR_SECTIONS = [
   { title: 'الرئيسية', items: [
     { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
@@ -123,11 +120,11 @@ const MODULE_EXPORT_MAP = {
   calendar:             'calendarPage',
   'pricing-calculator': 'pricingCalculatorPage',
   'financial-center':   'financialCenterPage',
+  'kpis':               'kpisPage',
 };
 
 let currentPage = null;
 
-/* --- App Shell --- */
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
@@ -140,12 +137,7 @@ const layout = createLayout({
   topbar: {
     title: 'لوحة التحكم',
     actions: [
-      {
-        id: 'theme',
-        icon: '🌙',
-        label: 'تبديل الثيم',
-        onClick: () => toast.info('الوضع الليلي — قريباً'),
-      },
+      { id: 'theme', icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
     ],
     showMenu: true,
   },
@@ -158,7 +150,6 @@ const layout = createLayout({
 
 app.appendChild(layout.node);
 
-/* --- Placeholders --- */
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
     el('div', { className: 'empty-state__icon' }, icon),
@@ -211,11 +202,9 @@ const PLACEHOLDER_PAGES = {
   'occasions':    ['المواسم والأعياد', '🎉'],
   'activity-log': ['سجل النشاط', '📜'],
   'trash':        ['سلة المحذوفات', '🗑️'],
-  'kpis':         ['مؤشرات الأداء', '📊'],
   'cloud-sync':   ['المزامنة السحابية', '☁️'],
 };
 
-/* --- Router --- */
 async function renderPage(id) {
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
