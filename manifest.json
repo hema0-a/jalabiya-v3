@@ -1,0 +1,42 @@
+{
+  "name": "ورشة تفصيل الجلابيب",
+  "short_name": "ورشة الجلابيب",
+  "description": "تطبيق إدارة ورشة تفصيل الجلابيب — العملاء، الطلبات، المخزون، المالية، والإعدادات الاحترافية.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F1E6",
+  "theme_color": "#1F6D57",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "العملاء",
+      "short_name": "العملاء",
+      "url": "./index.html#customers",
+      "description": "إدارة العملاء"
+    },
+    {
+      "name": "الطلبات",
+      "short_name": "الطلبات",
+      "url": "./index.html#orders",
+      "description": "إدارة الطلبات"
+    },
+    {
+      "name": "الإعدادات",
+      "short_name": "الإعدادات",
+      "url": "./index.html#settings",
+      "description": "إعدادات التطبيق"
+    }
+  ]
+}
