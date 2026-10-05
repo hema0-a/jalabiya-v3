@@ -1,8 +1,5 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router + PWA
-   ==========================================================================
-   - calendar → calendarPage (تقويم مرئي).
-   - appointments تبقى موجودة للاستخدام المستقبلي (اختصارات).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -10,7 +7,6 @@ if (app) {
   while (app.firstChild) app.removeChild(app.firstChild);
 }
 
-/* --- شاشة خطأ --- */
 function showError(title, err) {
   const msg = (err && err.message) ? err.message : String(err);
   const stack = (err && err.stack) ? err.stack : '';
@@ -54,18 +50,19 @@ try {
 async function loadPageModule(pageId) {
   try {
     switch (pageId) {
-      case 'dashboard':  return await import('./pages/dashboard.js');
-      case 'customers':  return await import('./pages/customers.js');
-      case 'orders':     return await import('./pages/orders.js');
-      case 'payments':   return await import('./pages/payments.js');
-      case 'inventory':  return await import('./pages/inventory.js');
-      case 'workers':    return await import('./pages/workers.js');
-      case 'expenses':   return await import('./pages/expenses.js');
-      case 'reports':    return await import('./pages/reports.js');
-      case 'settings':   return await import('./pages/settings/index.js');
-      case 'calendar':   return await import('./pages/calendar.js');
-      case 'tests':      return await import('./tests/index.js');
-      default:           return null;
+      case 'dashboard':          return await import('./pages/dashboard.js');
+      case 'customers':          return await import('./pages/customers.js');
+      case 'orders':             return await import('./pages/orders.js');
+      case 'payments':           return await import('./pages/payments.js');
+      case 'inventory':          return await import('./pages/inventory.js');
+      case 'workers':            return await import('./pages/workers.js');
+      case 'expenses':           return await import('./pages/expenses.js');
+      case 'reports':            return await import('./pages/reports.js');
+      case 'settings':           return await import('./pages/settings/index.js');
+      case 'calendar':           return await import('./pages/calendar.js');
+      case 'pricing-calculator': return await import('./pages/pricing-calculator.js');
+      case 'tests':              return await import('./tests/index.js');
+      default:                   return null;
     }
   } catch (e) {
     console.warn('[Main] Page "' + pageId + '" not found — using placeholder.');
@@ -122,16 +119,17 @@ const SIDEBAR_SECTIONS = [
 const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
 
 const MODULE_EXPORT_MAP = {
-  dashboard: 'dashboardPage',
-  customers: 'customersPage',
-  orders:    'ordersPage',
-  payments:  'paymentsPage',
-  inventory: 'inventoryPage',
-  workers:   'workersPage',
-  expenses:  'expensesPage',
-  reports:   'reportsPage',
-  settings:  'settingsPage',
-  calendar:  'calendarPage',
+  dashboard:          'dashboardPage',
+  customers:          'customersPage',
+  orders:             'ordersPage',
+  payments:           'paymentsPage',
+  inventory:          'inventoryPage',
+  workers:            'workersPage',
+  expenses:           'expensesPage',
+  reports:            'reportsPage',
+  settings:           'settingsPage',
+  calendar:           'calendarPage',
+  'pricing-calculator': 'pricingCalculatorPage',
 };
 
 let currentPage = null;
@@ -195,13 +193,11 @@ async function buildTestsPage(testsIndex) {
       borderRadius: '8px', boxSizing: 'border-box',
     },
   });
-
   const lines = [];
   const paint = () => { pre.textContent = lines.join('\n'); };
   lines.push('🚀 Running tests...');
   paint();
   wrap.appendChild(pre);
-
   try {
     const result = await testsIndex.runAll((header, body) => {
       lines.push(header);
@@ -218,23 +214,21 @@ async function buildTestsPage(testsIndex) {
     lines.push('❌ Failed: ' + (err.message || String(err)));
     paint();
   }
-
   return wrap;
 }
 
 const PLACEHOLDER_PAGES = {
-  'pricing-calculator': ['حاسبة التسعير', '🧮'],
-  'portfolio':          ['معرض الأعمال', '📸'],
-  'referrals':          ['الإحالات', '🤝'],
-  'commitments':        ['الالتزامات', '💳'],
-  'house-expenses':     ['مصاريف البيت', '🏠'],
-  'loans':              ['القروض', '💵'],
-  'occasions':          ['المواسم والأعياد', '🎉'],
-  'activity-log':       ['سجل النشاط', '📜'],
-  'trash':              ['سلة المحذوفات', '🗑️'],
-  'financial-center':   ['المركز المالي', '💰'],
-  'kpis':               ['مؤشرات الأداء', '📊'],
-  'cloud-sync':         ['المزامنة السحابية', '☁️'],
+  'portfolio':        ['معرض الأعمال', '📸'],
+  'referrals':        ['الإحالات', '🤝'],
+  'commitments':      ['الالتزامات', '💳'],
+  'house-expenses':   ['مصاريف البيت', '🏠'],
+  'loans':            ['القروض', '💵'],
+  'occasions':        ['المواسم والأعياد', '🎉'],
+  'activity-log':     ['سجل النشاط', '📜'],
+  'trash':            ['سلة المحذوفات', '🗑️'],
+  'financial-center': ['المركز المالي', '💰'],
+  'kpis':             ['مؤشرات الأداء', '📊'],
+  'cloud-sync':       ['المزامنة السحابية', '☁️'],
 };
 
 /* ==========================================================================
@@ -252,7 +246,6 @@ async function renderPage(id) {
   }
   currentPage = null;
 
-  /* صفحة الاختبارات (وصول عبر #/tests) */
   if (id === 'tests') {
     layout.setTitle('الاختبارات');
     const testsMod = await loadPageModule('tests');
@@ -264,7 +257,6 @@ async function renderPage(id) {
     return;
   }
 
-  /* محاولة تحميل صفحة حقيقية */
   const mod = await loadPageModule(id);
   const exportName = MODULE_EXPORT_MAP[id];
   if (mod && exportName && mod[exportName]) {
@@ -275,7 +267,6 @@ async function renderPage(id) {
     return;
   }
 
-  /* placeholder */
   if (PLACEHOLDER_PAGES[id]) {
     const [title, icon] = PLACEHOLDER_PAGES[id];
     layout.setContent(buildPlaceholderPage(title, icon));
@@ -294,7 +285,4 @@ window.addEventListener('hashchange', () => {
   renderPage(getHashPage());
 });
 
-/* ==========================================================================
-   7. تشغيل
-   ========================================================================== */
 renderPage(getHashPage());
