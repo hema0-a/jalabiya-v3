@@ -1,14 +1,12 @@
 /* ==========================================================================
    sections-data.js — أقسام البيانات (5)
-   ==========================================================================
-   حقول المقاسات، أنواع الجلابيات، المخزون، الحد اليومي، تجميع الطلبات
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
-import { DEFAULT_SETTINGS } from '../../core/config.js';
+import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
 /* ==========================================================================
    1. حقول المقاسات
@@ -29,7 +27,6 @@ const measurementFieldsSection = {
         }, 'لا توجد حقول — أضف حقلاً جديداً'));
         return;
       }
-
       fields.forEach((f, idx) => {
         const enabled = f.enabled !== false;
         list.appendChild(el('div', {
@@ -252,15 +249,16 @@ const inventoryLimitsSection = {
 };
 
 /* ==========================================================================
-   4. الحد اليومي
+   4. الحد اليومي + يوم الإجازة
    ========================================================================== */
 const dailyLimitSection = {
   id: 'daily-limit',
   icon: '📊',
-  title: 'الحد اليومي',
+  title: 'الحد اليومي + يوم الإجازة',
   async render(body, currentSettings, saveFn) {
     const dl = currentSettings.dailyLimit || DEFAULT_SETTINGS.dailyLimit;
 
+    /* --- الحد اليومي --- */
     const limitInput = el('input', {
       className: 'input', type: 'number', min: '0',
       value: String(dl.dailyOrderLimit || 700),
@@ -274,6 +272,7 @@ const dailyLimitSection = {
       el('div', { className: 'settings-field__hint' }, 'تنبيه عند تجاوز هذا الرقم — لا يمنع الإضافة'),
     ]));
 
+    /* --- تنبيه استلام القماش --- */
     const pickupInput = el('input', {
       className: 'input', type: 'number', min: '0', max: '30',
       value: String(dl.fabricPickupAlertDays || 2),
@@ -286,12 +285,42 @@ const dailyLimitSection = {
       pickupInput,
     ]));
 
+    /* --- يوم الإجازة الأسبوعي --- */
+    body.appendChild(el('div', {
+      style: {
+        marginTop: '12px', paddingTop: '12px',
+        borderTop: '1px dashed rgba(31,109,87,0.15)',
+      },
+    }, [
+      el('h3', {
+        style: {
+          fontSize: '14px', fontWeight: '600', color: '#123C2F',
+          margin: '0 0 8px 0',
+        },
+      }, '🏖️ يوم الإجازة الأسبوعي'),
+    ]));
+
+    const dayOffSelect = el('select', { className: 'select' });
+    WEEKDAYS.forEach((d) => {
+      const o = el('option', { value: String(d.id) }, d.name);
+      if (Number(dl.dayOffWeekday ?? 0) === d.id) o.selected = true;
+      dayOffSelect.appendChild(o);
+    });
+    dayOffSelect.addEventListener('change', () => {
+      saveFn({ dailyLimit: { ...dl, dayOffWeekday: Number(dayOffSelect.value) } });
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'اليوم الأسبوعي للإجازة'),
+      dayOffSelect,
+      el('div', { className: 'settings-field__hint' }, 'يُبرَز في التقويم بلون مميز — ويُعطَّل في نموذج الطلبات'),
+    ]));
+
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
         background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
       },
-    }, '💡 التنبيه يظهر في صفحة الطلبات — يمكنك المتابعة دائماً (لا يمنع الحفظ).'));
+    }, '💡 الحد اليومي يظهر في صفحة الطلبات (تنبيه). يوم الإجازة يُطبَّق على التقويم + اقتراح مواعيد التسليم.'));
   },
 };
 
