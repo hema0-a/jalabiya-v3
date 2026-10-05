@@ -13,7 +13,7 @@ import { LIMITS } from '../../core/config.js';
 /* ===== schema.js (6) ===== */
 register('schema.js', async (t) => {
   const schemaKeys = Object.keys(SCHEMA);
-  await t.test('1. SCHEMA has 10 stores', schemaKeys.length === 10);
+await t.test('1. SCHEMA has 11 stores', schemaKeys.length === 11);
 
   let validOk = true;
   try { validateSchema(); }
