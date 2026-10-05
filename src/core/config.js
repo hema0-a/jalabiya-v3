@@ -86,7 +86,7 @@ export const FONT_SIZES = [
   { id: 'xlarge', name: 'كبير جداً',  factor: 1.25 },
 ];
 
-/* --- 10. أيام الأسبوع (لـ يوم الإجازة) --- */
+/* --- 10. أيام الأسبوع --- */
 export const WEEKDAYS = [
   { id: 0, name: 'الأحد' },
   { id: 1, name: 'الاثنين' },
@@ -97,12 +97,12 @@ export const WEEKDAYS = [
   { id: 6, name: 'السبت' },
 ];
 
-/* --- 11. الإعدادات الافتراضية (21 قسماً) --- */
+/* --- 11. الإعدادات الافتراضية (22 قسماً) --- */
 export const DEFAULT_SETTINGS = {
   /* 1. معلومات الورشة */
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
 
-  /* 2-3. المظهر والتخصيص */
+  /* 2. المظهر والتخصيص */
   appearance: {
     theme: 'classic',
     primaryColor: '#1F6D57',
@@ -112,7 +112,7 @@ export const DEFAULT_SETTINGS = {
     iconStyle: 'default',
   },
 
-  /* 4. أوضاع العرض */
+  /* 3. أوضاع العرض */
   display: {
     darkMode: false,
     highContrast: false,
@@ -122,7 +122,7 @@ export const DEFAULT_SETTINGS = {
     fontFamily: 'ibm-plex',
   },
 
-  /* 5. حقول المقاسات */
+  /* 4. حقول المقاسات */
   measurementFields: [
     { id: 'shoulder', name: 'الكتف',   enabled: true, unit: 'cm' },
     { id: 'chest',    name: 'الصدر',   enabled: true, unit: 'cm' },
@@ -133,13 +133,13 @@ export const DEFAULT_SETTINGS = {
     { id: 'neck',     name: 'الرقبة',  enabled: true, unit: 'cm' },
   ],
 
-  /* 6. أنواع الجلابيات */
+  /* 5. أنواع الجلابيات */
   jalabiyaTypes: [],
 
-  /* 7. المواسم والأعياد */
+  /* 6. المواسم والأعياد */
   occasions: DEFAULT_OCCASIONS,
 
-  /* 8. التنبيهات */
+  /* 7. التنبيهات */
   notifications: {
     seasons: true,
     appointments: true,
@@ -148,25 +148,38 @@ export const DEFAULT_SETTINGS = {
     leadDays: 2,
   },
 
-  /* 9. المخزون والحدود */
+  /* 8. المخزون والحدود */
   inventory: {
     minThreshold: 5,
     alertOnFabricLow: true,
     alertOnProductLow: true,
   },
 
-  /* 10. الحد اليومي + يوم الإجازة */
+  /* 9. الحد اليومي + يوم الإجازة */
   dailyLimit: {
     dailyOrderLimit: 700,
     fabricPickupAlertDays: 2,
-    dayOffWeekday: 0,               // 0=الأحد, 1=الاثنين, ..., 6=السبت
+    dayOffWeekday: 0,
   },
 
-  /* 11. تجميع الطلبات المتشابهة */
+  /* 10. تجميع الطلبات المتشابهة */
   grouping: {
     enabled: false,
     tolerance: 2,
     sameTypeOnly: true,
+  },
+
+  /* 11. حاسبة التسعير */
+  pricingCalculator: {
+    enableFabric: true,
+    enableLabor: true,
+    enableExtras: true,
+    enableOverhead: true,
+    defaultMargin: 30,
+    marginPresets: [20, 30, 50, 100],
+    saveHistory: true,
+    enableCreateOrder: true,
+    maxHistoryItems: 50,
   },
 
   /* 12. الرسائل التلقائية */
@@ -256,6 +269,8 @@ export const STORAGE_KEYS = {
   V3_FAILED_ATTEMPTS: 'jalabiya_v3_failed_attempts',
   V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
   V3_OFFLINE_QUEUE:   'jalabiya_v3_offline_queue',
+  V3_PRICING_HISTORY: 'jalabiya_v3_pricing_history',
+  V3_CALENDAR_FILTER: 'jalabiya_v3_calendar_filter',
 };
 
 /* --- 16. الحدود القصوى --- */
