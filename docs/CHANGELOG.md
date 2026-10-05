@@ -7,81 +7,89 @@
 
 ## [Unreleased]
 
-### قيد التطوير — المرحلة 9
-- Firebase Sync (auth-sync, firestore-sync, offline-queue)
+### قيد التطوير — المرحلة 10
+- PWA (manifest + service worker + icons)
+- تثبيت على الجوال + عمل offline كامل
 
-### مخطط لاحقاً
-- المرحلة 10: PWA (manifest, service worker, icons)
+---
+
+## [0.7.0] — 2026-10-05 — Phase 9 Complete
+
+### أُضيف
+
+**طبقة المزامنة (Sync Layer):**
+- `src/sync/firebase-config.js` — تحميل Firebase SDK (Lazy) + تحقق من الإعدادات
+- `src/sync/auth-sync.js` — مصادقة Email/Password + ترجمة أخطاء عربية
+- `src/sync/firestore-sync.js` — Push/Pull/Apply كامل
+- `src/sync/offline-queue.js` — طابور العمليات أثناء عدم الاتصال
+
+### تغيّر
+
+- `src/core/config.js` — إضافة `V3_OFFLINE_QUEUE` لمفاتيح التخزين
+- `src/pages/settings/sections-system.js` — قسم المزامنة يعمل فعلياً (نموذج دخول + رفع/تنزيل/خروج)
+
+### الميزات
+
+**firebase-config.js:**
+- تحميل Lazy لـ Firebase SDK 10.12.0 من CDN
+- لا يُحمَّل حتى يُستخدَم فعلاً
+- تحقق من اكتمال الإعدادات + إرجاع المفاتيح الناقصة
+- Singleton (يُهيَّأ مرة واحدة)
+
+**auth-sync.js:**
+- تسجيل دخول Email/Password
+- تسجيل خروج
+- مراقبة تغيّر الحالة (onAuthStateChanged)
+- ترجمة رسائل Firebase إلى العربية
+
+**firestore-sync.js:**
+- Push: رفع كل البيانات المحلية (8 مخازن)
+- Pull: قراءة snapshot من السحابة
+- Apply: دمج snapshot في IndexedDB
+- المسار: `users_v3/{uid}/data/main`
+- البنية: `{ stores: { customers: [...], orders: [...], ... }, updatedAt }`
+
+**offline-queue.js:**
+- إضافة عمليات (add)
+- قراءة + حذف (list, remove, size)
+- معالجة الطابور (process) — يحاول كل عملية ويحذف الناجح
+- حد أقصى 500 عملية
+- التخزين في localStorage
+
+**قسم المزامنة السحابية:**
+- إذا Firebase غير مُهيّأ → رسالة صفراء توضيحية
+- إذا لم يُسجَّل المستخدم → نموذج تسجيل دخول
+- إذا مسجَّل → بطاقة خضراء + آخر مزامنة + 3 أزرار (رفع، تنزيل، خروج)
+- مؤشر حالة الإنترنت (متصل/غير متصل)
+
+### الاختبارات
+- **189 اختباراً** — لا تغيير (لا اختبارات جديدة في هذه المرحلة)
+
+### ملاحظة مهمة
+- Firebase غير مُهيّأ حالياً (`FIREBASE_CONFIG.apiKey = ''`)
+- المزامنة لن تعمل فعلياً حتى يتم وضع بيانات مشروع Firebase في `config.js`
+- الكود جاهز للاستخدام بمجرد إضافة الإعدادات
 
 ---
 
 ## [0.6.0] — 2026-10-05 — Phase 8 Complete
 
 ### أُضيف
-
-**صفحة الإعدادات الاحترافية (13 قسماً):**
-- `src/pages/settings/index.js` — المُجمِّع + بحث فوري + TOC + Scroll Spy
-- `src/pages/settings/sections-workshop.js` — معلومات الورشة، المظهر، أوضاع العرض
-- `src/pages/settings/sections-data.js` — حقول المقاسات، أنواع الجلابيات، المخزون
-- `src/pages/settings/sections-system.js` — التنبيهات، الرسائل، النسخ، Sync، ضغط الصور
-- `src/pages/settings/sections-security.js` — الأمان + منطقة الخطر
-
-**طبقة الأنماط:**
-- `styles/settings.css` — 12 فئة نمط للإعدادات
-
-**اختبارات:**
+- صفحة الإعدادات الاحترافية (13 قسماً)
+- `src/pages/settings/index.js` + 4 ملفات أقسام
+- `styles/settings.css`
 - `src/tests/modules/settings.test.js` — 8 اختبارات
 
-### تغيّر
-- `src/main.js` — إضافة صفحة الإعدادات + بطاقة ⚙️ في السايدبار
-- `styles/main.css` — إضافة `@import 'settings.css'`
-- `src/tests/index.js` — إضافة `settings.test.js`
-
-### الميزات
-
-**البحث الفوري:** كتابة أي كلمة → تُخفي الأقسام غير المطابقة.
-
-**الفهرس الجانبي (TOC):** 13 عنصراً مع Scroll Spy تلقائي يُبرز القسم الحالي.
-
-**معلومات الورشة:** اسم، شعار (رفع صورة)، عنوان، هاتف، WhatsApp.
-
-**المظهر:**
-- 9 ثيمات قابلة للتبديل بضغطة
-- Color Pickers (أساسي + ثانوي + خلفية)
-- تطبيق فوري للألوان (CSS Variables)
-
-**أوضاع العرض:** الوضع الليلي، التباين العالي، المضغوط، وضع العميل + حجم الخط.
-
-**حقول المقاسات:** CRUD ديناميكي (إضافة/تعديل/حذف/تفعيل).
-
-**أنواع الجلابيات:** CRUD مع الاسم + السعر + الملاحظات.
-
-**المخزون والحدود:** الحد الأدنى للتنبيه + تنبيهات القماش/المنتج.
-
-**التنبيهات:** مواسم، مواعيد، مخزون، مديونيات + فترة التنبيه.
-
-**الرسائل التلقائية:** 5 قوالب (طلب جديد، بدء التنفيذ، جاهز، شكر، تذكير) + متغيرات ديناميكية.
-
-**النسخ الاحتياطي:** تصدير/استيراد JSON + نسخ تلقائي بفترات.
-
-**المزامنة السحابية:** حالة الاتصال + آخر مزامنة (واجهة جاهزة للمرحلة 9).
-
-**ضغط الصور:** الجودة، الحجم الأقصى، الأبعاد القصوى.
-
-**الأمان:** تعيين/تغيير PIN، قفل تلقائي، مدة جلسة، تسجيل محاولات.
-
-**منطقة الخطر:** حذف كل البيانات (تأكيد مزدوج) + إعادة تعيين الإعدادات.
-
 ### الاختبارات
-- **189 اختباراً** في 27 وحدة — كلها ناجحة ✅
+- **189 اختباراً** ✅
 
 ---
 
 ## [0.5.0] — 2026-10-05 — Phase 7 Complete
 
 ### أُضيف
-- 5 صفحات: `payments.js`, `inventory.js`, `workers.js`, `expenses.js`, `reports.js`
-- `src/tests/modules/pages2.test.js` — 13 اختباراً
+- 5 صفحات: payments, inventory, workers, expenses, reports
+- `src/tests/modules/pages2.test.js`
 
 ### الاختبارات
 - **181 اختباراً** ✅
@@ -91,8 +99,7 @@
 ## [0.4.0] — 2026-10-05 — Phase 6 Complete
 
 ### أُضيف
-- `src/pages/customers.js`, `orders.js`, `dashboard.js`
-- 3 وحدات اختبار
+- dashboard, customers, orders
 
 ### الاختبارات
 - **168 اختباراً** ✅
@@ -102,10 +109,7 @@
 ## [0.3.0] — 2026-10-05 — Phase 5 Complete
 
 ### أُضيف
-- طبقة الأمان: `pin-crypto.js`, `auth.js`
-- 7 مكونات UI: `toast`, `modal`, `controls`, `form-builder`, `sidebar`, `topbar`, `layout`
-- `styles/components.css`, `styles/layout.css`
-- Registry Pattern للاختبارات
+- طبقة الأمان + 7 مكونات UI + Registry Pattern
 
 ### الاختبارات
 - **144 اختباراً** ✅
@@ -115,12 +119,7 @@
 ## [0.2.0] — 2026-10-04 — Phase 2 Complete
 
 ### أُضيف
-- `src/data/schema.js`, `idb.js`, `repository.js`
-- 10 مستودعات
-
-### الأمان
-- إصلاح ثغرة `data:image/svg+xml`
-- إصلاح فهارس boolean
+- طبقة البيانات الكاملة
 
 ### الاختبارات
 - **122 اختباراً** ✅
@@ -130,9 +129,7 @@
 ## [0.1.0] — 2026-10-04 — Phase 1 Complete
 
 ### أُضيف
-- `index.html` (CSP مشدد)
-- `styles/base.css`, `main.css`
-- 5 ملفات core
+- الأساس (config, events, sanitize, dom, utils)
 
 ### الاختبارات
 - **39 اختباراً** ✅
@@ -142,5 +139,4 @@
 ## [0.0.1] — 2026-10-04 — Bootstrap
 
 ### أُضيف
-- إنشاء المستودع
-- تفعيل GitHub Pages
+- إنشاء المستودع + تفعيل Pages
