@@ -1,5 +1,7 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router + PWA
+   ==========================================================================
+   كل الصفحات (10) موصولة — لا placeholders.
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -37,7 +39,7 @@ if ('serviceWorker' in navigator) {
 let el, toast, createLayout, testsIndex;
 let customersPage, ordersPage, dashboardPage;
 let paymentsPage, inventoryPage, workersPage, expensesPage, reportsPage;
-let settingsPage;
+let settingsPage, appointmentsPage;
 
 try {
   ({ el } = await import('./core/dom.js'));
@@ -53,6 +55,7 @@ try {
   ({ expensesPage } = await import('./pages/expenses.js'));
   ({ reportsPage } = await import('./pages/reports.js'));
   ({ settingsPage } = await import('./pages/settings/index.js'));
+  ({ appointmentsPage } = await import('./pages/appointments.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -80,7 +83,7 @@ let currentPage = null;
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
-    subtitle: 'V3 — قيد التطوير',
+    subtitle: 'V3 — v3.0.0',
     logo: '🧵',
     items: SIDEBAR_ITEMS,
     activeId: 'home',
@@ -108,14 +111,6 @@ app.appendChild(layout.node);
 /* ==========================================================================
    الصفحات
    ========================================================================== */
-
-function buildPlaceholderPage(title, icon) {
-  return el('div', { className: 'empty-state' }, [
-    el('div', { className: 'empty-state__icon' }, icon),
-    el('h2', { className: 'empty-state__title', text: title }),
-    el('p', { className: 'empty-state__text' }, 'قيد التطوير — سيُبنى في المراحل القادمة.'),
-  ]);
-}
 
 async function buildTestsPage() {
   const wrap = el('div', {});
@@ -182,24 +177,21 @@ async function renderPage(id) {
   }
   currentPage = null;
 
-  if (id === 'home')        return renderRepoPage(dashboardPage);
-  if (id === 'customers')   return renderRepoPage(customersPage);
-  if (id === 'orders')      return renderRepoPage(ordersPage);
-  if (id === 'payments')    return renderRepoPage(paymentsPage);
-  if (id === 'inventory')   return renderRepoPage(inventoryPage);
-  if (id === 'workers')     return renderRepoPage(workersPage);
-  if (id === 'expenses')    return renderRepoPage(expensesPage);
-  if (id === 'reports')     return renderRepoPage(reportsPage);
-  if (id === 'settings')    return renderRepoPage(settingsPage);
+  if (id === 'home')         return renderRepoPage(dashboardPage);
+  if (id === 'customers')    return renderRepoPage(customersPage);
+  if (id === 'orders')       return renderRepoPage(ordersPage);
+  if (id === 'payments')     return renderRepoPage(paymentsPage);
+  if (id === 'inventory')    return renderRepoPage(inventoryPage);
+  if (id === 'workers')      return renderRepoPage(workersPage);
+  if (id === 'expenses')     return renderRepoPage(expensesPage);
+  if (id === 'appointments') return renderRepoPage(appointmentsPage);
+  if (id === 'reports')      return renderRepoPage(reportsPage);
+  if (id === 'settings')     return renderRepoPage(settingsPage);
 
   if (id === 'tests') {
     layout.setContent(await buildTestsPage());
     return;
   }
-
-  const labels = { appointments: ['المواعيد', '📅'] };
-  const [title, icon] = labels[id] || ['صفحة', '📄'];
-  layout.setContent(buildPlaceholderPage(title, icon));
 }
 
 /* --- تشغيل الصفحة الافتراضية --- */
