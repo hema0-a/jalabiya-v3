@@ -1,34 +1,18 @@
 /* ==========================================================================
-   schema.js — تعريف بنية IndexedDB (المخازن + الفهارس)
+   schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   يُستورَد من idb.js لإنشاء قاعدة البيانات.
-   لا يحتوي على منطق تنفيذي — فقط وصف البنية.
+   v3: إضافة مخزن portfolio.
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس — IDB لا يقبلها.
    ========================================================================== */
 
 import { STORES } from '../core/config.js';
 
-/* --- مصنع الفهارس — لتقليل التكرار --- */
 const idx = (name, keyPath, unique = false) => ({ name, keyPath, unique });
 
-/* --- معرّف السجل الوحيد في مخزن الإعدادات --- */
 export const SETTINGS_ID = 'main';
-
-/* --- قائمة أسماء كل المخازن (من config.js — مصدر الحقيقة الوحيد) --- */
 export const STORE_NAMES = Object.values(STORES);
 
-/* ==========================================================================
-   SCHEMA — وصف كامل لكل مخزن
-   ==========================================================================
-   كل مخزن له:
-     - keyPath: 'id' (جميع السجلات تُولّد بـ uid())
-     - autoIncrement: false (نتحكم في المعرّفات)
-     - indexes: قائمة الفهارس للبحث السريع
-   ⚠️ أنواع المفاتيح المسموحة: string / number / Date / Array
-   ========================================================================== */
-
 export const SCHEMA = {
-  /* --- العملاء --- */
   [STORES.CUSTOMERS]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -39,7 +23,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- الطلبات --- */
   [STORES.ORDERS]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -51,7 +34,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- الدفعات --- */
   [STORES.PAYMENTS]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -62,7 +44,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- المخزون --- */
   [STORES.INVENTORY]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -72,7 +53,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- العمال --- */
   [STORES.WORKERS]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -81,7 +61,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- مصروفات الورشة --- */
   [STORES.EXPENSES]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -91,7 +70,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- المواعيد --- */
   [STORES.APPOINTMENTS]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -103,14 +81,12 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- الإعدادات (سجل واحد فقط: id='main') --- */
   [STORES.SETTINGS]: {
     keyPath: 'id',
     autoIncrement: false,
     indexes: [],
   },
 
-  /* --- سلة المحذوفات --- */
   [STORES.TRASH]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -120,7 +96,6 @@ export const SCHEMA = {
     ],
   },
 
-  /* --- سجل النشاط --- */
   [STORES.ACTIVITY]: {
     keyPath: 'id',
     autoIncrement: false,
@@ -130,16 +105,21 @@ export const SCHEMA = {
       idx('by_entityId',  'entityId'),
     ],
   },
+
+  /* --- جديد في v3 --- */
+  [STORES.PORTFOLIO]: {
+    keyPath: 'id',
+    autoIncrement: false,
+    indexes: [
+      idx('by_createdAt',  'createdAt'),
+      idx('by_category',   'category'),
+      idx('by_customerId', 'customerId'),
+    ],
+  },
 };
 
-/* ==========================================================================
-   VALIDATION — التحقق من تطابق SCHEMA مع STORES
-   ========================================================================== */
-
 /**
- * التحقق من تطابق مفاتيح SCHEMA مع قيم STORES.
- * @returns {true} إذا تطابقا تماماً
- * @throws {Error} إذا كان هناك مخزن ناقص أو زائد
+ * التحقق من تطابق SCHEMA مع STORES.
  */
 export function validateSchema() {
   const schemaKeys = Object.keys(SCHEMA).sort();
