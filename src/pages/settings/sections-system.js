@@ -1,12 +1,14 @@
 /* ==========================================================================
-   sections-system.js — أقسام: التنبيهات، الرسائل، النسخ، المزامنة، ضغط الصور
+   sections-system.js — أقسام النظام (6)
+   ==========================================================================
+   التنبيهات، المواسم والأعياد، الرسائل التلقائية، النسخ، Sync، ضغط الصور
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
-import { DEFAULT_SETTINGS, STORAGE_KEYS } from '../../core/config.js';
+import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
 import * as authSync from '../../sync/auth-sync.js';
 import * as firestoreSync from '../../sync/firestore-sync.js';
 
@@ -57,7 +59,127 @@ const notificationsSection = {
 };
 
 /* ==========================================================================
-   2. الرسائل التلقائية
+   2. المواسم والأعياد
+   ========================================================================== */
+const occasionsSection = {
+  id: 'occasions',
+  icon: '🎉',
+  title: 'المواسم والأعياد',
+  async render(body, currentSettings, saveFn) {
+    const occasions = currentSettings.occasions || [...DEFAULT_OCCASIONS];
+    const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+
+    function rebuild() {
+      clear(list);
+      if (occasions.length === 0) {
+        list.appendChild(el('div', {
+          style: { fontSize: '13px', color: '#2E8B6F', textAlign: 'center', padding: '12px' },
+        }, 'لا توجد مناسبات — أضف مناسبة جديدة'));
+        return;
+      }
+      occasions.forEach((o, idx) => {
+        const enabled = o.enabled !== false;
+        list.appendChild(el('div', {
+          style: {
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 10px', background: '#F6F1E6',
+            borderRadius: '8px', opacity: enabled ? '1' : '0.5',
+          },
+        }, [
+          el('span', { style: { fontSize: '20px' } }, o.icon || '🎉'),
+          el('div', { style: { flex: '1' } }, [
+            el('div', { style: { fontSize: '14px', fontWeight: '500' } }, o.name),
+            el('div', { style: { fontSize: '11px', color: '#666' } },
+              'الشهر ' + o.month + ' — اليوم ' + o.day + ' — تنبيه قبل ' + o.alertDays + ' يوم'),
+          ]),
+          el('button', {
+            className: 'btn btn--sm btn--ghost', type: 'button',
+            onClick: () => {
+              occasions[idx].enabled = !enabled;
+              saveFn({ occasions });
+              rebuild();
+            },
+          }, enabled ? '✅' : '⬜'),
+          el('button', {
+            className: 'btn btn--sm btn--ghost', type: 'button',
+            onClick: () => openOccasionForm(occasions, idx, saveFn, rebuild),
+          }, '✏️'),
+          el('button', {
+            className: 'btn btn--sm btn--danger', type: 'button',
+            onClick: () => {
+              occasions.splice(idx, 1);
+              saveFn({ occasions });
+              rebuild();
+            },
+          }, '🗑️'),
+        ]));
+      });
+    }
+
+    body.appendChild(list);
+    body.appendChild(el('button', {
+      className: 'btn btn--primary btn--block', type: 'button',
+      style: { marginTop: '8px' },
+      onClick: () => openOccasionForm(occasions, -1, saveFn, rebuild),
+    }, '➕ إضافة مناسبة جديدة'));
+
+    rebuild();
+  },
+};
+
+function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
+  const isEdit = editIdx >= 0;
+  const existing = isEdit ? occasions[editIdx] : { month: 1, day: 1, alertDays: 14, recurring: true, enabled: true };
+
+  const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'مثال: رمضان', value: existing.name || '' });
+  const iconInput = el('input', { className: 'input', type: 'text', placeholder: '🎉', maxLength: 4, value: existing.icon || '🎉' });
+  const monthInput = el('input', { className: 'input', type: 'number', min: '1', max: '12', value: String(existing.month) });
+  const dayInput = el('input', { className: 'input', type: 'number', min: '1', max: '31', value: String(existing.day) });
+  const alertInput = el('input', { className: 'input', type: 'number', min: '1', max: '90', value: String(existing.alertDays) });
+
+  const body = el('div', {}, [
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم المناسبة *'), nameInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الأيقونة'), iconInput]),
+    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
+      el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الشهر (1-12)'), monthInput]),
+      el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اليوم (1-31)'), dayInput]),
+    ]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التنبيه قبل (أيام)'), alertInput]),
+  ]);
+
+  const handle = modal.open({
+    title: isEdit ? 'تعديل مناسبة' : 'إضافة مناسبة',
+    body,
+    actions: [
+      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
+      {
+        text: isEdit ? 'حفظ' : 'إضافة',
+        variant: 'primary', action: 'save',
+        onClick: () => {
+          const name = nameInput.value.trim();
+          if (!name) return toast.warning('الاسم مطلوب');
+          const data = {
+            name,
+            icon: iconInput.value.trim() || '🎉',
+            month: Math.max(1, Math.min(12, Number(monthInput.value) || 1)),
+            day: Math.max(1, Math.min(31, Number(dayInput.value) || 1)),
+            alertDays: Math.max(1, Math.min(90, Number(alertInput.value) || 14)),
+            recurring: true,
+            enabled: isEdit ? (occasions[editIdx].enabled !== false) : true,
+          };
+          if (isEdit) occasions[editIdx] = { ...occasions[editIdx], ...data };
+          else occasions.push({ id: 'occ_' + Date.now(), ...data });
+          saveFn({ occasions });
+          handle.close();
+          rebuild();
+        },
+      },
+    ],
+  });
+}
+
+/* ==========================================================================
+   3. الرسائل التلقائية
    ========================================================================== */
 const AUTO_MESSAGES = [
   { id: 'new_order',   name: 'طلب جديد',        text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
@@ -177,7 +299,7 @@ function openTemplateEditor(tpl, current, onSave) {
 }
 
 /* ==========================================================================
-   3. النسخ الاحتياطي
+   4. النسخ الاحتياطي
    ========================================================================== */
 const backupSection = {
   id: 'backup',
@@ -274,7 +396,7 @@ async function importAllData(file) {
 }
 
 /* ==========================================================================
-   4. المزامنة السحابية — Firebase
+   5. المزامنة السحابية
    ========================================================================== */
 const cloudSyncSection = {
   id: 'cloud-sync',
@@ -286,7 +408,6 @@ const cloudSyncSection = {
       await cloudSyncSection.render(body, currentSettings, saveFn);
     };
 
-    /* Firebase غير مُهيّأ */
     if (!authSync.isConfigured()) {
       body.appendChild(el('div', {
         style: {
@@ -307,11 +428,9 @@ const cloudSyncSection = {
       },
     }, isOnline ? '🟢 متصل بالإنترنت' : '🔴 غير متصل'));
 
-    /* المستخدم الحالي */
     const user = await authSync.current();
 
     if (!user) {
-      /* --- نموذج تسجيل الدخول --- */
       const emailInput = el('input', { className: 'input', type: 'email', placeholder: 'example@mail.com' });
       const passInput = el('input', { className: 'input', type: 'password', placeholder: '••••••••' });
 
@@ -342,7 +461,6 @@ const cloudSyncSection = {
       return;
     }
 
-    /* --- مسجَّل دخول --- */
     body.appendChild(el('div', {
       style: {
         padding: '12px', background: '#E8F5E9', borderRadius: '8px',
@@ -356,7 +474,6 @@ const cloudSyncSection = {
       ]),
     ]));
 
-    /* آخر مزامنة */
     const lastSync = localStorage.getItem(STORAGE_KEYS.V3_LAST_SYNC);
     body.appendChild(el('div', {
       style: {
@@ -367,14 +484,12 @@ const cloudSyncSection = {
       ? '🕐 آخر مزامنة: ' + new Date(Number(lastSync)).toLocaleString('ar-EG')
       : '⚠️ لم تتم المزامنة بعد'));
 
-    /* زر الرفع */
     const pushBtn = el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
       style: { marginBottom: '8px' },
       onClick: async () => {
         pushBtn.disabled = true;
         pushBtn.textContent = '⏳ جارٍ الرفع...';
-        toast.info('جارٍ رفع البيانات...');
         const res = await firestoreSync.push(user.uid);
         if (res.ok) {
           localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
@@ -388,7 +503,6 @@ const cloudSyncSection = {
       },
     }, '⬆️ رفع إلى السحابة');
 
-    /* زر التنزيل */
     const pullBtn = el('button', {
       className: 'btn btn--secondary btn--block', type: 'button',
       style: { marginBottom: '8px' },
@@ -399,11 +513,8 @@ const cloudSyncSection = {
           confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
         });
         if (!ok) return;
-
         pullBtn.disabled = true;
         pullBtn.textContent = '⏳ جارٍ التنزيل...';
-        toast.info('جارٍ تنزيل البيانات...');
-
         const res = await firestoreSync.pull(user.uid);
         if (!res.ok) {
           toast.danger(res.error || 'فشل التنزيل');
@@ -430,7 +541,6 @@ const cloudSyncSection = {
       },
     }, '⬇️ تنزيل من السحابة');
 
-    /* زر تسجيل الخروج */
     const logoutBtn = el('button', {
       className: 'btn btn--danger btn--block', type: 'button',
       onClick: async () => {
@@ -447,7 +557,7 @@ const cloudSyncSection = {
 };
 
 /* ==========================================================================
-   5. ضغط الصور
+   6. ضغط الصور
    ========================================================================== */
 const imageCompressionSection = {
   id: 'image-compression',
@@ -497,6 +607,7 @@ const imageCompressionSection = {
 /* --- تصدير --- */
 export const SYSTEM_SECTIONS = [
   notificationsSection,
+  occasionsSection,
   autoMessagesSection,
   backupSection,
   cloudSyncSection,
