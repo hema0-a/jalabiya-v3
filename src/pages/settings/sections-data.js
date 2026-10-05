@@ -1,11 +1,14 @@
 /* ==========================================================================
-   sections-data.js — أقسام: حقول المقاسات، أنواع الجلابيات، المخزون
+   sections-data.js — أقسام البيانات (5)
+   ==========================================================================
+   حقول المقاسات، أنواع الجلابيات، المخزون، الحد اليومي، تجميع الطلبات
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
-import { DEFAULT_SETTINGS, LIMITS } from '../../core/config.js';
+import { createToggle } from '../../ui/controls.js';
+import { DEFAULT_SETTINGS } from '../../core/config.js';
 
 /* ==========================================================================
    1. حقول المقاسات
@@ -39,8 +42,7 @@ const measurementFieldsSection = {
           el('span', { style: { flex: '1', fontSize: '14px', fontWeight: '500' } }, f.name),
           el('span', { style: { fontSize: '11px', color: '#666' } }, f.unit || 'cm'),
           el('button', {
-            className: 'btn btn--sm btn--ghost',
-            type: 'button',
+            className: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => {
               fields[idx].enabled = !enabled;
               saveFn({ measurementFields: fields });
@@ -48,13 +50,11 @@ const measurementFieldsSection = {
             },
           }, enabled ? '✅' : '⬜'),
           el('button', {
-            className: 'btn btn--sm btn--ghost',
-            type: 'button',
+            className: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => openFieldForm(fields, idx, saveFn, rebuild),
           }, '✏️'),
           el('button', {
-            className: 'btn btn--sm btn--danger',
-            type: 'button',
+            className: 'btn btn--sm btn--danger', type: 'button',
             onClick: () => {
               fields.splice(idx, 1);
               saveFn({ measurementFields: fields });
@@ -67,8 +67,7 @@ const measurementFieldsSection = {
 
     body.appendChild(list);
     body.appendChild(el('button', {
-      className: 'btn btn--primary btn--block',
-      type: 'button',
+      className: 'btn btn--primary btn--block', type: 'button',
       style: { marginTop: '8px' },
       onClick: () => openFieldForm(fields, -1, saveFn, rebuild),
     }, '➕ إضافة حقل جديد'));
@@ -96,8 +95,7 @@ function openFieldForm(fields, editIdx, saveFn, rebuild) {
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
         text: isEdit ? 'حفظ' : 'إضافة',
-        variant: 'primary',
-        action: 'save',
+        variant: 'primary', action: 'save',
         onClick: () => {
           const name = nameInput.value.trim();
           if (!name) return toast.warning('الاسم مطلوب');
@@ -231,8 +229,6 @@ const inventoryLimitsSection = {
       el('div', { className: 'settings-field__hint' }, 'عند نزول الكمية تحت هذا الرقم — يظهر تنبيه'),
     ]));
 
-    /* Toggle: تنبيه نقص القماش */
-    const { createToggle } = await import('../../ui/controls.js');
     const t1 = createToggle({
       label: 'تنبيه عند نقص القماش',
       checked: inv.alertOnFabricLow !== false,
@@ -255,9 +251,107 @@ const inventoryLimitsSection = {
   },
 };
 
+/* ==========================================================================
+   4. الحد اليومي
+   ========================================================================== */
+const dailyLimitSection = {
+  id: 'daily-limit',
+  icon: '📊',
+  title: 'الحد اليومي',
+  async render(body, currentSettings, saveFn) {
+    const dl = currentSettings.dailyLimit || DEFAULT_SETTINGS.dailyLimit;
+
+    const limitInput = el('input', {
+      className: 'input', type: 'number', min: '0',
+      value: String(dl.dailyOrderLimit || 700),
+    });
+    limitInput.addEventListener('blur', () => {
+      saveFn({ dailyLimit: { ...dl, dailyOrderLimit: Number(limitInput.value) || 0 } });
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'الحد الأقصى للطلبات اليومية (ج.م)'),
+      limitInput,
+      el('div', { className: 'settings-field__hint' }, 'تنبيه عند تجاوز هذا الرقم — لا يمنع الإضافة'),
+    ]));
+
+    const pickupInput = el('input', {
+      className: 'input', type: 'number', min: '0', max: '30',
+      value: String(dl.fabricPickupAlertDays || 2),
+    });
+    pickupInput.addEventListener('blur', () => {
+      saveFn({ dailyLimit: { ...dl, fabricPickupAlertDays: Number(pickupInput.value) || 2 } });
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'تنبيه استلام القماش قبل (أيام)'),
+      pickupInput,
+    ]));
+
+    body.appendChild(el('div', {
+      style: {
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+      },
+    }, '💡 التنبيه يظهر في صفحة الطلبات — يمكنك المتابعة دائماً (لا يمنع الحفظ).'));
+  },
+};
+
+/* ==========================================================================
+   5. تجميع الطلبات المتشابهة
+   ========================================================================== */
+const groupingSection = {
+  id: 'grouping',
+  icon: '🎯',
+  title: 'تجميع الطلبات المتشابهة',
+  async render(body, currentSettings, saveFn) {
+    const gr = currentSettings.grouping || DEFAULT_SETTINGS.grouping;
+
+    const mainToggle = createToggle({
+      label: 'تفعيل التجميع',
+      checked: gr.enabled === true,
+      onChange: (v) => saveFn({ grouping: { ...gr, enabled: v } }),
+    });
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'تفعيل التجميع'),
+      mainToggle,
+    ]));
+
+    const toleranceInput = el('input', {
+      className: 'input', type: 'number', min: '0', max: '20',
+      value: String(gr.tolerance || 2),
+    });
+    toleranceInput.addEventListener('blur', () => {
+      saveFn({ grouping: { ...gr, tolerance: Number(toleranceInput.value) || 2 } });
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'نسبة التقارب في القياسات (سم)'),
+      toleranceInput,
+      el('div', { className: 'settings-field__hint' }, 'مثال: 2 سم تعني أن القياسات المتقاربة بحدود 2 سم تُجمَّع'),
+    ]));
+
+    const typeToggle = createToggle({
+      label: 'نفس النوع فقط',
+      checked: gr.sameTypeOnly !== false,
+      onChange: (v) => saveFn({ grouping: { ...gr, sameTypeOnly: v } }),
+    });
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'التجميع لنفس النوع فقط'),
+      typeToggle,
+    ]));
+
+    body.appendChild(el('div', {
+      style: {
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+      },
+    }, '💡 يظهر زر "🎯 تجميع" في صفحة الطلبات — يعرض الطلبات القابلة للتجميع في دفعات موحدة.'));
+  },
+};
+
 /* --- تصدير --- */
 export const DATA_SECTIONS = [
   measurementFieldsSection,
   jalabiyaTypesSection,
   inventoryLimitsSection,
+  dailyLimitSection,
+  groupingSection,
 ];
