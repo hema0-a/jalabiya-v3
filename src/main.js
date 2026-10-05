@@ -54,6 +54,7 @@ async function loadPageModule(pageId) {
       case 'financial-center':   return await import('./pages/financial-center.js');
       case 'kpis':               return await import('./pages/kpis.js');
       case 'portfolio':          return await import('./pages/portfolio.js');
+      case 'commitments':        return await import('./pages/commitments.js');
       case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
@@ -123,6 +124,7 @@ const MODULE_EXPORT_MAP = {
   'financial-center':   'financialCenterPage',
   'kpis':               'kpisPage',
   'portfolio':          'portfolioPage',
+  'commitments':        'commitmentsPage',
 };
 
 let currentPage = null;
@@ -196,14 +198,13 @@ async function buildTestsPage(testsIndex) {
 }
 
 const PLACEHOLDER_PAGES = {
-  'referrals':    ['الإحالات', '🤝'],
-  'commitments':  ['الالتزامات', '💳'],
+  'referrals':      ['الإحالات', '🤝'],
   'house-expenses': ['مصاريف البيت', '🏠'],
-  'loans':        ['القروض', '💵'],
-  'occasions':    ['المواسم والأعياد', '🎉'],
-  'activity-log': ['سجل النشاط', '📜'],
-  'trash':        ['سلة المحذوفات', '🗑️'],
-  'cloud-sync':   ['المزامنة السحابية', '☁️'],
+  'loans':          ['القروض', '💵'],
+  'occasions':      ['المواسم والأعياد', '🎉'],
+  'activity-log':   ['سجل النشاط', '📜'],
+  'trash':          ['سلة المحذوفات', '🗑️'],
+  'cloud-sync':     ['المزامنة السحابية', '☁️'],
 };
 
 async function renderPage(id) {
