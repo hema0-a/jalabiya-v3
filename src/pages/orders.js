@@ -1,10 +1,5 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD + فلاتر بالحالة)
-   ==========================================================================
-   API:
-     ordersPage.render(container)  → Promise<void>
-     ordersPage.destroy()          → void
-     filterOrders(list, filterId)  → Array (مُصدَّرة للاختبار)
+   orders.js — صفحة الطلبات (CRUD + فلاتر + معاينة سريعة)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -13,9 +8,10 @@ import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { previewOrder } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
-/* --- حالة الصفحة --- */
+/* --- الحالة --- */
 let state = {
   orders: [],
   customers: [],
@@ -36,15 +32,9 @@ const STATUS_MAP = {
 const STATUS_ORDER = ['pending', 'in_progress', 'ready', 'delivered', 'cancelled'];
 
 /* ==========================================================================
-   1. فلترة (مُصدَّرة للاختبار)
+   1. الفلترة
    ========================================================================== */
 
-/**
- * فلترة الطلبات حسب الحالة.
- * @param {Array} list
- * @param {string} filterId — 'all' أو حالة
- * @returns {Array}
- */
 export function filterOrders(list, filterId) {
   if (filterId === 'all') return list;
   return list.filter((o) => o.status === filterId);
@@ -67,73 +57,45 @@ async function loadData() {
 }
 
 /* ==========================================================================
-   3. نموذج إضافة/تعديل طلب
+   3. النموذج
    ========================================================================== */
 
 function openOrderForm(existing = null) {
   const isEdit = existing !== null;
 
-  /* قائمة العملاء */
   const customerSelect = el('select', { className: 'select' });
   customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
   state.customers.forEach((c) => {
     const label = c.name + (c.phone ? ' (' + c.phone + ')' : '');
     customerSelect.appendChild(el('option', { value: c.id }, label));
   });
-  if (isEdit && existing.customerId) {
-    customerSelect.value = existing.customerId;
-  }
+  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
 
-  /* حالة الطلب */
   const statusSelect = el('select', { className: 'select' });
   STATUS_ORDER.forEach((s) => {
     statusSelect.appendChild(el('option', { value: s }, STATUS_MAP[s].label));
   });
   statusSelect.value = isEdit ? existing.status : 'pending';
 
-  /* التاريخ */
   const dateInput = el('input', { className: 'input', type: 'date' });
   if (isEdit && existing.dueDate) {
     dateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
   }
 
-  /* المبلغ */
   const amountInput = el('input', {
-    className: 'input',
-    type: 'number',
-    placeholder: '0',
-    min: '0',
-    step: '0.01',
+    className: 'input', type: 'number', placeholder: '0', min: '0', step: '0.01',
   });
-  if (isEdit && existing.amount != null) {
-    amountInput.value = String(existing.amount);
-  }
+  if (isEdit && existing.amount != null) amountInput.value = String(existing.amount);
 
-  /* الملاحظات */
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
 
   const body = el('div', {}, [
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, 'العميل *'),
-      customerSelect,
-    ]),
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, 'الحالة'),
-      statusSelect,
-    ]),
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, 'تاريخ التسليم'),
-      dateInput,
-    ]),
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, 'المبلغ (ج.م)'),
-      amountInput,
-    ]),
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, 'ملاحظات'),
-      notesInput,
-    ]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العميل *'), customerSelect]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الحالة'), statusSelect]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'تاريخ التسليم'), dateInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ (ج.م)'), amountInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
 
   const handle = modal.open({
@@ -144,14 +106,10 @@ function openOrderForm(existing = null) {
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
         text: isEdit ? 'حفظ التعديلات' : 'إضافة',
-        variant: 'primary',
-        action: 'save',
+        variant: 'primary', action: 'save',
         onClick: async () => {
           const customerId = customerSelect.value;
-          if (!customerId) {
-            toast.warning('اختر عميلاً');
-            return;
-          }
+          if (!customerId) { toast.warning('اختر عميلاً'); return; }
           const dueDateStr = dateInput.value;
           const dueDate = dueDateStr ? new Date(dueDateStr).getTime() : null;
           const amountRaw = amountInput.value.trim();
@@ -166,18 +124,11 @@ function openOrderForm(existing = null) {
           };
 
           try {
-            if (isEdit) {
-              await orders.update(existing.id, data);
-              toast.success('تم تحديث الطلب');
-            } else {
-              await orders.create(data);
-              toast.success('تم إضافة الطلب');
-            }
+            if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }
+            else { await orders.create(data); toast.success('تم إضافة الطلب'); }
             handle.close();
             await refreshAll();
-          } catch (err) {
-            toast.danger('فشل الحفظ: ' + err.message);
-          }
+          } catch (err) { toast.danger('فشل الحفظ: ' + err.message); }
         },
       },
     ],
@@ -194,9 +145,7 @@ async function deleteOrder(order) {
   const ok = await modal.confirm({
     title: 'حذف طلب',
     message: 'هل أنت متأكد من حذف طلب "' + label + '"؟',
-    confirmText: 'حذف',
-    cancelText: 'إلغاء',
-    danger: true,
+    confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
   try {
@@ -204,9 +153,7 @@ async function deleteOrder(order) {
     await orders.remove(order.id);
     toast.success('تم الحذف');
     await refreshAll();
-  } catch (err) {
-    toast.danger('فشل الحذف: ' + err.message);
-  }
+  } catch (err) { toast.danger('فشل الحذف: ' + err.message); }
 }
 
 async function advanceStatus(order) {
@@ -220,13 +167,11 @@ async function advanceStatus(order) {
     await orders.update(order.id, { status: next });
     toast.success('الحالة: ' + STATUS_MAP[next].label);
     await refreshAll();
-  } catch (err) {
-    toast.danger('فشل التحديث: ' + err.message);
-  }
+  } catch (err) { toast.danger('فشل التحديث: ' + err.message); }
 }
 
 /* ==========================================================================
-   5. بناء بطاقة طلب
+   5. بطاقة الطلب
    ========================================================================== */
 
 function buildOrderCard(o) {
@@ -246,6 +191,33 @@ function buildOrderCard(o) {
   const metaChildren = [];
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
+
+  /* ✅ البطاقة كلها قابلة للنقر → معاينة */
+  const card = el('div', {
+    className: 'card',
+    style: { marginBottom: '8px', cursor: 'pointer' },
+    'data-id': o.id,
+    onClick: () => previewOrder(o, c, () => openOrderForm(o)),
+  }, [
+    el('div', {
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '8px', marginBottom: '8px',
+      },
+    }, headerChildren),
+    el('div', {
+      style: {
+        display: 'flex', gap: '12px', flexWrap: 'wrap',
+        fontSize: '12px', color: '#666', marginBottom: '8px',
+      },
+    }, metaChildren),
+  ]);
+
+  if (o.notes) {
+    card.appendChild(el('div', {
+      style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.4' },
+    }, o.notes));
+  }
 
   const actionChildren = [
     el('button', {
@@ -267,27 +239,10 @@ function buildOrderCard(o) {
     onClick: () => deleteOrder(o),
   }, '🗑️'));
 
-  const card = el('div', {
-    className: 'card',
-    style: { marginBottom: '8px' },
-    'data-id': o.id,
-  }, [
-    el('div', {
-      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' },
-    }, headerChildren),
-    el('div', {
-      style: { display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '12px', color: '#666', marginBottom: '8px' },
-    }, metaChildren),
-  ]);
-
-  if (o.notes) {
-    card.appendChild(el('div', {
-      style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.4' },
-    }, o.notes));
-  }
-
+  /* ⚠️ منع انتشار الحدث من الأزرار */
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+    onClick: (e) => e.stopPropagation(),
   }, actionChildren));
 
   return card;
@@ -387,7 +342,7 @@ async function refreshAll() {
 }
 
 /* ==========================================================================
-   7. API عام
+   7. API
    ========================================================================== */
 
 export const ordersPage = {
@@ -419,11 +374,8 @@ export const ordersPage = {
 
   destroy() {
     state = {
-      orders: [],
-      customers: [],
-      customerMap: {},
-      activeFilter: 'all',
-      container: null,
+      orders: [], customers: [], customerMap: {},
+      activeFilter: 'all', container: null,
     };
   },
 };
