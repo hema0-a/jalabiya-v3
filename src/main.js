@@ -1,5 +1,7 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + PWA
+   main.js — نقطة الدخول + App Shell + Router
+   ==========================================================================
+   Service Worker معطَّل مؤقتاً أثناء التطوير (V3.1 يُعيد تفعيله).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -50,6 +52,7 @@ async function loadPageModule(pageId) {
       case 'kpis':               return await import('./pages/kpis.js');
       case 'portfolio':          return await import('./pages/portfolio.js');
       case 'commitments':        return await import('./pages/commitments.js');
+      case 'house-expenses':     return await import('./pages/house-expenses.js');
       case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
@@ -120,6 +123,7 @@ const MODULE_EXPORT_MAP = {
   'kpis':               'kpisPage',
   'portfolio':          'portfolioPage',
   'commitments':        'commitmentsPage',
+  'house-expenses':     'houseExpensesPage',
 };
 
 let currentPage = null;
@@ -193,13 +197,12 @@ async function buildTestsPage(testsIndex) {
 }
 
 const PLACEHOLDER_PAGES = {
-  'referrals':      ['الإحالات', '🤝'],
-  'house-expenses': ['مصاريف البيت', '🏠'],
-  'loans':          ['القروض', '💵'],
-  'occasions':      ['المواسم والأعياد', '🎉'],
-  'activity-log':   ['سجل النشاط', '📜'],
-  'trash':          ['سلة المحذوفات', '🗑️'],
-  'cloud-sync':     ['المزامنة السحابية', '☁️'],
+  'referrals': ['الإحالات', '🤝'],
+  'loans':     ['القروض', '💵'],
+  'occasions': ['المواسم والأعياد', '🎉'],
+  'activity-log': ['سجل النشاط', '📜'],
+  'trash':     ['سلة المحذوفات', '🗑️'],
+  'cloud-sync': ['المزامنة السحابية', '☁️'],
 };
 
 async function renderPage(id) {
