@@ -1,7 +1,5 @@
 /* ==========================================================================
    index.js — قائمة وحدات الاختبار (Entry Point)
-   ==========================================================================
-   لإضافة وحدة اختبار جديدة: أضف سطر import واحد هنا.
    ========================================================================== */
 
 import './modules/core.test.js';
@@ -16,5 +14,6 @@ import './modules/pages2.test.js';
 import './modules/settings.test.js';
 import './modules/appointments-page.test.js';
 import './modules/pricing.test.js';
+import './modules/financial.test.js';
 
 export { runAll, register } from './registry.js';
