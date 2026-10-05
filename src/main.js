@@ -1,10 +1,8 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router + PWA
    ==========================================================================
-   - لا innerHTML.
-   - استيراد ديناميكي للصفحات (Lazy Loading).
-   - Hash routing (#/page-id).
-   - السايدبار يُحدَّث عند الفتح المباشر.
+   - calendar → calendarPage (تقويم مرئي).
+   - appointments تبقى موجودة للاستخدام المستقبلي (اختصارات).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -25,7 +23,7 @@ function showError(title, err) {
 }
 
 /* ==========================================================================
-   0. PWA — تسجيل Service Worker
+   0. PWA — Service Worker
    ========================================================================== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -65,7 +63,7 @@ async function loadPageModule(pageId) {
       case 'expenses':   return await import('./pages/expenses.js');
       case 'reports':    return await import('./pages/reports.js');
       case 'settings':   return await import('./pages/settings/index.js');
-      case 'calendar':   return await import('./pages/appointments.js');
+      case 'calendar':   return await import('./pages/calendar.js');
       case 'tests':      return await import('./tests/index.js');
       default:           return null;
     }
@@ -133,7 +131,7 @@ const MODULE_EXPORT_MAP = {
   expenses:  'expensesPage',
   reports:   'reportsPage',
   settings:  'settingsPage',
-  calendar:  'appointmentsPage',
+  calendar:  'calendarPage',
 };
 
 let currentPage = null;
