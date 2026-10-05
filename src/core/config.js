@@ -1,8 +1,5 @@
 /* ==========================================================================
    config.js — ثوابت المشروع وإعداداته الافتراضية
-   ==========================================================================
-   لا يحتوي على أي منطق تنفيذي — فقط كائنات ثابتة (Constants).
-   يُستورَد من كل ملفات المشروع.
    ========================================================================== */
 
 /* --- 1. معلومات التطبيق --- */
@@ -23,10 +20,10 @@ export const APP_CONFIG = {
 /* --- 2. إعدادات IndexedDB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 2,        // v2: حذف فهارس boolean غير صالحة (by_vip, by_active)
+  version: 2,
 };
 
-/* --- 3. أسماء المخازن (Stores) --- */
+/* --- 3. أسماء المخازن --- */
 export const STORES = {
   CUSTOMERS:    'customers',
   ORDERS:       'orders',
@@ -40,28 +37,76 @@ export const STORES = {
   ACTIVITY:     'activity',
 };
 
-/* --- 4. الإعدادات الافتراضية --- */
+/* --- 4. المناسبات الافتراضية (7) --- */
+export const DEFAULT_OCCASIONS = [
+  { id: 'ramadan',      name: 'رمضان',                 month: 3, day: 1,  icon: '🌙', alertDays: 30, recurring: true, enabled: true },
+  { id: 'eid-fitr',     name: 'عيد الفطر',             month: 4, day: 10, icon: '🎉', alertDays: 21, recurring: true, enabled: true },
+  { id: 'eid-adha',     name: 'عيد الأضحى',            month: 6, day: 10, icon: '🐑', alertDays: 21, recurring: true, enabled: true },
+  { id: 'mawlid',       name: 'المولد النبوي',          month: 9, day: 12, icon: '🕌', alertDays: 14, recurring: true, enabled: true },
+  { id: 'school-start', name: 'بداية العام الدراسي',    month: 9, day: 1,  icon: '🎓', alertDays: 30, recurring: true, enabled: true },
+  { id: 'new-year',     name: 'رأس السنة',             month: 1, day: 1,  icon: '🎊', alertDays: 14, recurring: true, enabled: true },
+  { id: 'mothers-day',  name: 'عيد الأم',              month: 3, day: 21, icon: '💐', alertDays: 14, recurring: true, enabled: true },
+];
+
+/* --- 5. الخلفيات الإبداعية (5) --- */
+export const BACKGROUNDS = [
+  { id: 'none',      name: 'بدون' },
+  { id: 'fabric',    name: 'قماش' },
+  { id: 'sewing',    name: 'خياطة' },
+  { id: 'geometric', name: 'هندسي' },
+  { id: 'paper',     name: 'ورقي' },
+];
+
+/* --- 6. أنماط الأيقونات (3) --- */
+export const ICON_STYLES = [
+  { id: 'default',        name: 'افتراضي' },
+  { id: 'colored-badges', name: 'شارات ملونة' },
+  { id: 'line',           name: 'خطي بسيط' },
+];
+
+/* --- 7. الخطوط (5) --- */
+export const FONT_FAMILIES = [
+  { id: 'ibm-plex',   name: 'IBM Plex Sans Arabic', font: "'IBM Plex Sans Arabic', system-ui" },
+  { id: 'cairo',      name: 'Cairo',                font: "'Cairo', system-ui" },
+  { id: 'tajawal',    name: 'Tajawal',              font: "'Tajawal', system-ui" },
+  { id: 'almarai',    name: 'Almarai',              font: "'Almarai', system-ui" },
+  { id: 'noto-kufi',  name: 'Noto Kufi Arabic',     font: "'Noto Kufi Arabic', system-ui" },
+];
+
+/* --- 8. أحجام الخطوط (4) --- */
+export const FONT_SIZES = [
+  { id: 'small',  name: 'صغير',       factor: 0.9  },
+  { id: 'normal', name: 'متوسط',      factor: 1.0  },
+  { id: 'large',  name: 'كبير',       factor: 1.12 },
+  { id: 'xlarge', name: 'كبير جداً',  factor: 1.25 },
+];
+
+/* --- 9. الإعدادات الافتراضية (19 قسماً) --- */
 export const DEFAULT_SETTINGS = {
+  /* 1. معلومات الورشة */
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
 
+  /* 2-3. المظهر والتخصيص */
   appearance: {
     theme: 'classic',
     primaryColor: '#1F6D57',
     accentColor: '#B8863B',
     backgroundColor: '#F6F1E6',
-    backgroundPattern: 'none',
-    iconStyle: 'default',
+    backgroundPattern: 'none',      // none | fabric | sewing | geometric | paper
+    iconStyle: 'default',           // default | colored-badges | line
   },
 
+  /* 4. أوضاع العرض */
   display: {
     darkMode: false,
     highContrast: false,
     compactMode: false,
     clientMode: false,
-    fontSize: 'medium',
-    fontFamily: 'ibm-plex',
+    fontSize: 'normal',             // small | normal | large | xlarge
+    fontFamily: 'ibm-plex',         // ibm-plex | cairo | tajawal | almarai | noto-kufi
   },
 
+  /* 5. حقول المقاسات */
   measurementFields: [
     { id: 'shoulder', name: 'الكتف',   enabled: true, unit: 'cm' },
     { id: 'chest',    name: 'الصدر',   enabled: true, unit: 'cm' },
@@ -72,6 +117,13 @@ export const DEFAULT_SETTINGS = {
     { id: 'neck',     name: 'الرقبة',  enabled: true, unit: 'cm' },
   ],
 
+  /* 6. أنواع الجلابيات */
+  jalabiyaTypes: [],
+
+  /* 7. المواسم والأعياد */
+  occasions: DEFAULT_OCCASIONS,
+
+  /* 8. التنبيهات */
   notifications: {
     seasons: true,
     appointments: true,
@@ -80,17 +132,52 @@ export const DEFAULT_SETTINGS = {
     leadDays: 2,
   },
 
+  /* 9. المخزون والحدود */
   inventory: {
     minThreshold: 5,
     alertOnFabricLow: true,
     alertOnProductLow: true,
   },
 
+  /* 10. الحد اليومي */
+  dailyLimit: {
+    dailyOrderLimit: 700,
+    fabricPickupAlertDays: 2,
+  },
+
+  /* 11. تجميع الطلبات المتشابهة */
+  grouping: {
+    enabled: false,
+    tolerance: 2,
+    sameTypeOnly: true,
+  },
+
+  /* 12. الرسائل التلقائية */
+  autoMessages: {
+    enabled: true,
+    templates: {},
+  },
+
+  /* 13. النسخ الاحتياطي */
   backup: {
     autoBackup: true,
     intervalHours: 24,
   },
 
+  /* 14. المزامنة السحابية */
+  cloudSync: {
+    enabled: false,
+    lastSyncAt: null,
+  },
+
+  /* 15. ضغط الصور */
+  imageCompression: {
+    quality: 0.85,
+    maxSizeKB: 500,
+    maxDimensionPx: 1600,
+  },
+
+  /* 16. الأمان */
   security: {
     autoLock: true,
     lockAfterMinutes: 5,
@@ -98,14 +185,15 @@ export const DEFAULT_SETTINGS = {
     logLoginAttempts: true,
   },
 
-  imageCompression: {
-    quality: 0.85,
-    maxSizeKB: 500,
-    maxDimensionPx: 1600,
+  /* 17. شاشة القفل */
+  lockScreen: {
+    background: null,
+    message: 'أدخل الرقم السري للدخول',
+    showLogo: true,
   },
 };
 
-/* --- 5. الثيمات الجاهزة (9) --- */
+/* --- 10. الثيمات الجاهزة (9) --- */
 export const THEMES = [
   { id: 'classic',  name: 'كلاسيكي',   emoji: '🟢', primary: '#1F6D57', accent: '#B8863B', bg: '#F6F1E6' },
   { id: 'modern',   name: 'عصري',      emoji: '🔵', primary: '#1565C0', accent: '#4FC3F7', bg: '#F5F8FC' },
@@ -118,7 +206,7 @@ export const THEMES = [
   { id: 'ocean',    name: 'أزرق بحري', emoji: '🌊', primary: '#0D47A1', accent: '#26C6DA', bg: '#E8F4F8' },
 ];
 
-/* --- 6. إعدادات Firebase (تُملأ لاحقاً) --- */
+/* --- 11. إعدادات Firebase --- */
 export const FIREBASE_CONFIG = {
   apiKey: '',
   authDomain: '',
@@ -128,22 +216,20 @@ export const FIREBASE_CONFIG = {
   appId: '',
 };
 
-/* --- 7. مسار بيانات V3 في Firestore --- */
+/* --- 12. مسار بيانات V3 --- */
 export const FIRESTORE_PATHS = {
   base: 'users_v3',
   dataMain: 'data/main',
 };
 
-/* --- 8. مفاتيح localStorage --- */
+/* --- 13. مفاتيح localStorage --- */
 export const STORAGE_KEYS = {
-  // --- مفاتيح V2 (للترحيل) ---
   V2_DB:              'jalabiya_v2_db',
   V2_SETTINGS:        'jalabiya_v2_settings',
   V2_SESSION:         'jalabiya_v2_session',
   V2_FAILED_ATTEMPTS: 'jalabiya_v2_failed_attempts',
   V2_AUTO_BACKUPS:    'jalabiya_v2_auto_backups',
 
-  // --- مفاتيح V3 ---
   V3_THEME:           'jalabiya_v3_theme',
   V3_SESSION:         'jalabiya_v3_session',
   V3_PIN_HASH:        'jalabiya_v3_pin_hash',
@@ -151,11 +237,11 @@ export const STORAGE_KEYS = {
   V3_LAST_SYNC:       'jalabiya_v3_last_sync',
   V3_MIGRATED:        'jalabiya_v3_migrated',
   V3_FAILED_ATTEMPTS: 'jalabiya_v3_failed_attempts',
-    V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
+  V3_LOCK_UNTIL:      'jalabiya_v3_lock_until',
   V3_OFFLINE_QUEUE:   'jalabiya_v3_offline_queue',
 };
 
-/* --- 9. الحدود القصوى (MAX limits) --- */
+/* --- 14. الحدود القصوى --- */
 export const LIMITS = {
   maxActivityLog:  500,
   maxTrashItems:   200,
@@ -168,7 +254,7 @@ export const LIMITS = {
   saveDebounceMs:  300,
 };
 
-/* --- 10. إعدادات المزامنة (Sync) --- */
+/* --- 15. إعدادات المزامنة --- */
 export const SYNC_CONFIG = {
   debounceMs:     30000,
   maxRetries:     3,
