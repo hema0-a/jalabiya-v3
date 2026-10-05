@@ -13,7 +13,7 @@ import { LIMITS } from '../../core/config.js';
 /* ===== schema.js (6) ===== */
 register('schema.js', async (t) => {
   const schemaKeys = Object.keys(SCHEMA);
-await t.test('1. SCHEMA has 11 stores', schemaKeys.length === 11);
+await t.test('1. SCHEMA has 14 stores', schemaKeys.length === 14);
 
   let validOk = true;
   try { validateSchema(); }
@@ -47,7 +47,7 @@ await t.test('1. SCHEMA has 11 stores', schemaKeys.length === 11);
   await t.test('5. no duplicate index names', noDup);
 
   const idsOk = SETTINGS_ID === 'main';
-const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === 11;
+const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === 14;
 await t.test('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
 });
 
