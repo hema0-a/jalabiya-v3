@@ -68,6 +68,22 @@ export function getPeriodRange(period) {
  * @returns {{score:number, level:string, stars:number}}
  */
 export function calculateHealthScore(stats) {
+  /* فحص "لا بيانات" — لا يعطي نقاطاً وهمية */
+  const hasData =
+    Number(stats.profitMargin) !== 0 ||
+    Number(stats.collectionRate) !== 0 ||
+    Number(stats.topCategoryPercent) !== 0 ||
+    Number(stats.revenueGrowthPercent) !== 0;
+
+  if (!hasData) {
+    return {
+      score: 0,
+      level: 'يحتاج تحسين',
+      stars: 1,
+      breakdown: { margin: 0, collection: 0, topCategoryPercent: 0, growth: 0 },
+    };
+  }
+
   let score = 0;
 
   const margin = Number(stats.profitMargin) || 0;
