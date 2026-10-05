@@ -2,11 +2,13 @@
    sections-system.js — أقسام: التنبيهات، الرسائل، النسخ، المزامنة، ضغط الصور
    ========================================================================== */
 
-import { el } from '../../core/dom.js';
+import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, STORAGE_KEYS } from '../../core/config.js';
+import * as authSync from '../../sync/auth-sync.js';
+import * as firestoreSync from '../../sync/firestore-sync.js';
 
 /* ==========================================================================
    1. التنبيهات
@@ -38,7 +40,6 @@ const notificationsSection = {
     body.appendChild(toggleRow('inventory', 'تنبيهات المخزون', 'عند نقص الكمية'));
     body.appendChild(toggleRow('debts', 'تنبيهات المديونيات', 'العملاء بأرصدة معلقة'));
 
-    /* فترة التنبيه */
     const periodSelect = el('select', { className: 'select' });
     [['1', 'يوم'], ['2', 'يومان'], ['7', 'أسبوع']].forEach(([v, l]) => {
       const o = el('option', { value: v }, l);
@@ -59,11 +60,11 @@ const notificationsSection = {
    2. الرسائل التلقائية
    ========================================================================== */
 const AUTO_MESSAGES = [
-  { id: 'new_order',   name: 'طلب جديد',        text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م وسنبدأ التنفيذ قريباً.' },
-  { id: 'start_work',  name: 'بدء التنفيذ',     text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك. سنعلمك حين يكون جاهزاً.' },
-  { id: 'ready',       name: 'جاهز للتسليم',    text: 'طلبك جاهز للتسليم يا {customer}! يمكنك المرور في أي وقت.' },
-  { id: 'thanks',      name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}! نتشرف بخدمتك دائماً.' },
-  { id: 'payment_due', name: 'تذكير بالدفع',    text: 'تذكير ودّي: متبقي عليك {amount} ج.م. شكراً لتعاونك.' },
+  { id: 'new_order',   name: 'طلب جديد',        text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
+  { id: 'start_work',  name: 'بدء التنفيذ',     text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك.' },
+  { id: 'ready',       name: 'جاهز للتسليم',    text: 'طلبك جاهز للتسليم يا {customer}!' },
+  { id: 'thanks',      name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}!' },
+  { id: 'payment_due', name: 'تذكير بالدفع',    text: 'تذكير ودّي: متبقي عليك {amount} ج.م.' },
 ];
 
 const autoMessagesSection = {
@@ -73,7 +74,6 @@ const autoMessagesSection = {
   async render(body, currentSettings, saveFn) {
     const am = currentSettings.autoMessages || { enabled: true, templates: {} };
 
-    /* Toggle رئيسي */
     const mainToggle = createToggle({
       label: 'تفعيل الرسائل التلقائية',
       checked: am.enabled !== false,
@@ -84,12 +84,10 @@ const autoMessagesSection = {
       mainToggle,
     ]));
 
-    /* القوالب */
     const templates = am.templates || {};
     AUTO_MESSAGES.forEach((tpl) => {
       const current = templates[tpl.id] || { enabled: true, text: tpl.text };
 
-      /* Toggle القالب */
       const t = createToggle({
         label: '',
         checked: current.enabled !== false,
@@ -103,24 +101,16 @@ const autoMessagesSection = {
         },
       });
 
-      /* معاينة */
       const preview = el('div', {
         style: {
-          fontSize: '12px',
-          color: '#666',
-          padding: '8px',
-          background: '#F6F1E6',
-          borderRadius: '6px',
-          marginTop: '6px',
-          lineHeight: '1.5',
-          whiteSpace: 'pre-wrap',
+          fontSize: '12px', color: '#666', padding: '8px',
+          background: '#F6F1E6', borderRadius: '6px',
+          marginTop: '6px', lineHeight: '1.5', whiteSpace: 'pre-wrap',
         },
       }, current.text);
 
-      /* زر تعديل */
       const editBtn = el('button', {
-        className: 'btn btn--sm btn--ghost',
-        type: 'button',
+        className: 'btn btn--sm btn--ghost', type: 'button',
         onClick: () => openTemplateEditor(tpl, current, (newText) => {
           saveFn({
             autoMessages: {
@@ -134,11 +124,8 @@ const autoMessagesSection = {
 
       body.appendChild(el('div', {
         style: {
-          padding: '12px',
-          background: '#FFF',
-          border: '1px solid #E5DDD0',
-          borderRadius: '8px',
-          marginBottom: '8px',
+          padding: '12px', background: '#FFF',
+          border: '1px solid #E5DDD0', borderRadius: '8px', marginBottom: '8px',
         },
       }, [
         el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' } }, [
@@ -149,17 +136,12 @@ const autoMessagesSection = {
       ]));
     });
 
-    /* تلميح المتغيرات */
     body.appendChild(el('div', {
       style: {
-        fontSize: '12px',
-        color: '#2E8B6F',
-        padding: '10px',
-        background: '#F1F8E9',
-        borderRadius: '8px',
-        lineHeight: '1.6',
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
       },
-    }, '💡 المتغيرات المتاحة: {customer} (اسم العميل)، {amount} (المبلغ)، {phone} (الهاتف)'));
+    }, '💡 المتغيرات: {customer} {amount} {phone}'));
   },
 };
 
@@ -173,9 +155,6 @@ function openTemplateEditor(tpl, current, onSave) {
       el('label', { className: 'field__label' }, 'نص القالب'),
       textarea,
     ]),
-    el('div', {
-      style: { fontSize: '12px', color: '#2E8B6F', marginTop: '8px' },
-    }, '💡 {customer} — {amount} — {phone}'),
   ]);
 
   const handle = modal.open({
@@ -207,7 +186,6 @@ const backupSection = {
   async render(body, currentSettings, saveFn) {
     const bk = currentSettings.backup || DEFAULT_SETTINGS.backup;
 
-    /* Toggle تلقائي */
     const autoToggle = createToggle({
       label: 'النسخ التلقائي',
       checked: bk.autoBackup !== false,
@@ -218,14 +196,10 @@ const backupSection = {
       autoToggle,
     ]));
 
-    /* الفترة */
     const intervalSelect = el('select', { className: 'select' });
     [
-      ['6',   'كل 6 ساعات'],
-      ['12',  'كل 12 ساعة'],
-      ['24',  'كل يوم'],
-      ['48',  'كل يومين'],
-      ['168', 'كل أسبوع'],
+      ['6', 'كل 6 ساعات'], ['12', 'كل 12 ساعة'],
+      ['24', 'كل يوم'], ['48', 'كل يومين'], ['168', 'كل أسبوع'],
     ].forEach(([v, l]) => {
       const o = el('option', { value: v }, l);
       if (String(bk.intervalHours || 24) === v) o.selected = true;
@@ -239,15 +213,12 @@ const backupSection = {
       intervalSelect,
     ]));
 
-    /* زر نسخة يدوية الآن */
     body.appendChild(el('button', {
-      className: 'btn btn--primary btn--block',
-      type: 'button',
+      className: 'btn btn--primary btn--block', type: 'button',
       style: { marginTop: '8px' },
       onClick: () => exportAllData(),
-    }, '💾 تنزيل نسخة احتياطية الآن (JSON)'));
+    }, '💾 تنزيل نسخة احتياطية (JSON)'));
 
-    /* زر استيراد */
     const importInput = el('input', { type: 'file', accept: '.json', style: { display: 'none' } });
     importInput.addEventListener('change', () => {
       const file = importInput.files[0];
@@ -256,11 +227,10 @@ const backupSection = {
       importInput.value = '';
     });
     body.appendChild(el('button', {
-      className: 'btn btn--secondary btn--block',
-      type: 'button',
+      className: 'btn btn--secondary btn--block', type: 'button',
       style: { marginTop: '8px' },
       onClick: () => importInput.click(),
-    }, '📂 استيراد من ملف JSON'));
+    }, '📂 استيراد من JSON'));
     body.appendChild(importInput);
   },
 };
@@ -270,13 +240,9 @@ async function exportAllData() {
     const db = await import('../../data/idb.js');
     const stores = ['customers', 'orders', 'payments', 'inventory', 'workers', 'expenses', 'appointments', 'settings'];
     const data = { version: 3, exportedAt: Date.now(), stores: {} };
+    for (const s of stores) data.stores[s] = await db.getAll(s);
 
-    for (const s of stores) {
-      data.stores[s] = await db.getAll(s);
-    }
-
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -284,94 +250,199 @@ async function exportAllData() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('تم تنزيل النسخة');
-  } catch (err) {
-    toast.danger('فشل: ' + err.message);
-  }
+  } catch (err) { toast.danger('فشل: ' + err.message); }
 }
 
 async function importAllData(file) {
   const ok = await modal.confirm({
     title: 'استيراد بيانات',
     message: 'سيتم دمج البيانات مع الحالية. متابعة؟',
-    confirmText: 'استيراد',
-    cancelText: 'إلغاء',
-    danger: true,
+    confirmText: 'استيراد', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
-
   try {
-    const text = await file.text();
-    const data = JSON.parse(text);
+    const data = JSON.parse(await file.text());
     if (!data || !data.stores) throw new Error('ملف غير صالح');
-
     const db = await import('../../data/idb.js');
-    let totalImported = 0;
-    for (const [storeName, records] of Object.entries(data.stores)) {
-      if (!Array.isArray(records)) continue;
-      for (const rec of records) {
-        await db.put(storeName, rec);
-        totalImported++;
-      }
+    let total = 0;
+    for (const [sn, recs] of Object.entries(data.stores)) {
+      if (!Array.isArray(recs)) continue;
+      for (const r of recs) { await db.put(sn, r); total++; }
     }
-    toast.success('تم استيراد ' + totalImported + ' عنصر');
-  } catch (err) {
-    toast.danger('فشل الاستيراد: ' + err.message);
-  }
+    toast.success('تم استيراد ' + total + ' عنصر');
+  } catch (err) { toast.danger('فشل: ' + err.message); }
 }
 
 /* ==========================================================================
-   4. المزامنة السحابية
+   4. المزامنة السحابية — Firebase
    ========================================================================== */
 const cloudSyncSection = {
   id: 'cloud-sync',
   icon: '☁️',
   title: 'المزامنة السحابية',
   async render(body, currentSettings, saveFn) {
-    const isOnline = navigator.onLine;
+    const redraw = async () => {
+      clear(body);
+      await cloudSyncSection.render(body, currentSettings, saveFn);
+    };
 
-    /* حالة الاتصال */
+    /* Firebase غير مُهيّأ */
+    if (!authSync.isConfigured()) {
+      body.appendChild(el('div', {
+        style: {
+          padding: '12px', background: '#FFF3E0', borderRadius: '8px',
+          fontSize: '13px', color: '#F57C00', lineHeight: '1.6',
+        },
+      }, '⚠️ Firebase غير مُهيّأ. أضف إعدادات Firebase في config.js لتفعيل المزامنة.'));
+      return;
+    }
+
+    const isOnline = navigator.onLine;
     body.appendChild(el('div', {
       style: {
-        padding: '12px',
+        padding: '10px', borderRadius: '8px', marginBottom: '12px',
+        fontSize: '13px', fontWeight: '500',
         background: isOnline ? '#E8F5E9' : '#FFEBEE',
-        borderRadius: '8px',
-        marginBottom: '12px',
-        fontSize: '13px',
         color: isOnline ? '#2E7D32' : '#C62828',
-        fontWeight: '500',
       },
     }, isOnline ? '🟢 متصل بالإنترنت' : '🔴 غير متصل'));
 
-    /* حالة تسجيل الدخول — من localStorage */
+    /* المستخدم الحالي */
+    const user = await authSync.current();
+
+    if (!user) {
+      /* --- نموذج تسجيل الدخول --- */
+      const emailInput = el('input', { className: 'input', type: 'email', placeholder: 'example@mail.com' });
+      const passInput = el('input', { className: 'input', type: 'password', placeholder: '••••••••' });
+
+      const loginBtn = el('button', {
+        className: 'btn btn--primary btn--block', type: 'button',
+        onClick: async () => {
+          loginBtn.disabled = true;
+          loginBtn.textContent = '⏳ جارٍ الدخول...';
+          const res = await authSync.login(emailInput.value.trim(), passInput.value);
+          if (res.ok) { toast.success('تم تسجيل الدخول'); await redraw(); }
+          else {
+            toast.danger(res.error || 'فشل الدخول');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '🔓 تسجيل الدخول';
+          }
+        },
+      }, '🔓 تسجيل الدخول');
+
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, 'البريد الإلكتروني'),
+        emailInput,
+      ]));
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, 'كلمة المرور'),
+        passInput,
+      ]));
+      body.appendChild(loginBtn);
+      return;
+    }
+
+    /* --- مسجَّل دخول --- */
+    body.appendChild(el('div', {
+      style: {
+        padding: '12px', background: '#E8F5E9', borderRadius: '8px',
+        marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px',
+      },
+    }, [
+      el('div', { style: { fontSize: '24px' } }, '✅'),
+      el('div', { style: { flex: '1' } }, [
+        el('div', { style: { fontWeight: '600', color: '#2E7D32', fontSize: '14px' } }, 'مسجل الدخول'),
+        el('div', { style: { fontSize: '12px', color: '#666' } }, user.email || user.uid || ''),
+      ]),
+    ]));
+
+    /* آخر مزامنة */
     const lastSync = localStorage.getItem(STORAGE_KEYS.V3_LAST_SYNC);
     body.appendChild(el('div', {
       style: {
-        padding: '12px',
-        background: '#F6F1E6',
-        borderRadius: '8px',
-        marginBottom: '12px',
-        fontSize: '13px',
-        color: '#123C2F',
+        padding: '10px', background: '#F6F1E6', borderRadius: '8px',
+        marginBottom: '12px', fontSize: '12px', color: '#123C2F',
       },
-    }, lastSync ? '🕐 آخر مزامنة: ' + new Date(Number(lastSync)).toLocaleString('ar-EG') : '⚠️ لم تتم المزامنة بعد'));
+    }, lastSync
+      ? '🕐 آخر مزامنة: ' + new Date(Number(lastSync)).toLocaleString('ar-EG')
+      : '⚠️ لم تتم المزامنة بعد'));
 
-    /* زر مزامنة الآن */
-    body.appendChild(el('button', {
-      className: 'btn btn--primary btn--block',
-      type: 'button',
-      onClick: () => toast.info('Firebase Sync — المرحلة 9'),
-    }, '🔄 مزامنة الآن'));
-
-    /* تلميح */
-    body.appendChild(el('div', {
-      style: {
-        fontSize: '12px',
-        color: '#666',
-        textAlign: 'center',
-        marginTop: '12px',
-        lineHeight: '1.6',
+    /* زر الرفع */
+    const pushBtn = el('button', {
+      className: 'btn btn--primary btn--block', type: 'button',
+      style: { marginBottom: '8px' },
+      onClick: async () => {
+        pushBtn.disabled = true;
+        pushBtn.textContent = '⏳ جارٍ الرفع...';
+        toast.info('جارٍ رفع البيانات...');
+        const res = await firestoreSync.push(user.uid);
+        if (res.ok) {
+          localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
+          toast.success('تم رفع البيانات');
+          await redraw();
+        } else {
+          toast.danger(res.error || 'فشل الرفع');
+          pushBtn.disabled = false;
+          pushBtn.textContent = '⬆️ رفع إلى السحابة';
+        }
       },
-    }, '☁️ سيتم تفعيل Firebase Sync في المرحلة 9'));
+    }, '⬆️ رفع إلى السحابة');
+
+    /* زر التنزيل */
+    const pullBtn = el('button', {
+      className: 'btn btn--secondary btn--block', type: 'button',
+      style: { marginBottom: '8px' },
+      onClick: async () => {
+        const ok = await modal.confirm({
+          title: 'تنزيل من السحابة',
+          message: 'سيتم استبدال البيانات المحلية بالبيانات السحابية. متابعة؟',
+          confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
+        });
+        if (!ok) return;
+
+        pullBtn.disabled = true;
+        pullBtn.textContent = '⏳ جارٍ التنزيل...';
+        toast.info('جارٍ تنزيل البيانات...');
+
+        const res = await firestoreSync.pull(user.uid);
+        if (!res.ok) {
+          toast.danger(res.error || 'فشل التنزيل');
+          pullBtn.disabled = false;
+          pullBtn.textContent = '⬇️ تنزيل من السحابة';
+          return;
+        }
+        if (!res.data) {
+          toast.warning('لا توجد بيانات سحابية بعد');
+          pullBtn.disabled = false;
+          pullBtn.textContent = '⬇️ تنزيل من السحابة';
+          return;
+        }
+        const applyRes = await firestoreSync.apply(res.data);
+        if (applyRes.ok) {
+          localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
+          toast.success('تم التنزيل — جارٍ إعادة التحميل...');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          toast.danger(applyRes.error || 'فشل التطبيق');
+          pullBtn.disabled = false;
+          pullBtn.textContent = '⬇️ تنزيل من السحابة';
+        }
+      },
+    }, '⬇️ تنزيل من السحابة');
+
+    /* زر تسجيل الخروج */
+    const logoutBtn = el('button', {
+      className: 'btn btn--danger btn--block', type: 'button',
+      onClick: async () => {
+        await authSync.logout();
+        toast.info('تم تسجيل الخروج');
+        await redraw();
+      },
+    }, '🚪 تسجيل الخروج');
+
+    body.appendChild(pushBtn);
+    body.appendChild(pullBtn);
+    body.appendChild(logoutBtn);
   },
 };
 
@@ -403,37 +474,23 @@ const imageCompressionSection = {
     }
 
     body.appendChild(selectField('الجودة', 'quality', [
-      ['0.60', '60%'],
-      ['0.75', '75%'],
-      ['0.85', '85%'],
-      ['0.95', '95%'],
+      ['0.60', '60%'], ['0.75', '75%'], ['0.85', '85%'], ['0.95', '95%'],
     ], ic.quality));
 
     body.appendChild(selectField('الحجم الأقصى', 'maxSizeKB', [
-      [200, '200 KB'],
-      [500, '500 KB'],
-      [800, '800 KB'],
-      [1500, '1.5 MB'],
+      [200, '200 KB'], [500, '500 KB'], [800, '800 KB'], [1500, '1.5 MB'],
     ], ic.maxSizeKB));
 
     body.appendChild(selectField('الأبعاد القصوى', 'maxDimensionPx', [
-      [800, '800 px'],
-      [1200, '1200 px'],
-      [1600, '1600 px'],
-      [2000, '2000 px'],
+      [800, '800 px'], [1200, '1200 px'], [1600, '1600 px'], [2000, '2000 px'],
     ], ic.maxDimensionPx));
 
-    /* معاينة القيم */
     body.appendChild(el('div', {
       style: {
-        fontSize: '12px',
-        color: '#2E8B6F',
-        padding: '10px',
-        background: '#F1F8E9',
-        borderRadius: '8px',
-        lineHeight: '1.6',
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
       },
-    }, '📊 التوفير المتوقع: ~' + Math.round((1 - (ic.quality || 0.85)) * 100) + '% من الحجم الأصلي'));
+    }, '📊 التوفير المتوقع: ~' + Math.round((1 - (ic.quality || 0.85)) * 100) + '%'));
   },
 };
 
