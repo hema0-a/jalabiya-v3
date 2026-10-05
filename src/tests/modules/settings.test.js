@@ -1,7 +1,7 @@
 /* ==========================================================================
    settings.test.js — اختبارات صفحة الإعدادات
    ==========================================================================
-   10 اختبارات: pages/settings (20 قسماً)
+   10 اختبارات: pages/settings (21 قسماً)
    ========================================================================== */
 
 import { register } from '../registry.js';
@@ -22,13 +22,13 @@ register('pages/settings.js', async (t) => {
     container.querySelector('.settings-search') !== null &&
     container.querySelector('.settings-layout') !== null);
 
-  /* 2. عدد الأقسام = 20 */
+  /* 2. عدد الأقسام = 21 */
   const sections = container.querySelectorAll('.settings-section');
-  await t.test('2. renders 20 sections', sections.length === 20);
+  await t.test('2. renders 21 sections', sections.length === 21);
 
-  /* 3. عدد عناصر TOC = 20 */
+  /* 3. عدد عناصر TOC = 21 */
   const tocItems = container.querySelectorAll('.settings-toc__item');
-  await t.test('3. TOC has 20 items', tocItems.length === 20);
+  await t.test('3. TOC has 21 items', tocItems.length === 21);
 
   /* 4. حقل البحث موجود */
   await t.test('4. search input exists',
@@ -54,19 +54,20 @@ register('pages/settings.js', async (t) => {
   const visibleSections = Array.from(container.querySelectorAll('.settings-section'))
     .filter((s) => !s.classList.contains('settings-section--hidden'));
   await t.test('7. search filters sections',
-    visibleSections.length > 0 && visibleSections.length < 20);
+    visibleSections.length > 0 && visibleSections.length < 21);
 
   /* 8. جميع الأقسام الجديدة موجودة */
   const requiredIds = [
     'workshop', 'appearance', 'backgrounds', 'icons', 'fonts', 'display',
     'measurements', 'jalabiya-types', 'inventory-limits', 'daily-limit', 'grouping',
+    'pricing-calculator',
     'notifications', 'occasions', 'auto-messages', 'backup', 'cloud-sync', 'image-compression',
     'security', 'lock-screen', 'danger-zone',
   ];
   const missing = requiredIds.filter(
     (id) => container.querySelector('[data-section-id="' + id + '"]') === null
   );
-  await t.test('8. all 20 required sections present', missing.length === 0);
+  await t.test('8. all 21 required sections present', missing.length === 0);
   if (missing.length > 0) {
     t.log('    missing: ' + missing.join(', '));
   }
