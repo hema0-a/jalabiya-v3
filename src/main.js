@@ -18,9 +18,7 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-/* ==========================================================================
-   0. PWA — Service Worker
-   ========================================================================== */
+/* --- PWA --- */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
@@ -30,11 +28,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* ==========================================================================
-   1. الاستيرادات الأساسية
-   ========================================================================== */
+/* --- الاستيرادات الأساسية --- */
 let el, toast, createLayout;
-
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -44,9 +39,7 @@ try {
   throw e;
 }
 
-/* ==========================================================================
-   2. محمّل الصفحات الديناميكي
-   ========================================================================== */
+/* --- محمّل الصفحات --- */
 async function loadPageModule(pageId) {
   try {
     switch (pageId) {
@@ -61,18 +54,17 @@ async function loadPageModule(pageId) {
       case 'settings':           return await import('./pages/settings/index.js');
       case 'calendar':           return await import('./pages/calendar.js');
       case 'pricing-calculator': return await import('./pages/pricing-calculator.js');
+      case 'financial-center':   return await import('./pages/financial-center.js');
       case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
   } catch (e) {
-    console.warn('[Main] Page "' + pageId + '" not found — using placeholder.');
+    console.warn('[Main] Page "' + pageId + '" not found.');
     return null;
   }
 }
 
-/* ==========================================================================
-   3. قائمة السايدبار — 9 أقسام، 22 عنصراً (مطابقة V2)
-   ========================================================================== */
+/* --- السايدبار: 9 أقسام، 22 عنصراً --- */
 const SIDEBAR_SECTIONS = [
   { title: 'الرئيسية', items: [
     { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
@@ -119,24 +111,23 @@ const SIDEBAR_SECTIONS = [
 const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
 
 const MODULE_EXPORT_MAP = {
-  dashboard:          'dashboardPage',
-  customers:          'customersPage',
-  orders:             'ordersPage',
-  payments:           'paymentsPage',
-  inventory:          'inventoryPage',
-  workers:            'workersPage',
-  expenses:           'expensesPage',
-  reports:            'reportsPage',
-  settings:           'settingsPage',
-  calendar:           'calendarPage',
+  dashboard:            'dashboardPage',
+  customers:            'customersPage',
+  orders:               'ordersPage',
+  payments:             'paymentsPage',
+  inventory:            'inventoryPage',
+  workers:              'workersPage',
+  expenses:             'expensesPage',
+  reports:              'reportsPage',
+  settings:             'settingsPage',
+  calendar:             'calendarPage',
   'pricing-calculator': 'pricingCalculatorPage',
+  'financial-center':   'financialCenterPage',
 };
 
 let currentPage = null;
 
-/* ==========================================================================
-   4. إنشاء App Shell
-   ========================================================================== */
+/* --- App Shell --- */
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
@@ -160,19 +151,14 @@ const layout = createLayout({
   },
   onPageSelect: (id) => {
     const targetHash = '#/' + id;
-    if (location.hash !== targetHash) {
-      location.hash = targetHash;
-    } else {
-      renderPage(id);
-    }
+    if (location.hash !== targetHash) location.hash = targetHash;
+    else renderPage(id);
   },
 });
 
 app.appendChild(layout.node);
 
-/* ==========================================================================
-   5. الصفحات
-   ========================================================================== */
+/* --- Placeholders --- */
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
     el('div', { className: 'empty-state__icon' }, icon),
@@ -208,7 +194,6 @@ async function buildTestsPage(testsIndex) {
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
     paint();
-    console.log('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests);
   } catch (err) {
     lines.push('');
     lines.push('❌ Failed: ' + (err.message || String(err)));
@@ -218,22 +203,19 @@ async function buildTestsPage(testsIndex) {
 }
 
 const PLACEHOLDER_PAGES = {
-  'portfolio':        ['معرض الأعمال', '📸'],
-  'referrals':        ['الإحالات', '🤝'],
-  'commitments':      ['الالتزامات', '💳'],
-  'house-expenses':   ['مصاريف البيت', '🏠'],
-  'loans':            ['القروض', '💵'],
-  'occasions':        ['المواسم والأعياد', '🎉'],
-  'activity-log':     ['سجل النشاط', '📜'],
-  'trash':            ['سلة المحذوفات', '🗑️'],
-  'financial-center': ['المركز المالي', '💰'],
-  'kpis':             ['مؤشرات الأداء', '📊'],
-  'cloud-sync':       ['المزامنة السحابية', '☁️'],
+  'portfolio':    ['معرض الأعمال', '📸'],
+  'referrals':    ['الإحالات', '🤝'],
+  'commitments':  ['الالتزامات', '💳'],
+  'house-expenses': ['مصاريف البيت', '🏠'],
+  'loans':        ['القروض', '💵'],
+  'occasions':    ['المواسم والأعياد', '🎉'],
+  'activity-log': ['سجل النشاط', '📜'],
+  'trash':        ['سلة المحذوفات', '🗑️'],
+  'kpis':         ['مؤشرات الأداء', '📊'],
+  'cloud-sync':   ['المزامنة السحابية', '☁️'],
 };
 
-/* ==========================================================================
-   6. Router
-   ========================================================================== */
+/* --- Router --- */
 async function renderPage(id) {
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
@@ -249,11 +231,9 @@ async function renderPage(id) {
   if (id === 'tests') {
     layout.setTitle('الاختبارات');
     const testsMod = await loadPageModule('tests');
-    if (testsMod) {
-      layout.setContent(await buildTestsPage(testsMod));
-    } else {
-      layout.setContent(buildPlaceholderPage('الاختبارات', '🧪'));
-    }
+    layout.setContent(testsMod
+      ? await buildTestsPage(testsMod)
+      : buildPlaceholderPage('الاختبارات', '🧪'));
     return;
   }
 
