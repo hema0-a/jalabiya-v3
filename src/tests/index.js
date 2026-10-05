@@ -13,5 +13,6 @@ import './modules/pages.test.js';
 import './modules/orders.test.js';
 import './modules/dashboard.test.js';
 import './modules/pages2.test.js';
+import './modules/settings.test.js';
 
 export { runAll, register } from './registry.js';
