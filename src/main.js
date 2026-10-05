@@ -1,7 +1,5 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router
-   ==========================================================================
-   كل الصفحات (بما فيها الإعدادات) موصولة.
+   main.js — نقطة الدخول + App Shell + Router + PWA
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -17,6 +15,22 @@ function showError(title, err) {
   pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#2a0000;color:#ff8080;min-height:100vh;box-sizing:border-box';
   pre.textContent = '❌ ' + title + '\n\n' + msg + '\n\n' + stack;
   app.appendChild(pre);
+}
+
+/* ==========================================================================
+   0. PWA — تسجيل Service Worker
+   ========================================================================== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./sw.js', { scope: './' })
+      .then((reg) => {
+        console.log('[PWA] Service Worker registered:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[PWA] SW registration failed:', err);
+      });
+  });
 }
 
 /* --- الاستيرادات --- */
@@ -152,10 +166,6 @@ async function buildTestsPage() {
   return wrap;
 }
 
-/**
- * عرض صفحة من مستودع الصفحات.
- * @param {Object} pageModule
- */
 async function renderRepoPage(pageModule) {
   const container = el('div', {});
   layout.setContent(container);
@@ -167,7 +177,6 @@ async function renderPage(id) {
   const item = SIDEBAR_ITEMS.find((i) => i.id === id);
   if (item) layout.setTitle(item.label);
 
-  /* تنظيف الصفحة السابقة */
   if (currentPage && typeof currentPage.destroy === 'function') {
     try { currentPage.destroy(); } catch (e) { console.error(e); }
   }
@@ -188,7 +197,6 @@ async function renderPage(id) {
     return;
   }
 
-  /* placeholder (appointments) */
   const labels = { appointments: ['المواعيد', '📅'] };
   const [title, icon] = labels[id] || ['صفحة', '📄'];
   layout.setContent(buildPlaceholderPage(title, icon));
