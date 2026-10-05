@@ -1,9 +1,7 @@
 /* ==========================================================================
    main.js — نقطة الدخول + App Shell + Router
    ==========================================================================
-   صفحة "الرئيسية" = Dashboard حقيقي (KPIs من البيانات).
-   صفحة "الاختبارات" = تشغيل كل الوحدات.
-   باقي الصفحات = قيد التطوير.
+   كل الصفحات الثمانية موصولة بـ IndexedDB عبر مستودعاتها.
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -24,6 +22,8 @@ function showError(title, err) {
 /* --- الاستيرادات --- */
 let el, toast, createLayout, testsIndex;
 let customersPage, ordersPage, dashboardPage;
+let paymentsPage, inventoryPage, workersPage, expensesPage, reportsPage;
+
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -32,6 +32,11 @@ try {
   ({ customersPage } = await import('./pages/customers.js'));
   ({ ordersPage } = await import('./pages/orders.js'));
   ({ dashboardPage } = await import('./pages/dashboard.js'));
+  ({ paymentsPage } = await import('./pages/payments.js'));
+  ({ inventoryPage } = await import('./pages/inventory.js'));
+  ({ workersPage } = await import('./pages/workers.js'));
+  ({ expensesPage } = await import('./pages/expenses.js'));
+  ({ reportsPage } = await import('./pages/reports.js'));
 } catch (e) {
   showError('Failed to load modules', e);
   throw e;
@@ -144,6 +149,17 @@ async function buildTestsPage() {
   return wrap;
 }
 
+/**
+ * عرض صفحة من مستودع الصفحات.
+ * @param {Object} pageModule — كائن الصفحة (له render + destroy)
+ */
+async function renderRepoPage(pageModule) {
+  const container = el('div', {});
+  layout.setContent(container);
+  await pageModule.render(container);
+  currentPage = pageModule;
+}
+
 async function renderPage(id) {
   const item = SIDEBAR_ITEMS.find((i) => i.id === id);
   if (item) layout.setTitle(item.label);
@@ -154,45 +170,24 @@ async function renderPage(id) {
   }
   currentPage = null;
 
-  /* الرئيسية = Dashboard */
-  if (id === 'home') {
-    const container = el('div', {});
-    layout.setContent(container);
-    await dashboardPage.render(container);
-    currentPage = dashboardPage;
-    return;
-  }
+  if (id === 'home')        return renderRepoPage(dashboardPage);
+  if (id === 'customers')   return renderRepoPage(customersPage);
+  if (id === 'orders')      return renderRepoPage(ordersPage);
+  if (id === 'payments')    return renderRepoPage(paymentsPage);
+  if (id === 'inventory')   return renderRepoPage(inventoryPage);
+  if (id === 'workers')     return renderRepoPage(workersPage);
+  if (id === 'expenses')    return renderRepoPage(expensesPage);
+  if (id === 'reports')     return renderRepoPage(reportsPage);
 
   if (id === 'tests') {
     layout.setContent(await buildTestsPage());
     return;
   }
 
-  if (id === 'customers') {
-    const container = el('div', {});
-    layout.setContent(container);
-    await customersPage.render(container);
-    currentPage = customersPage;
-    return;
-  }
-
-  if (id === 'orders') {
-    const container = el('div', {});
-    layout.setContent(container);
-    await ordersPage.render(container);
-    currentPage = ordersPage;
-    return;
-  }
-
+  /* صفحة placeholder (appointments) */
   const labels = {
-    payments:     ['الدفعات',   '💰'],
-    inventory:    ['المخزون',   '🧵'],
-    workers:      ['العمال',    '👷'],
-    expenses:     ['المصروفات', '🧾'],
-    appointments: ['المواعيد',  '📅'],
-    reports:      ['التقارير',  '📊'],
+    appointments: ['المواعيد', '📅'],
   };
-
   const [title, icon] = labels[id] || ['صفحة', '📄'];
   layout.setContent(buildPlaceholderPage(title, icon));
 }
