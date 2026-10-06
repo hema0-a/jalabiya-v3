@@ -1,7 +1,7 @@
 /* ==========================================================================
    idb.js — غلاف IndexedDB (Promise-based)
    ==========================================================================
-   Migration v4 → v5: إضافة مخزن houseExpenses فقط.
+   Migration v5 → v6: إضافة مخزني personalLoans + loanPayments.
    ⚠️ لا نلمس المخازن الموجودة.
    ========================================================================== */
 
@@ -92,7 +92,26 @@ export function openDB() {
         }
       }
 
-      /* --- إنشاء المخازن الناقصة (oldVersion = 0) --- */
+      /* --- Migration v5 → v6: إضافة القروض --- */
+      if (oldVersion >= 5 && oldVersion < 6) {
+        if (!db.objectStoreNames.contains(STORES.PERSONAL_LOANS)) {
+          const store = db.createObjectStore(STORES.PERSONAL_LOANS, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_type', 'type');
+          store.createIndex('by_personName', 'personName');
+          store.createIndex('by_createdAt', 'createdAt');
+        }
+        if (!db.objectStoreNames.contains(STORES.LOAN_PAYMENTS)) {
+          const store = db.createObjectStore(STORES.LOAN_PAYMENTS, {
+            keyPath: 'id', autoIncrement: false,
+          });
+          store.createIndex('by_loanId', 'loanId');
+          store.createIndex('by_date', 'date');
+        }
+      }
+
+      /* --- إنشاء المخازن الناقصة (oldVersion = 0 أو ترقية من V2) --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
         const store = db.createObjectStore(storeName, {
