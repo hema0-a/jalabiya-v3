@@ -133,8 +133,7 @@ export async function previewCustomer(customer, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '👤 ' + customer.name, body, actions, closable: true });
-}
+  modal.open({ title: '👤 ' + customer.name, body, actions, closable: true, variant: 'sheet' });
 
 /* ==========================================================================
    3. previewOrder
@@ -193,10 +192,9 @@ export async function previewOrder(order, customer, onEdit) {
   ].filter(Boolean);
 
   modal.open({
-    title: '📋 ' + (customer ? customer.name : 'طلب'),
-    body, actions, closable: true,
-  });
-}
+  title: '📋 ' + (customer ? customer.name : 'طلب'),
+  body, actions, closable: true, variant: 'sheet',
+});
 
 /* ==========================================================================
    4. previewPayment
@@ -231,8 +229,7 @@ export function previewPayment(payment, customer, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '💰 تفاصيل دفعة', body, actions, closable: true });
-}
+  modal.open({ title: '💰 تفاصيل دفعة', body, actions, closable: true, variant: 'sheet' });
 
 /* ==========================================================================
    5. previewInventory
@@ -274,8 +271,7 @@ export function previewInventory(item, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '🧵 ' + item.name, body, actions, closable: true });
-}
+  modal.open({ title: '🧵 ' + item.name, body, actions, closable: true, variant: 'sheet' });
 
 /* ==========================================================================
    6. previewWorker
@@ -318,4 +314,4 @@ export function previewWorker(worker, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '👤 ' + customer.name, body, actions, closable: true, variant: 'sheet' });
+  modal.open({ title: '👷 ' + worker.name, body, actions, closable: true, variant: 'sheet' });
