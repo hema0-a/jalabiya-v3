@@ -653,3 +653,26 @@
   .sub-page__detail,
   .sub-page__item { transition: none; }
 }
+/* ============================================================
+   Topbar — Back Button (Sub-Page)
+   ============================================================ */
+.topbar__back {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-m);
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  font-size: 22px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.topbar__back:hover { background: rgba(31, 109, 87, 0.08); }
+
+.topbar__back.is-hidden,
+.topbar__menu.is-hidden {
+  display: none !important;
+}
