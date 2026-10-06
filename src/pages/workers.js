@@ -1,5 +1,5 @@
 /* ==========================================================================
-   workers.js — صفحة العمال
+   workers.js — صفحة العمال (CRUD + معاينة سريعة)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -7,6 +7,7 @@ import { workers } from '../data/repos/workers.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { previewWorker } from '../ui/quick-preview.js';
 import { formatEGP } from '../core/utils.js';
 
 let state = { workers: [], activeFilter: 'all', container: null };
@@ -104,7 +105,12 @@ function buildWorkerCard(w) {
   const isActive = w.active !== false;
   const initial = String(w.name || '?').charAt(0) || '?';
 
-  return el('div', { className: 'card', style: { marginBottom: '8px', opacity: isActive ? '1' : '0.6' }, 'data-id': w.id }, [
+  return el('div', {
+    className: 'card',
+    style: { marginBottom: '8px', opacity: isActive ? '1' : '0.6', cursor: 'pointer' },
+    'data-id': w.id,
+    onClick: () => previewWorker(w, () => openWorkerForm(w)),
+  }, [
     el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' } }, [
       el('div', {
         style: {
@@ -120,7 +126,10 @@ function buildWorkerCard(w) {
       ]),
       w.salary ? el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#B8863B' } }, formatEGP(w.salary)) : null,
     ]),
-    el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, [
+    el('div', {
+      style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+      onClick: (e) => e.stopPropagation(),
+    }, [
       el('button', {
         className: 'btn btn--sm ' + (isActive ? 'btn--ghost' : 'btn--secondary'),
         onClick: () => toggleActive(w),
