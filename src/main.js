@@ -24,11 +24,12 @@ function showError(title, err) {
    سيُفعَّل في V3.1 بعد اكتمال كل الصفحات.
    السبب: منع Cache Issues المتكررة. */
 
-let el, toast, createLayout;
+let el, toast, createLayout, events;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
+  ({ events } = await import('./core/events.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -151,7 +152,9 @@ const layout = createLayout({
   },
 });
 
-app.appendChild(layout.node);
+events.on('topbar:setBack', (handler) => {
+  layout.topbar.setBackAction(typeof handler === 'function' ? handler : null);
+});
 
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
