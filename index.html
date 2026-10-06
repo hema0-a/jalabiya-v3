@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#1F6D57" />
-  <meta name="description" content="تطبيق ورشة تفصيل الجلابيب — إدارة كاملة للعملاء والطلبات والمخزون." />
+  <meta name="description" content="تطبيق ورشة تفصيل الجلابيب" />
 
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="ورشة الجلابيب" />
 
@@ -19,7 +20,6 @@
                  connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com;
                  worker-src 'self';
                  manifest-src 'self';
-                 frame-ancestors 'none';
                  object-src 'none';
                  base-uri 'self';
                  form-action 'self';" />
@@ -37,7 +37,6 @@
   <title>ورشة تفصيل الجلابيب</title>
 
   <style>
-    /* مؤقت: خلفية أساسية قبل تحميل CSS */
     body {
       background: #F6F1E6;
       color: #1F6D57;
@@ -45,7 +44,6 @@
       margin: 0;
       min-height: 100vh;
     }
-    /* Placeholder بسيط داخل #app — يُستبدل بمحتوى JS */
     #app > .boot {
       display: flex;
       align-items: center;
@@ -63,6 +61,6 @@
     <div class="boot">جارٍ التحميل…</div>
   </div>
 
-  <script type="module" src="/jalabiya-v3/src/main.js?fresh=1"></script>
+  <script type="module" src="src/main-v2.js"></script>
 </body>
 </html>
