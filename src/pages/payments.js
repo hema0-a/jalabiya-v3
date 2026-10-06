@@ -119,7 +119,12 @@ function buildPaymentCard(p) {
   const name = c ? c.name : 'عميل محذوف';
   const methods = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى' };
 
-  const card = el('div', { className: 'card', style: { marginBottom: '8px' }, 'data-id': p.id }, [
+  const card = el('div', {
+  className: 'card',
+  style: { marginBottom: '8px', cursor: 'pointer' },
+  'data-id': p.id,
+  onClick: () => previewPayment(p, c, () => openPaymentForm(p)),
+}, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } }, [
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
       el('div', { style: { fontWeight: '700', color: '#2E7D32', fontSize: '16px' } }, formatEGP(p.amount)),
