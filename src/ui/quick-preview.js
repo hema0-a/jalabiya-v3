@@ -4,12 +4,13 @@
    - يفتح نافذة bottom-sheet على الجوال (variant: 'sheet').
    - يقبل id (نصي) أو كائناً جاهزاً — توافق خلفي كامل.
    - كل دالة async تُرجع Promise<void>.
+   - WhatsApp: يطبّع الأرقام لصيغة دولية عبر normalizePhone.
    - Static imports فقط. JSDoc عربي.
    ========================================================================== */
 
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
 import { customers as customersRepo } from '../data/repos/customers.js';
@@ -104,12 +105,14 @@ function _progress(percent) {
 
 /**
  * فتح واتساب في تبويب جديد.
+ * يستخدم normalizePhone لتحويل الأرقام المحلية (01xxxx) إلى صيغة دولية (+20xxxx).
  * @param {string} phone
  * @param {string} message
  */
 function _whatsapp(phone, message) {
   if (!phone) return;
-  const clean = String(phone).replace(/\D/g, '');
+  const normalized = normalizePhone(phone);
+  const clean = String(normalized).replace(/\D/g, '');
   if (!clean) return;
   window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(message), '_blank');
 }
