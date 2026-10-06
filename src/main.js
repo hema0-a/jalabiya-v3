@@ -219,24 +219,42 @@ async function renderPage(id) {
 
   if (id === 'tests') {
   layout.setTitle('الاختبارات');
-  let testsMod = null;
-  let errMsg = '';
-  let errStack = '';
-  try {
-    testsMod = await import('./tests/index.js');
-  } catch (e) {
-    errMsg = (e && e.message) ? e.message : String(e);
-    errStack = (e && e.stack) ? e.stack : '';
-  }
-  if (testsMod) {
-    layout.setContent(await buildTestsPage(testsMod));
-  } else {
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#2a0000;color:#ff8080;border-radius:8px;box-sizing:border-box;max-height:80vh;overflow:auto';
-    pre.textContent = '❌ فشل تحميل الاختبارات:\n\n' + errMsg + '\n\n' + errStack;
-    const wrap = el('div', {});
-    wrap.appendChild(pre);
-    layout.setContent(wrap);
+  const wrap = el('div', {});
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;border-radius:8px;box-sizing:border-box;max-height:80vh;overflow:auto';
+  wrap.appendChild(pre);
+  layout.setContent(wrap);
+
+  const files = [
+    './tests/modules/core.test.js',
+    './tests/modules/data.test.js',
+    './tests/modules/repos.test.js',
+    './tests/modules/security.test.js',
+    './tests/modules/ui.test.js',
+    './tests/modules/pages.test.js',
+    './tests/modules/orders.test.js',
+    './tests/modules/dashboard.test.js',
+    './tests/modules/pages2.test.js',
+    './tests/modules/settings.test.js',
+    './tests/modules/appointments-page.test.js',
+    './tests/modules/pricing.test.js',
+    './tests/modules/financial.test.js',
+    './tests/modules/kpis.test.js',
+    './tests/modules/portfolio.test.js',
+    './tests/modules/commitments.test.js',
+    './tests/modules/house-expenses.test.js',
+  ];
+
+  const lines = [];
+  for (const f of files) {
+    try {
+      await import(f);
+      lines.push('✅ ' + f);
+    } catch (e) {
+      lines.push('❌ ' + f);
+      lines.push('   → ' + ((e && e.message) ? e.message : String(e)));
+    }
+    pre.textContent = lines.join('\n');
   }
   return;
   }
