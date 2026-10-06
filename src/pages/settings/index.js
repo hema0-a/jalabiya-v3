@@ -4,7 +4,7 @@
    - Master view: قائمة 21 قسم.
    - Detail view: صفحة فرعية لكل قسم (Slide من اليمين).
    - زر الرجوع في Topbar.
-   - حفظ الحالة في URL (#/settings/xxx).
+   - تحديث URL عبر history.replaceState (بدون hashchange → لا إعادة بناء).
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
@@ -111,19 +111,35 @@ export const settingsPage = {
       sections: buildSubPageSections(),
       onOpen: (id) => {
         if (!document.contains(state.container)) return;
-        const targetHash = '#/settings/' + id;
-        if (location.hash !== targetHash) {
-          location.hash = targetHash;
+        /* ⚠️ نستخدم replaceState بدلاً من location.hash */
+        /* السبب: location.hash يُطلق hashchange → main.js يُعيد بناء الصفحة → نفقد القسم */
+        try {
+          history.replaceState(null, '', '#/settings/' + id);
+        } catch (e) {
+          console.warn('[settings] replaceState failed:', e);
         }
         events.emit('topbar:setBack', () => {
-          location.hash = '#/settings';
+          closeCurrent();
         });
       },
       onClose: () => {
         if (!document.contains(state.container)) return;
+        try {
+          history.replaceState(null, '', '#/settings');
+        } catch (e) {
+          console.warn('[settings] replaceState failed:', e);
+        }
         events.emit('topbar:setBack', null);
       },
     });
+
+    /* دالة إغلاق القسم الحالي من زر الرجوع */
+    function closeCurrent() {
+      try {
+        history.replaceState(null, '', '#/settings');
+      } catch (e) { /* ignore */ }
+      if (state.mgr) state.mgr.closeSection();
+    }
 
     state.mgr = mgr;
     page.appendChild(mgr.node);
