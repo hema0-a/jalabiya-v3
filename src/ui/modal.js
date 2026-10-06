@@ -2,7 +2,7 @@
    modal.js — نوافذ منبثقة (Modal + Confirm)
    ==========================================================================
    API:
-     modal.open({title, body, actions, closable, onClose})
+     modal.open({title, body, actions, closable, onClose, variant})
      modal.close()        → إغلاق النافذة العلوية
      modal.closeAll()     → إغلاق كل النوافذ
      modal.confirm({title, message, confirmText, cancelText, danger})
@@ -45,7 +45,8 @@ function closeAll() {
  * @param {Node|string} [options.body='']
  * @param {Array<{text:string, variant?:string, action?:string, onClick?:Function}>} [options.actions]
  * @param {boolean} [options.closable=true]
- * @param {Function} [options.onClose]
+  * @param {Function} [options.onClose]
+ * @param {'centered'|'sheet'} [options.variant='centered'] — نمط العرض (sheet = bottom-sheet على الجوال)
  * @returns {{id:string, node:HTMLElement, close:Function}}
  */
 export function open(options = {}) {
@@ -55,6 +56,7 @@ export function open(options = {}) {
     actions = [],
     closable = true,
     onClose = null,
+    variant = 'centered',
   } = options;
 
   const id = 'modal-' + (++_idCounter);
@@ -100,10 +102,11 @@ export function open(options = {}) {
   }, [header, bodyWrap, footer]);
 
   /* Backdrop */
-  const backdrop = el('div', {
-    className: 'modal-backdrop',
-    'data-modal-id': id,
-  }, [modalNode]);
+const backdrop = el('div', {
+  className: 'modal-backdrop' +
+    (variant === 'sheet' ? ' modal-backdrop--sheet' : ''),
+  'data-modal-id': id,
+}, [modalNode]);
 
   if (closable) {
     backdrop.addEventListener('click', (e) => {
