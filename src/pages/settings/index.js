@@ -1,17 +1,17 @@
 /* ==========================================================================
-   settings/index.js — صفحة الإعدادات الاحترافية
+   settings/index.js — صفحة الإعدادات (Sub-page Navigation)
    ==========================================================================
-   - 21 قسماً (6+6+6+3) — قابلة للطي (Accordion)
-   - بحث فوري (يفتح الأقسام المطابقة تلقائياً)
-   - فهرس جانبي (TOC) + Scroll Spy
-   - "فتح الكل" / "إغلاق الكل"
-   - حفظ الحالة في localStorage عبر collapsible.js
+   - Master view: قائمة 21 قسم.
+   - Detail view: صفحة فرعية لكل قسم (Slide من اليمين).
+   - زر الرجوع في Topbar.
+   - حفظ الحالة في URL (#/settings/xxx).
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
 import { settings } from '../../data/repos/settings.js';
 import { toast } from '../../ui/toast.js';
-import { createCollapsible, openAll, closeAll } from '../../ui/collapsible.js';
+import { events } from '../../core/events.js';
+import { createSubPageManager } from '../../ui/sub-page.js';
 import { WORKSHOP_SECTIONS } from './sections-workshop.js';
 import { DATA_SECTIONS } from './sections-data.js';
 import { SYSTEM_SECTIONS } from './sections-system.js';
@@ -24,53 +24,13 @@ const ALL_SECTIONS = [
   ...SECURITY_SECTIONS,
 ];
 
-const COLLAPSED_KEY = 'jalabiya_v3_collapsed_state';
-
 let state = {
   container: null,
   settings: null,
-  searchQuery: '',
-  sectionRefs: {},
+  mgr: null,
 };
 
-/* --- البحث --- */
-function applySearch() {
-  const q = state.searchQuery.trim().toLowerCase();
-  const sectionEls = state.container.querySelectorAll('[data-section-id]');
-  sectionEls.forEach((sec) => {
-    if (!q) {
-      sec.classList.remove('settings-section--hidden');
-      return;
-    }
-    const text = sec.textContent.toLowerCase();
-    if (text.includes(q)) {
-      sec.classList.remove('settings-section--hidden');
-      sec.classList.add('collapsible--open');
-      const h = sec.querySelector('.collapsible__header');
-      if (h) h.setAttribute('aria-expanded', 'true');
-    } else {
-      sec.classList.add('settings-section--hidden');
-    }
-  });
-}
-
-/* --- Scroll Spy --- */
-function setupScrollSpy() {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        const id = entry.target.dataset.sectionId;
-        state.container.querySelectorAll('.settings-toc__item').forEach((it) => {
-          it.classList.toggle('settings-toc__item--active', it.dataset.target === id);
-        });
-      }
-    });
-  }, { rootMargin: '-120px 0px -60% 0px', threshold: 0 });
-
-  Object.values(state.sectionRefs).forEach((secEl) => observer.observe(secEl));
-}
-
-/* --- تطبيق الإعدادات المحفوظة --- */
+/* --- تطبيق الإعدادات المحفوظة على الواجهة --- */
 function applySettings(s) {
   if (s.appearance) {
     if (s.appearance.primaryColor) {
@@ -97,111 +57,6 @@ function applySettings(s) {
   }
 }
 
-/* --- البحث العلوي --- */
-function buildSearchBar() {
-  const wrap = el('div', { className: 'settings-search' });
-  const input = el('input', {
-    className: 'settings-search__input',
-    type: 'search',
-    placeholder: '🔍 ابحث في الإعدادات...',
-  });
-  input.addEventListener('input', () => {
-    state.searchQuery = input.value;
-    applySearch();
-  });
-  wrap.appendChild(input);
-  return wrap;
-}
-
-/* --- أزرار فتح/إغلاق الكل --- */
-function buildOpenCloseControls() {
-  return el('div', {
-    style: {
-      display: 'flex',
-      gap: '8px',
-      marginBottom: '12px',
-      justifyContent: 'flex-end',
-    },
-  }, [
-    el('button', {
-      className: 'btn btn--sm btn--secondary',
-      type: 'button',
-      onClick: () => openAll(state.container),
-    }, '📂 فتح الكل'),
-    el('button', {
-      className: 'btn btn--sm btn--secondary',
-      type: 'button',
-      onClick: () => closeAll(state.container),
-    }, '📁 إغلاق الكل'),
-  ]);
-}
-
-/* --- الفهرس الجانبي --- */
-function buildTOC() {
-  const toc = el('aside', { className: 'settings-toc' });
-  ALL_SECTIONS.forEach((sec) => {
-    const btn = el('button', {
-      type: 'button',
-      className: 'settings-toc__item',
-      'data-target': sec.id,
-      onClick: () => {
-        const target = state.sectionRefs[sec.id];
-        if (!target) return;
-        target.classList.add('collapsible--open');
-        const h = target.querySelector('.collapsible__header');
-        if (h) h.setAttribute('aria-expanded', 'true');
-        try {
-          const s = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '{}');
-          s[sec.id] = true;
-          localStorage.setItem(COLLAPSED_KEY, JSON.stringify(s));
-        } catch {}
-        target.classList.add('collapsible--highlight');
-        setTimeout(() => target.classList.remove('collapsible--highlight'), 1600);
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      },
-    }, [
-      el('span', { className: 'settings-toc__icon' }, sec.icon),
-      el('span', {}, sec.title),
-    ]);
-    toc.appendChild(btn);
-  });
-  return toc;
-}
-
-/* --- بناء الأقسام (Collapsible) --- */
-async function buildSections() {
-  const wrap = el('div', { className: 'settings-main' });
-
-  for (const sec of ALL_SECTIONS) {
-    const body = el('div', { className: 'settings-section__body' });
-
-    try {
-      await sec.render(body, state.settings, saveSettings);
-    } catch (e) {
-      body.appendChild(el('div', {
-        style: { fontSize: '12px', color: '#C62828', padding: '8px' },
-      }, 'خطأ في تحميل القسم: ' + (e.message || String(e))));
-    }
-
-    const titleText = (sec.icon ? sec.icon + '  ' : '') + sec.title;
-    const coll = createCollapsible({
-      id: sec.id,
-      title: titleText,
-      content: body,
-      defaultOpen: false,
-    });
-
-    coll.node.classList.add('settings-section');
-    if (sec.dangerous) coll.node.classList.add('settings-danger');
-    coll.node.setAttribute('data-section-id', sec.id);
-
-    wrap.appendChild(coll.node);
-    state.sectionRefs[sec.id] = coll.node;
-  }
-
-  return wrap;
-}
-
 /* --- الحفظ --- */
 async function saveSettings(patch) {
   try {
@@ -213,37 +68,81 @@ async function saveSettings(patch) {
   }
 }
 
+/* --- تحويل الأقسام لصيغة sub-page --- */
+function buildSubPageSections() {
+  return ALL_SECTIONS.map((sec) => ({
+    id: sec.id,
+    title: sec.title,
+    icon: sec.icon,
+    render: async (container) => {
+      const body = el('div', { className: 'settings-section__body' });
+      container.appendChild(body);
+      try {
+        await sec.render(body, state.settings, saveSettings);
+      } catch (e) {
+        body.appendChild(el('div', {
+          style: { fontSize: '12px', color: '#C62828', padding: '8px' },
+        }, 'خطأ في تحميل القسم: ' + (e.message || String(e))));
+      }
+    },
+  }));
+}
+
 /* --- API --- */
 export const settingsPage = {
-  async render(container) {
+  async render(container, subRoute) {
     clear(container);
     state.container = container;
-    state.searchQuery = '';
-    state.sectionRefs = {};
 
     state.settings = await settings.get();
     applySettings(state.settings);
 
+    /* رأس الصفحة */
     const page = el('div', { className: 'settings-page' });
-    page.appendChild(buildSearchBar());
-    page.appendChild(buildOpenCloseControls());
+    page.appendChild(el('div', { style: { marginBottom: '16px' } }, [
+      el('h1', { style: { fontSize: '22px', color: '#123C2F', margin: '0' } }, '⚙️ الإعدادات'),
+      el('p', { style: { fontSize: '13px', color: '#2E8B6F', margin: '4px 0 0 0' } },
+        'اضغط على أي قسم لعرض التفاصيل'),
+    ]));
 
-    const layout = el('div', { className: 'settings-layout' });
-    layout.appendChild(buildTOC());
-    layout.appendChild(await buildSections());
-    page.appendChild(layout);
+    /* Sub-page manager */
+    const mgr = createSubPageManager({
+      baseId: 'settings',
+      sections: buildSubPageSections(),
+      onOpen: (id) => {
+        if (!document.contains(state.container)) return;
+        const targetHash = '#/settings/' + id;
+        if (location.hash !== targetHash) {
+          location.hash = targetHash;
+        }
+        events.emit('topbar:setBack', () => {
+          location.hash = '#/settings';
+        });
+      },
+      onClose: () => {
+        if (!document.contains(state.container)) return;
+        events.emit('topbar:setBack', null);
+      },
+    });
 
+    state.mgr = mgr;
+    page.appendChild(mgr.node);
     container.appendChild(page);
 
-    setTimeout(setupScrollSpy, 100);
+    /* Deep link من URL */
+    if (subRoute) {
+      await mgr.openSection(subRoute);
+    } else {
+      events.emit('topbar:setBack', null);
+    }
   },
 
   destroy() {
+    events.emit('topbar:setBack', null);
     state = {
       container: null,
       settings: null,
-      searchQuery: '',
-      sectionRefs: {},
+      mgr: null,
     };
   },
 };
