@@ -57,6 +57,7 @@ async function loadPageModule(pageId) {
       case 'house-expenses':     return await import('./pages/house-expenses.js');
       case 'loans':              return await import('./pages/loans.js');
       case 'referrals':          return await import('./pages/referrals.js');
+      case 'occasions':          return await import('./pages/occasions.js');
       default:                   return null;
     }
   } catch (e) {
@@ -129,6 +130,7 @@ const MODULE_EXPORT_MAP = {
   'house-expenses':     'houseExpensesPage',
   'loans':              'loansPage',
   'referrals':          'referralsPage',
+  'occasions':          'occasionsPage',
 };
 
 let currentPage = null;
@@ -172,7 +174,6 @@ function buildPlaceholderPage(title, icon) {
 }
 
 const PLACEHOLDER_PAGES = {
-  'occasions':    ['المواسم والأعياد', '🎉'],
   'activity-log': ['سجل النشاط', '📜'],
   'trash':        ['سلة المحذوفات', '🗑️'],
   'cloud-sync':   ['المزامنة السحابية', '☁️'],
