@@ -2,6 +2,7 @@
    main.js — نقطة الدخول + App Shell + Router
    ==========================================================================
    Service Worker معطَّل مؤقتاً أثناء التطوير (V3.1 يُعيد تفعيله).
+   ⚠️ صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -24,11 +25,12 @@ function showError(title, err) {
    سيُفعَّل في V3.1 بعد اكتمال كل الصفحات.
    السبب: منع Cache Issues المتكررة. */
 
-let el, toast, createLayout;
+let el, toast, createLayout, events;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
+  ({ events } = await import('./core/events.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -53,7 +55,6 @@ async function loadPageModule(pageId) {
       case 'portfolio':          return await import('./pages/portfolio.js');
       case 'commitments':        return await import('./pages/commitments.js');
       case 'house-expenses':     return await import('./pages/house-expenses.js');
-      case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
   } catch (e) {
@@ -153,6 +154,11 @@ const layout = createLayout({
 
 app.appendChild(layout.node);
 
+/* ربط زر الرجوع في Topbar (يُستخدَم من sub-page) */
+events.on('topbar:setBack', (handler) => {
+  layout.topbar.setBackAction(typeof handler === 'function' ? handler : null);
+});
+
 function buildPlaceholderPage(title, icon) {
   return el('div', { className: 'empty-state' }, [
     el('div', { className: 'empty-state__icon' }, icon),
@@ -161,51 +167,46 @@ function buildPlaceholderPage(title, icon) {
   ]);
 }
 
-async function buildTestsPage(testsIndex) {
-  const wrap = el('div', {});
-  const pre = el('pre', {
-    style: {
-      padding: '16px', margin: '0',
-      fontFamily: 'monospace', direction: 'ltr',
-      textAlign: 'left', fontSize: '12px', lineHeight: '1.5',
-      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-      background: '#111', color: '#0f0',
-      borderRadius: '8px', boxSizing: 'border-box',
-    },
-  });
-  const lines = [];
-  const paint = () => { pre.textContent = lines.join('\n'); };
-  lines.push('🚀 Running tests...');
-  paint();
-  wrap.appendChild(pre);
-  try {
-    const result = await testsIndex.runAll((header, body) => {
-      lines.push(header);
-      if (body) lines.push(body);
-      paint();
-    });
-    lines.push('');
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
-    paint();
-  } catch (err) {
-    lines.push('');
-    lines.push('❌ Failed: ' + (err.message || String(err)));
-    paint();
-  }
-  return wrap;
-}
-
 const PLACEHOLDER_PAGES = {
-  'referrals': ['الإحالات', '🤝'],
-  'loans':     ['القروض', '💵'],
-  'occasions': ['المواسم والأعياد', '🎉'],
+  'referrals':    ['الإحالات', '🤝'],
+  'loans':        ['القروض', '💵'],
+  'occasions':    ['المواسم والأعياد', '🎉'],
   'activity-log': ['سجل النشاط', '📜'],
-  'trash':     ['سلة المحذوفات', '🗑️'],
-  'cloud-sync': ['المزامنة السحابية', '☁️'],
+  'trash':        ['سلة المحذوفات', '🗑️'],
+  'cloud-sync':   ['المزامنة السحابية', '☁️'],
 };
 
-async function renderPage(id) {
+/**
+ * استخراج المسار الأساسي من الـ hash الكامل.
+ * @param {string} fullRoute
+ * @returns {string}
+ */
+function getBaseRoute(fullRoute) {
+  const s = String(fullRoute || '').replace(/^#\/?/, '');
+  return s.split('/')[0] || 'dashboard';
+}
+
+/**
+ * استخراج المسار الفرعي من الـ hash الكامل.
+ * @param {string} fullRoute
+ * @returns {string|null}
+ */
+function getSubRoute(fullRoute) {
+  const s = String(fullRoute || '').replace(/^#\/?/, '');
+  const parts = s.split('/');
+  return parts[1] || null;
+}
+
+async function renderPage(fullRoute) {
+  /* ⚠️ صفحة الاختبارات معطَّلة مؤقتاً — تُعاد في نهاية المشروع */
+  if (fullRoute === 'tests' || fullRoute === '#/tests') {
+    location.hash = '#/dashboard';
+    return;
+  }
+
+  const id = getBaseRoute(fullRoute);
+  const subRoute = getSubRoute(fullRoute);
+
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
     layout.setTitle(item.label);
@@ -217,21 +218,12 @@ async function renderPage(id) {
   }
   currentPage = null;
 
-  if (id === 'tests') {
-    layout.setTitle('الاختبارات');
-    const testsMod = await loadPageModule('tests');
-    layout.setContent(testsMod
-      ? await buildTestsPage(testsMod)
-      : buildPlaceholderPage('الاختبارات', '🧪'));
-    return;
-  }
-
   const mod = await loadPageModule(id);
   const exportName = MODULE_EXPORT_MAP[id];
   if (mod && exportName && mod[exportName]) {
     const container = el('div', {});
     layout.setContent(container);
-    await mod[exportName].render(container);
+    await mod[exportName].render(container, subRoute);
     currentPage = mod[exportName];
     return;
   }
