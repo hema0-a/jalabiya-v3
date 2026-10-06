@@ -1,5 +1,5 @@
 /* ==========================================================================
-   inventory.js — صفحة المخزون
+   inventory.js — صفحة المخزون (CRUD + معاينة سريعة)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -7,6 +7,7 @@ import { inventory } from '../data/repos/inventory.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { previewInventory } from '../ui/quick-preview.js';
 
 let state = { items: [], activeCategory: 'all', container: null };
 
@@ -99,7 +100,12 @@ function buildItemCard(item) {
   const categories = { fabric: 'قماش', thread: 'خيوط', accessory: 'إكسسوارات', tool: 'أدوات', other: 'أخرى' };
   const isLow = Number(item.quantity) < 5;
 
-  const card = el('div', { className: 'card', style: { marginBottom: '8px' }, 'data-id': item.id }, [
+  const card = el('div', {
+    className: 'card',
+    style: { marginBottom: '8px', cursor: 'pointer' },
+    'data-id': item.id,
+    onClick: () => previewInventory(item, () => openItemForm(item)),
+  }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } }, [
       el('div', { style: { flex: '1' } }, [
         el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, item.name),
@@ -116,7 +122,10 @@ function buildItemCard(item) {
         },
       }, String(item.quantity)),
     ]),
-    el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, [
+    el('div', {
+      style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+      onClick: (e) => e.stopPropagation(),
+    }, [
       el('button', { className: 'btn btn--sm btn--ghost', onClick: () => adjustStock(item, 1) }, '+1'),
       el('button', { className: 'btn btn--sm btn--ghost', onClick: () => adjustStock(item, -1) }, '-1'),
       el('button', { className: 'btn btn--sm btn--secondary', onClick: () => openItemForm(item) }, '✏️'),
