@@ -4,7 +4,7 @@
    - تبويبان: الالتزامات / أهداف الادخار.
    - 8 تصنيفات + 6 دوريات.
    - 4 بطاقات إحصائية + صحة الالتزامات + تنبيهات ذكية.
-   - تصدير CSV + طباعة.
+   - معاينة سريعة (previewCommitment + previewGoal).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -28,11 +28,12 @@ import {
   COMMITMENT_FREQUENCIES,
 } from '../core/config.js';
 import { formatEGP, formatDate } from '../core/utils.js';
+import { previewCommitment, previewGoal } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
 let state = {
   container: null,
-  activeTab: 'commitments',  // 'commitments' | 'goals'
+  activeTab: 'commitments',
   activeCategory: 'all',
   searchQuery: '',
   stats: null,
@@ -400,7 +401,7 @@ function openPaymentForm(commitment) {
 }
 
 /* ==========================================================================
-   10. تفاصيل الالتزام
+   10. تفاصيل الالتزام (Modal داخلي قديم — بقي للاستخدام كزر "👁️")
    ========================================================================== */
 
 async function openCommitmentDetail(item) {
@@ -416,7 +417,6 @@ async function openCommitmentDetail(item) {
     item.notes ? el('div', { style: { fontSize: '13px', color: '#666', marginTop: '8px', lineHeight: '1.5' } }, item.notes) : null,
   ]);
 
-  /* بطاقات المدفوع/المتبقي */
   body.appendChild(el('div', {
     style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' },
   }, [
@@ -432,7 +432,6 @@ async function openCommitmentDetail(item) {
     ]),
   ]));
 
-  /* شريط التقدم */
   body.appendChild(el('div', {
     style: { background: '#E5DDD0', height: '8px', borderRadius: '4px', overflow: 'hidden', marginTop: '12px' },
   }, [
@@ -445,7 +444,6 @@ async function openCommitmentDetail(item) {
     }),
   ]));
 
-  /* سجل الدفعات */
   if (payments.length > 0) {
     body.appendChild(el('h4', {
       style: { fontSize: '14px', color: '#123C2F', margin: '16px 0 8px 0' },
@@ -463,42 +461,6 @@ async function openCommitmentDetail(item) {
       ]));
     });
   }
-
-  /* أزرار */
-  const actions = el('div', {
-    style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' },
-  }, [
-    el('button', {
-      className: 'btn btn--primary btn--block', type: 'button',
-      onClick: () => { handle.close(); openPaymentForm(item); },
-    }, '💵 دفعة جديدة'),
-    el('button', {
-      className: 'btn btn--secondary btn--block', type: 'button',
-      onClick: () => { handle.close(); openCommitmentForm(item); },
-    }, '✏️ تعديل'),
-    el('button', {
-      className: 'btn btn--danger btn--block', type: 'button',
-      onClick: async () => {
-        const ok = await modal.confirm({
-          title: 'حذف التزام',
-          message: 'حذف "' + item.name + '"؟ سيتم حذف كل دفعاته.',
-          confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
-        });
-        if (!ok) return;
-        try {
-          const pays = await commitmentPayments.listByCommitment(item.id);
-          for (const p of pays) await commitmentPayments.remove(p.id);
-          await commitments.remove(item.id);
-          toast.success('تم الحذف');
-          invalidateCache();
-          handle.close();
-          await refreshAll();
-        } catch (e) { toast.danger('فشل: ' + e.message); }
-      },
-    }, '🗑️ حذف'),
-  ]);
-
-  body.appendChild(actions);
 
   const handle = modal.open({
     title: 'تفاصيل الالتزام',
@@ -518,8 +480,10 @@ function buildCommitmentCard(item) {
   const isOverdue = !paid && item.dueDay && item.dueDay < new Date().getDate();
 
   const card = el('div', {
-    className: 'card', style: { marginBottom: '8px' },
+    className: 'card',
+    style: { marginBottom: '8px', cursor: 'pointer' },
     'data-id': item.id,
+    onClick: () => previewCommitment(item, () => openCommitmentForm(item)),
   });
 
   card.appendChild(el('div', {
@@ -537,7 +501,6 @@ function buildCommitmentCard(item) {
     ]),
   ]));
 
-  /* Progress bar */
   card.appendChild(el('div', {
     style: { background: '#E5DDD0', height: '6px', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px' },
   }, [
@@ -559,6 +522,7 @@ function buildCommitmentCard(item) {
 
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', marginTop: '8px' },
+    onClick: (e) => e.stopPropagation(),
   }, [
     el('button', {
       className: 'btn btn--sm btn--primary', type: 'button',
@@ -730,8 +694,10 @@ function buildGoalCard(goal) {
   const completed = goal.progressPercent >= 100;
 
   const card = el('div', {
-    className: 'card', style: { marginBottom: '8px' },
+    className: 'card',
+    style: { marginBottom: '8px', cursor: 'pointer' },
     'data-id': goal.id,
+    onClick: () => previewGoal(goal, () => openGoalForm(goal)),
   });
 
   card.appendChild(el('div', {
@@ -768,181 +734,6 @@ function buildGoalCard(goal) {
 
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', marginTop: '8px' },
+    onClick: (e) => e.stopPropagation(),
   }, [
     !completed ? el('button', {
-      className: 'btn btn--sm btn--primary', type: 'button',
-      onClick: () => openGoalDeposit(goal),
-    }, '💰 إيداع') : null,
-    el('button', {
-      className: 'btn btn--sm btn--secondary', type: 'button',
-      onClick: () => openGoalForm(goal),
-    }, '✏️'),
-    el('button', {
-      className: 'btn btn--sm btn--danger', type: 'button',
-      onClick: async () => {
-        const ok = await modal.confirm({
-          title: 'حذف هدف',
-          message: 'حذف "' + goal.name + '"؟',
-          confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
-        });
-        if (!ok) return;
-        try {
-          await savingsGoals.remove(goal.id);
-          toast.success('تم الحذف');
-          invalidateCache();
-          await refreshAll();
-        } catch (e) { toast.danger('فشل: ' + e.message); }
-      },
-    }, '🗑️'),
-  ]));
-
-  return card;
-}
-
-function renderGoalsList() {
-  const wrap = state.container?.querySelector('#cm-list');
-  if (!wrap) return;
-  clear(wrap);
-
-  let list = state.goals;
-  const q = state.searchQuery.trim().toLowerCase();
-  if (q) {
-    list = list.filter((g) => String(g.name || '').toLowerCase().includes(q));
-  }
-
-  if (list.length === 0) {
-    wrap.appendChild(el('div', { className: 'empty-state' }, [
-      el('div', { className: 'empty-state__icon' }, '🏦'),
-      el('h2', { className: 'empty-state__title' }, q ? 'لا نتائج' : 'لا توجد أهداف ادخار'),
-      el('p', { className: 'empty-state__text' }, q ? 'جرّب كلمة أخرى' : 'اضغط "إضافة هدف" للبدء'),
-    ]));
-    return;
-  }
-
-  list.forEach((g) => wrap.appendChild(buildGoalCard(g)));
-}
-
-/* ==========================================================================
-   13. الصفحة الرئيسية
-   ========================================================================== */
-
-function renderPage() {
-  const c = state.container;
-  if (!c) return;
-  clear(c);
-
-  /* Header */
-  c.appendChild(el('div', { style: { marginBottom: '12px' } }, [
-    el('h1', { style: { fontSize: '22px', color: '#123C2F', margin: '0 0 4px 0' } }, '💳 المالية الشخصية'),
-    el('p', { style: { fontSize: '13px', color: '#2E8B6F', margin: '0' } }, 'الالتزامات الشهرية وأهداف الادخار'),
-  ]));
-
-  /* Empty state عام */
-  if (!state.stats.hasData) {
-    c.appendChild(el('div', { className: 'empty-state' }, [
-      el('div', { className: 'empty-state__icon' }, '💳'),
-      el('h2', { className: 'empty-state__title' }, 'لا توجد بيانات'),
-      el('p', { className: 'empty-state__text' }, 'ابدأ بإضافة أول التزام أو هدف ادخار'),
-    ]));
-    c.appendChild(el('button', {
-      className: 'btn btn--primary btn--block', type: 'button',
-      style: { marginTop: '12px' },
-      onClick: () => openCommitmentForm(),
-    }, '➕ إضافة التزام'));
-    return;
-  }
-
-  /* Tabs */
-  c.appendChild(renderTabs());
-
-  /* Tab 1: الالتزامات */
-  if (state.activeTab === 'commitments') {
-    c.appendChild(renderStats());
-    c.appendChild(renderHealth());
-    const alerts = renderAlerts();
-    if (alerts) c.appendChild(alerts);
-
-    c.appendChild(el('button', {
-      className: 'btn btn--primary btn--block', type: 'button',
-      style: { marginBottom: '12px' },
-      onClick: () => openCommitmentForm(),
-    }, '➕ إضافة التزام'));
-
-    c.appendChild(renderSearchBox());
-    c.appendChild(renderCategoryFilters());
-
-    c.appendChild(el('div', { id: 'cm-list' }));
-    renderCommitmentsList();
-  }
-  /* Tab 2: الأهداف */
-  else {
-    c.appendChild(el('button', {
-      className: 'btn btn--primary btn--block', type: 'button',
-      style: { marginBottom: '12px' },
-      onClick: () => openGoalForm(),
-    }, '➕ إضافة هدف'));
-
-    /* ملخص الأهداف */
-    if (state.stats.goalsCount > 0) {
-      c.appendChild(el('div', {
-        className: 'card', style: { marginBottom: '12px' },
-      }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' } }, [
-          el('span', { style: { fontWeight: '600', color: '#123C2F' } }, '🏦 إجمالي الأهداف'),
-          el('span', { style: { color: '#2E8B6F' } }, state.stats.goalsCount + ' هدف'),
-        ]),
-        el('div', {
-          style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' },
-        }, [
-          el('span', {}, 'المجموع: ' + formatEGP(state.stats.totalGoalCurrent)),
-          el('span', {}, 'الهدف: ' + formatEGP(state.stats.totalGoalTarget)),
-        ]),
-      ]));
-    }
-
-    c.appendChild(renderSearchBox());
-    c.appendChild(el('div', { id: 'cm-list' }));
-    renderGoalsList();
-  }
-}
-
-/* ==========================================================================
-   14. تحميل + تحديث
-   ========================================================================== */
-
-async function refreshAll() {
-  try {
-    await loadData();
-    renderPage();
-  } catch (e) {
-    toast.danger('فشل التحميل: ' + e.message);
-    console.error(e);
-  }
-}
-
-/* ==========================================================================
-   15. API
-   ========================================================================== */
-
-export const commitmentsPage = {
-  async render(container) {
-    clear(container);
-    state.container = container;
-    state.activeTab = 'commitments';
-    state.activeCategory = 'all';
-    state.searchQuery = '';
-    await refreshAll();
-  },
-
-  destroy() {
-    state = {
-      container: null,
-      activeTab: 'commitments',
-      activeCategory: 'all',
-      searchQuery: '',
-      stats: null,
-      withPayments: [],
-      goals: [],
-    };
-  },
-};
