@@ -457,3 +457,41 @@
 .skeleton--title { height: 24px; width: 60%; margin-bottom: var(--space-s); }
 .skeleton--text  { height: 14px; margin-bottom: var(--space-xs); }
 .skeleton--block { height: 120px; border-radius: var(--radius-m); }
+
+/* ============================================================
+   Modal Variant: sheet — Bottom-Sheet على الجوال (< 768px)
+   يُضاف في نهاية الملف. لا يعدّل أي قاعدة موجودة.
+   ============================================================ */
+@media (max-width: 767px) {
+  .modal-backdrop--sheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-backdrop--sheet .modal {
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation: sheetSlideUp var(--duration-slow) var(--ease-out) both;
+  }
+
+  .modal-backdrop--sheet .modal__body {
+    padding-bottom: calc(var(--space-m) + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-backdrop--sheet .modal__footer {
+    padding-bottom: calc(var(--space-m) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop--sheet .modal {
+    animation: none;
+  }
+}
