@@ -1,13 +1,15 @@
 /* ==========================================================================
-   topbar.js — الشريط العلوي
+   topbar.js — الشريط العلوي (مع دعم زر الرجوع)
    ==========================================================================
    API:
      const topbar = createTopbar({
-       title, onMenuClick, actions, showMenu
+       title, onMenuClick, actions, showMenu, onBack
      });
-     topbar.node            → HTMLElement
-     topbar.setTitle(str)   → void
-     topbar.setActions([])  → void
+     topbar.node
+     topbar.setTitle(str)
+     topbar.setActions([])
+     topbar.setBackAction(fn | null)   // fn → يُظهر ← | null → يُخفيها ويُظهر ☰
+     topbar.isBackVisible()
    ========================================================================== */
 
 import { el } from '../core/dom.js';
@@ -16,10 +18,11 @@ import { el } from '../core/dom.js';
  * إنشاء الشريط العلوي.
  * @param {Object} [options]
  * @param {string} [options.title='']
- * @param {Function} [options.onMenuClick] — يُستدعى عند ضغط زر القائمة
+ * @param {Function} [options.onMenuClick]
+ * @param {Function} [options.onBack] — إن مُرّر → يبدأ بزر الرجوع
  * @param {Array<{id:string, icon:string, onClick:Function, label?:string}>} [options.actions]
  * @param {boolean} [options.showMenu=true]
- * @returns {{node:HTMLElement, setTitle:Function, setActions:Function}}
+ * @returns {{node:HTMLElement, setTitle:Function, setActions:Function, setBackAction:Function, isBackVisible:Function}}
  */
 export function createTopbar(options = {}) {
   const {
@@ -27,9 +30,13 @@ export function createTopbar(options = {}) {
     onMenuClick = null,
     actions = [],
     showMenu = true,
+    onBack = null,
   } = options;
 
-  /* زر القائمة (للموبايل) */
+  let backHandler = null;
+  let backVisible = false;
+
+  /* --- زر القائمة (يمين — يظهر على الجوال) --- */
   const menuBtn = el('button', {
     type: 'button',
     className: 'topbar__menu',
@@ -39,10 +46,20 @@ export function createTopbar(options = {}) {
     },
   }, '☰');
 
-  /* العنوان */
+  /* --- زر الرجوع (يحل مكان القائمة عند فتح قسم فرعي) --- */
+  const backBtn = el('button', {
+    type: 'button',
+    className: 'topbar__back is-hidden',
+    'aria-label': 'رجوع',
+    onClick: () => {
+      if (typeof backHandler === 'function') backHandler();
+    },
+  }, '←');
+
+  /* --- العنوان --- */
   const titleEl = el('h1', { className: 'topbar__title', text: title });
 
-  /* منطقة الأزرار */
+  /* --- منطقة الأزرار (يسار) --- */
   const actionsWrap = el('div', { className: 'topbar__actions' });
 
   /**
@@ -52,7 +69,7 @@ export function createTopbar(options = {}) {
   function setActions(newActions = []) {
     while (actionsWrap.firstChild) actionsWrap.removeChild(actionsWrap.firstChild);
     newActions.forEach((a) => {
-      const btn = el('button', {
+      actionsWrap.appendChild(el('button', {
         type: 'button',
         className: 'btn btn--icon btn--sm',
         'data-action': a.id || '',
@@ -60,23 +77,49 @@ export function createTopbar(options = {}) {
         onClick: () => {
           if (typeof a.onClick === 'function') a.onClick();
         },
-      }, a.icon || '•');
-      actionsWrap.appendChild(btn);
+      }, a.icon || '•'));
     });
   }
 
   setActions(actions);
 
-  /* Assembly */
-  const children = [];
-  if (showMenu) children.push(menuBtn);
-  children.push(titleEl, actionsWrap);
+  /**
+   * تفعيل/تعطيل زر الرجوع.
+   * - Function → يُظهر ← ويُخفي ☰
+   * - null     → يُخفي ← ويُظهر ☰ (إن كان showMenu مفعَّلاً)
+   * @param {Function|null} fn
+   */
+  function setBackAction(fn) {
+    if (typeof fn === 'function') {
+      backHandler = fn;
+      backVisible = true;
+      backBtn.classList.remove('is-hidden');
+      menuBtn.classList.add('is-hidden');
+    } else {
+      backHandler = null;
+      backVisible = false;
+      backBtn.classList.add('is-hidden');
+      menuBtn.classList.remove('is-hidden');
+    }
+  }
 
-  const node = el('header', { className: 'topbar' }, children);
+  if (typeof onBack === 'function') {
+    setBackAction(onBack);
+  }
+
+  /* --- Assembly --- */
+  const node = el('header', { className: 'topbar' }, [
+    menuBtn,
+    backBtn,
+    titleEl,
+    actionsWrap,
+  ]);
 
   return {
     node,
     setTitle: (str) => { titleEl.textContent = String(str ?? ''); },
     setActions,
+    setBackAction,
+    isBackVisible: () => backVisible,
   };
 }
