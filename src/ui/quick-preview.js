@@ -318,5 +318,4 @@ export function previewWorker(worker, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '👷 ' + worker.name, body, actions, closable: true });
-}
+  modal.open({ title: '👤 ' + customer.name, body, actions, closable: true, variant: 'sheet' });
