@@ -139,10 +139,13 @@ function buildPaymentCard(p) {
     card.appendChild(el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px' } }, p.notes));
   }
 
-  card.appendChild(el('div', { style: { display: 'flex', gap: '6px' } }, [
-    el('button', { className: 'btn btn--sm btn--secondary', onClick: () => openPaymentForm(p) }, '✏️ تعديل'),
-    el('button', { className: 'btn btn--sm btn--danger', onClick: () => deletePayment(p) }, '🗑️'),
-  ]));
+  card.appendChild(el('div', {
+  style: { display: 'flex', gap: '6px' },
+  onClick: (e) => e.stopPropagation(),
+}, [
+  el('button', { className: 'btn btn--sm btn--secondary', onClick: () => openPaymentForm(p) }, '✏️ تعديل'),
+  el('button', { className: 'btn btn--sm btn--danger', onClick: () => deletePayment(p) }, '🗑️'),
+]));
 
   return card;
 }
