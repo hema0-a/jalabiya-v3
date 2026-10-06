@@ -218,50 +218,12 @@ async function renderPage(id) {
   currentPage = null;
 
   if (id === 'tests') {
-  layout.setTitle('الاختبارات');
-  let testsMod = null;
-  let importError = null;
-  try {
-    testsMod = await import('./tests/index.js');
-  } catch (err) {
-    importError = err;
-    console.error('[Tests import failed]', err);
-  }
-  if (testsMod) {
-    layout.setContent(await buildTestsPage(testsMod));
-  } else {
-    const errBox = el('div', { style: { padding: '16px' } });
-    errBox.appendChild(el('h2', {
-      style: { color: '#C62828', marginBottom: '8px', fontSize: '18px' },
-    }, '❌ فشل تحميل الاختبارات'));
-    errBox.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#666', marginBottom: '12px' },
-    }, 'السبب (انسخه وأرسله):'));
-    const pre = el('pre', {
-      style: {
-        padding: '12px', margin: '0', fontFamily: 'monospace',
-        direction: 'ltr', textAlign: 'left', fontSize: '12px',
-        lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        background: '#2a0000', color: '#ff8080', borderRadius: '8px',
-        maxHeight: '60vh', overflow: 'auto',
-      },
-    });
-    pre.textContent =
-      (importError && importError.message ? importError.message : 'خطأ غير معروف') +
-      '\n\n' +
-      (importError && importError.stack ? importError.stack : '');
-    errBox.appendChild(pre);
-    errBox.appendChild(el('button', {
-      style: {
-        marginTop: '12px', padding: '10px 16px', background: '#1F6D57',
-        color: '#fff', border: 'none', borderRadius: '8px',
-        fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit',
-      },
-      onClick: () => location.reload(),
-    }, '🔄 إعادة المحاولة'));
-    layout.setContent(errBox);
-  }
-  return;
+    layout.setTitle('الاختبارات');
+    const testsMod = await loadPageModule('tests');
+    layout.setContent(testsMod
+      ? await buildTestsPage(testsMod)
+      : buildPlaceholderPage('الاختبارات', '🧪'));
+    return;
   }
 
   const mod = await loadPageModule(id);
