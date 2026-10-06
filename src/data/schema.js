@@ -1,7 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   v5: إضافة مخزن houseExpenses.
+   v6: إضافة مخزني personalLoans + loanPayments.
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
@@ -112,13 +112,28 @@ export const SCHEMA = {
       idx('by_createdAt', 'createdAt'),
     ],
   },
-  /* --- جديد v5 --- */
   [STORES.HOUSE_EXPENSES]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_category', 'category'),
       idx('by_date', 'date'),
       idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v6 --- */
+  [STORES.PERSONAL_LOANS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_type', 'type'),
+      idx('by_personName', 'personName'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  [STORES.LOAN_PAYMENTS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_loanId', 'loanId'),
+      idx('by_date', 'date'),
     ],
   },
 };
