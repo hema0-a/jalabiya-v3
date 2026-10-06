@@ -129,11 +129,20 @@ export const SCHEMA = {
       idx('by_createdAt', 'createdAt'),
     ],
   },
-  [STORES.LOAN_PAYMENTS]: {
+    [STORES.LOAN_PAYMENTS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_loanId', 'loanId'),
       idx('by_date', 'date'),
+    ],
+  },
+  /* --- جديد v7 --- */
+  [STORES.REFERRALS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_referrer', 'referrerName'),
+      idx('by_status', 'status'),
+      idx('by_createdAt', 'createdAt'),
     ],
   },
 };
