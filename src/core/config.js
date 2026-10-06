@@ -45,6 +45,8 @@ export const STORES = {
   COMMITMENT_PAYMENTS: 'commitmentPayments',
   SAVINGS_GOALS:       'savingsGoals',
   HOUSE_EXPENSES:      'houseExpenses',
+  PERSONAL_LOANS:      'personalLoans',
+  LOAN_PAYMENTS:       'loanPayments',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
@@ -81,7 +83,13 @@ export const COMMITMENT_FREQUENCIES = [
   { id: 'once',        label: 'مرة واحدة',   icon: '1️⃣' },
 ];
 
-/* --- 8. تصنيفات مصاريف البيت (10) --- */
+/* --- 8. أنواع القروض (2) --- */
+export const LOAN_TYPES = [
+  { id: 'given',    label: 'ليّ (أنا الدائن)',  icon: '📤' },
+  { id: 'received', label: 'عليّ (أنا المدين)', icon: '📥' },
+];
+
+/* --- 9. تصنيفات مصاريف البيت (10) --- */
 export const HOUSE_EXPENSE_CATEGORIES = [
   { id: 'food',             label: 'طعام وشراب',    icon: '🍞' },
   { id: 'bills',            label: 'فواتير',         icon: '🧾' },
@@ -95,7 +103,7 @@ export const HOUSE_EXPENSE_CATEGORIES = [
   { id: 'other',            label: 'أخرى',          icon: '📌' },
 ];
 
-/* --- 9. ألوان تصنيفات مصاريف البيت --- */
+/* --- 10. ألوان تصنيفات مصاريف البيت --- */
 export const HOUSE_EXPENSE_CATEGORY_COLORS = {
   food:             '#E67E22',
   bills:            '#3498DB',
@@ -109,7 +117,7 @@ export const HOUSE_EXPENSE_CATEGORY_COLORS = {
   other:            '#95A5A6',
 };
 
-/* --- 10. المناسبات --- */
+/* --- 11. المناسبات --- */
 export const DEFAULT_OCCASIONS = [
   { id: 'ramadan',      name: 'رمضان',                 month: 3, day: 1,  icon: '🌙', alertDays: 30, recurring: true, enabled: true },
   { id: 'eid-fitr',     name: 'عيد الفطر',             month: 4, day: 10, icon: '🎉', alertDays: 21, recurring: true, enabled: true },
@@ -120,7 +128,7 @@ export const DEFAULT_OCCASIONS = [
   { id: 'mothers-day',  name: 'عيد الأم',              month: 3, day: 21, icon: '💐', alertDays: 14, recurring: true, enabled: true },
 ];
 
-/* --- 11. خلفيات --- */
+/* --- 12. خلفيات --- */
 export const BACKGROUNDS = [
   { id: 'none',      name: 'بدون' },
   { id: 'fabric',    name: 'قماش' },
@@ -129,14 +137,14 @@ export const BACKGROUNDS = [
   { id: 'paper',     name: 'ورقي' },
 ];
 
-/* --- 12. أنماط أيقونات --- */
+/* --- 13. أنماط أيقونات --- */
 export const ICON_STYLES = [
   { id: 'default',        name: 'افتراضي' },
   { id: 'colored-badges', name: 'شارات ملونة' },
   { id: 'line',           name: 'خطي بسيط' },
 ];
 
-/* --- 13. خطوط --- */
+/* --- 14. خطوط --- */
 export const FONT_FAMILIES = [
   { id: 'ibm-plex',   name: 'IBM Plex Sans Arabic', font: "'IBM Plex Sans Arabic', system-ui" },
   { id: 'cairo',      name: 'Cairo',                font: "'Cairo', system-ui" },
@@ -145,7 +153,7 @@ export const FONT_FAMILIES = [
   { id: 'noto-kufi',  name: 'Noto Kufi Arabic',     font: "'Noto Kufi Arabic', system-ui" },
 ];
 
-/* --- 14. أحجام خطوط --- */
+/* --- 15. أحجام خطوط --- */
 export const FONT_SIZES = [
   { id: 'small',  name: 'صغير',      factor: 0.9  },
   { id: 'normal', name: 'متوسط',     factor: 1.0  },
@@ -153,7 +161,7 @@ export const FONT_SIZES = [
   { id: 'xlarge', name: 'كبير جداً', factor: 1.25 },
 ];
 
-/* --- 15. أيام الأسبوع --- */
+/* --- 16. أيام الأسبوع --- */
 export const WEEKDAYS = [
   { id: 0, name: 'الأحد' },
   { id: 1, name: 'الاثنين' },
@@ -164,7 +172,7 @@ export const WEEKDAYS = [
   { id: 6, name: 'السبت' },
 ];
 
-/* --- 16. الإعدادات الافتراضية --- */
+/* --- 17. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
   appearance: {
@@ -207,7 +215,7 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
-/* --- 17. الثيمات --- */
+/* --- 18. الثيمات --- */
 export const THEMES = [
   { id: 'classic',  name: 'كلاسيكي',   emoji: '🟢', primary: '#1F6D57', accent: '#B8863B', bg: '#F6F1E6' },
   { id: 'modern',   name: 'عصري',      emoji: '🔵', primary: '#1565C0', accent: '#4FC3F7', bg: '#F5F8FC' },
@@ -220,7 +228,7 @@ export const THEMES = [
   { id: 'ocean',    name: 'أزرق بحري', emoji: '🌊', primary: '#0D47A1', accent: '#26C6DA', bg: '#E8F4F8' },
 ];
 
-/* --- 18. Firebase --- */
+/* --- 19. Firebase --- */
 export const FIREBASE_CONFIG = {
   apiKey: '', authDomain: '', projectId: '',
   storageBucket: '', messagingSenderId: '', appId: '',
@@ -231,7 +239,7 @@ export const FIRESTORE_PATHS = {
   dataMain: 'data/main',
 };
 
-/* --- 19. localStorage keys --- */
+/* --- 20. localStorage keys --- */
 export const STORAGE_KEYS = {
   V2_DB: 'jalabiya_v2_db',
   V2_SETTINGS: 'jalabiya_v2_settings',
@@ -252,7 +260,7 @@ export const STORAGE_KEYS = {
   V3_DATA_HASH: 'jalabiya_v3_data_hash',
 };
 
-/* --- 20. الحدود القصوى --- */
+/* --- 21. الحدود القصوى --- */
 export const LIMITS = {
   maxActivityLog: 500,
   maxTrashItems: 200,
@@ -263,17 +271,15 @@ export const LIMITS = {
   maxCustomers: 10000,
   maxOrders: 50000,
   saveDebounceMs: 300,
-  /* صور */
   maxImageInputMB: 5,
   imageThumbnailSize: 200,
   imageQuality: 0.85,
   imageMaxSizeKB: 500,
   imageMaxDimensionPx: 1600,
-  /* بيانات قليلة */
   lowDataThreshold: 5,
 };
 
-/* --- 21. المزامنة --- */
+/* --- 22. المزامنة --- */
 export const SYNC_CONFIG = {
   debounceMs: 30000,
   maxRetries: 3,
