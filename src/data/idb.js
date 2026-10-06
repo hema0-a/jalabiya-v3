@@ -111,6 +111,17 @@ export function openDB() {
         }
       }
 
+       /* --- Migration v6 → v7: إضافة الإحالات --- */
+if (oldVersion >= 6 && oldVersion < 7) {
+  if (!db.objectStoreNames.contains(STORES.REFERRALS)) {
+    const store = db.createObjectStore(STORES.REFERRALS, {
+      keyPath: 'id', autoIncrement: false,
+    });
+    store.createIndex('by_referrer', 'referrerName');
+    store.createIndex('by_status', 'status');
+    store.createIndex('by_createdAt', 'createdAt');
+  }
+}
       /* --- إنشاء المخازن الناقصة (oldVersion = 0 أو ترقية من V2) --- */
       Object.entries(SCHEMA).forEach(([storeName, config]) => {
         if (db.objectStoreNames.contains(storeName)) return;
