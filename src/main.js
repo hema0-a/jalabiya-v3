@@ -53,7 +53,6 @@ async function loadPageModule(pageId) {
       case 'portfolio':          return await import('./pages/portfolio.js');
       case 'commitments':        return await import('./pages/commitments.js');
       case 'house-expenses':     return await import('./pages/house-expenses.js');
-      case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
   } catch (e) {
