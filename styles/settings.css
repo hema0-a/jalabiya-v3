@@ -243,3 +243,30 @@
   }
   .settings-themes { grid-template-columns: repeat(2, 1fr); }
 }
+/* ============================================================
+   Settings — Collapsible (Accordion) integration
+   ============================================================ */
+.collapsible.settings-section {
+  padding: 0;
+  overflow: hidden;
+}
+.collapsible.settings-section .collapsible__header {
+  padding: var(--space-m);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+}
+.collapsible.settings-section .collapsible__content {
+  padding: 0;
+}
+.collapsible.settings-section.collapsible--open .collapsible__content {
+  padding: var(--space-m);
+  padding-top: var(--space-s);
+  border-top: 1px solid var(--color-border);
+}
+.collapsible.settings-danger {
+  padding: 0;
+}
+.collapsible.settings-danger .collapsible__header {
+  color: #C62828;
+}
