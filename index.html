@@ -61,29 +61,6 @@
     <div class="boot">جارٍ التحميل…</div>
   </div>
 
-  <script>
-  // مُلتقِط أخطاء مؤقت — يُظهر الأخطاء على الشاشة
-  window.addEventListener('error', function(e) {
-    var app = document.getElementById('app');
-    if (app) {
-      app.innerHTML = '<pre style="padding:16px;background:#fee;color:#900;font-size:12px;white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;font-family:monospace;min-height:100vh;box-sizing:border-box;margin:0;overflow:auto;">❌ ' +
-        (e.message || 'Unknown error') + '\n\n' +
-        'File: ' + (e.filename || '?') + '\n' +
-        'Line: ' + (e.lineno || '?') + '\n\n' +
-        'Stack:\n' + (e.error && e.error.stack ? e.error.stack : 'N/A') +
-        '</pre>';
-    }
-  });
-  window.addEventListener('unhandledrejection', function(e) {
-    var app = document.getElementById('app');
-    if (app) {
-      app.innerHTML = '<pre style="padding:16px;background:#fee;color:#900;font-size:12px;white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;font-family:monospace;min-height:100vh;box-sizing:border-box;margin:0;overflow:auto;">❌ Promise Rejection:\n\n' +
-        (e.reason && e.reason.message ? e.reason.message : String(e.reason)) + '\n\n' +
-        'Stack:\n' + (e.reason && e.reason.stack ? e.reason.stack : 'N/A') +
-        '</pre>';
-    }
-  });
-</script>
-<script type="module" src="src/main.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
