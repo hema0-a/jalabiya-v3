@@ -205,7 +205,33 @@ const PLACEHOLDER_PAGES = {
   'cloud-sync':   ['المزامنة السحابية', '☁️'],
 };
 
-async function renderPage(id) {
+/**
+ * استخراج المسار الأساسي من الـ hash الكامل.
+ * مثال: 'settings/workshop' → 'settings'
+ * @param {string} fullRoute
+ * @returns {string}
+ */
+function getBaseRoute(fullRoute) {
+  const s = String(fullRoute || '').replace(/^#\/?/, '');
+  return s.split('/')[0] || 'dashboard';
+}
+
+/**
+ * استخراج المسار الفرعي من الـ hash الكامل.
+ * مثال: 'settings/workshop' → 'workshop' | 'settings' → null
+ * @param {string} fullRoute
+ * @returns {string|null}
+ */
+function getSubRoute(fullRoute) {
+  const s = String(fullRoute || '').replace(/^#\/?/, '');
+  const parts = s.split('/');
+  return parts[1] || null;
+}
+
+async function renderPage(fullRoute) {
+  const id = getBaseRoute(fullRoute);
+  const subRoute = getSubRoute(fullRoute);
+
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
     layout.setTitle(item.label);
@@ -231,7 +257,7 @@ async function renderPage(id) {
   if (mod && exportName && mod[exportName]) {
     const container = el('div', {});
     layout.setContent(container);
-    await mod[exportName].render(container);
+    await mod[exportName].render(container, subRoute);
     currentPage = mod[exportName];
     return;
   }
