@@ -1,8 +1,9 @@
 /* ==========================================================================
    quick-preview.js — معاينات سريعة موحّدة
    ==========================================================================
-   عند النقر على بطاقة (عميل، طلب، دفعة، صنف، عامل) → معاينة فورية.
+   عند النقر على بطاقة (عميل، طلب، دفعة، صنف، عامل) -> معاينة فورية.
    جميع الدوال async لتحميل البيانات المرتبطة.
+   يدعم bottom-sheet على الجوال (variant: 'sheet').
    ========================================================================== */
 
 import { el } from '../core/dom.js';
@@ -15,9 +16,6 @@ import { payments as paymentsRepo } from '../data/repos/payments.js';
    1. Helpers
    ========================================================================== */
 
-/**
- * صف معلومة (icon + label + value).
- */
 function row(icon, label, value) {
   return el('div', {
     style: {
@@ -32,9 +30,6 @@ function row(icon, label, value) {
   ]);
 }
 
-/**
- * صندوق إحصائي مصغّر.
- */
 function stat(label, value, color = '#123C2F') {
   return el('div', {
     style: { flex: '1', textAlign: 'center', padding: '8px 4px', background: '#F6F1E6', borderRadius: '8px' },
@@ -44,9 +39,6 @@ function stat(label, value, color = '#123C2F') {
   ]);
 }
 
-/**
- * عنصر في قائمة (text + sub).
- */
 function listItem(text, sub) {
   return el('div', {
     style: { padding: '6px 0', borderBottom: '1px solid #F0EAE0', fontSize: '12px' },
@@ -56,10 +48,7 @@ function listItem(text, sub) {
   ]);
 }
 
-/**
- * عنوان قسم داخل المعاينة.
- */
-function title(text) {
+function sectionTitle(text) {
   return el('div', {
     style: {
       fontSize: '13px', fontWeight: '600', color: '#1F6D57',
@@ -68,9 +57,6 @@ function title(text) {
   }, text);
 }
 
-/**
- * فتح WhatsApp (بدون مكتبات).
- */
 function whatsapp(phone, message) {
   if (!phone) return;
   const url = 'https://wa.me/' + phone.replace(/\D/g, '') + '?text=' + encodeURIComponent(message);
@@ -81,11 +67,6 @@ function whatsapp(phone, message) {
    2. previewCustomer
    ========================================================================== */
 
-/**
- * معاينة سريعة لعميل.
- * @param {Object} customer
- * @param {Function} [onEdit]
- */
 export async function previewCustomer(customer, onEdit) {
   if (!customer) return;
 
@@ -108,13 +89,13 @@ export async function previewCustomer(customer, onEdit) {
     }, '⭐ عميل VIP') : null,
     row('📞', 'الهاتف', customer.phone || '—'),
     customer.notes ? row('📝', 'ملاحظات', customer.notes) : null,
-    title('📊 الإحصائيات'),
+    sectionTitle('📊 الإحصائيات'),
     el('div', { style: { display: 'flex', gap: '6px' } }, [
       stat('الطلبات', orders.length),
       stat('المدفوع', formatEGP(totalPaid), '#2E7D32'),
       stat('المتبقي', formatEGP(remaining), remaining > 0 ? '#F57C00' : '#666'),
     ]),
-    recent.length > 0 ? title('📦 آخر الطلبات') : null,
+    recent.length > 0 ? sectionTitle('📦 آخر الطلبات') : null,
     ...recent.map((o) => listItem(
       'طلب بقيمة ' + formatEGP(o.amount),
       (o.createdAt ? formatDate(o.createdAt) : '') + (o.notes ? ' · ' + o.notes : '')
@@ -133,18 +114,17 @@ export async function previewCustomer(customer, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '👤 ' + customer.name, body, actions, closable: true, variant: 'sheet' });
+  modal.open({
+    title: '👤 ' + customer.name,
+    body, actions, closable: true,
+    variant: 'sheet',
+  });
+}
 
 /* ==========================================================================
    3. previewOrder
    ========================================================================== */
 
-/**
- * معاينة سريعة لطلب.
- * @param {Object} order
- * @param {Object} [customer]
- * @param {Function} [onEdit]
- */
 export async function previewOrder(order, customer, onEdit) {
   if (!order) return;
 
@@ -167,13 +147,13 @@ export async function previewOrder(order, customer, onEdit) {
     row('🔖', 'الحالة', statusLabels[order.status] || order.status),
     order.dueDate ? row('📅', 'تاريخ التسليم', formatDate(order.dueDate)) : null,
     order.createdAt ? row('📆', 'تاريخ الطلب', formatDate(order.createdAt)) : null,
-    title('💰 المبالغ'),
+    sectionTitle('💰 المبالغ'),
     el('div', { style: { display: 'flex', gap: '6px' } }, [
       stat('الإجمالي', formatEGP(total)),
       stat('المدفوع', formatEGP(totalPaid), '#2E7D32'),
       stat('المتبقي', formatEGP(remaining), remaining > 0 ? '#F57C00' : '#666'),
     ]),
-    order.notes ? title('📝 ملاحظات') : null,
+    order.notes ? sectionTitle('📝 ملاحظات') : null,
     order.notes ? el('p', {
       style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' },
     }, order.notes) : null,
@@ -192,17 +172,16 @@ export async function previewOrder(order, customer, onEdit) {
   ].filter(Boolean);
 
   modal.open({
-  title: '📋 ' + (customer ? customer.name : 'طلب'),
-  body, actions, closable: true, variant: 'sheet',
-});
+    title: '📋 ' + (customer ? customer.name : 'طلب'),
+    body, actions, closable: true,
+    variant: 'sheet',
+  });
+}
 
 /* ==========================================================================
    4. previewPayment
    ========================================================================== */
 
-/**
- * معاينة سريعة لدفعة.
- */
 export function previewPayment(payment, customer, onEdit) {
   if (!payment) return;
 
@@ -214,7 +193,7 @@ export function previewPayment(payment, customer, onEdit) {
     row('💳', 'طريقة الدفع', methods[payment.method] || 'نقدي'),
     payment.createdAt ? row('📅', 'التاريخ', formatDate(payment.createdAt)) : null,
     payment.notes ? row('📝', 'ملاحظات', payment.notes) : null,
-    title('💰 المبلغ'),
+    sectionTitle('💰 المبلغ'),
     el('div', { style: { textAlign: 'center', padding: '12px', background: '#E8F5E9', borderRadius: '8px' } }, [
       el('div', { style: { fontSize: '22px', fontWeight: '700', color: '#2E7D32' } },
         formatEGP(payment.amount)),
@@ -229,15 +208,17 @@ export function previewPayment(payment, customer, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '💰 تفاصيل دفعة', body, actions, closable: true, variant: 'sheet' });
+  modal.open({
+    title: '💰 تفاصيل دفعة',
+    body, actions, closable: true,
+    variant: 'sheet',
+  });
+}
 
 /* ==========================================================================
    5. previewInventory
    ========================================================================== */
 
-/**
- * معاينة سريعة لصنف مخزون.
- */
 export function previewInventory(item, onEdit) {
   if (!item) return;
 
@@ -248,7 +229,7 @@ export function previewInventory(item, onEdit) {
     row('📦', 'الفئة', cats[item.category] || 'أخرى'),
     row('🔢', 'الكمية', item.quantity),
     item.unit ? row('📏', 'الوحدة', item.unit) : null,
-    title('📊 الحالة'),
+    sectionTitle('📊 الحالة'),
     el('div', {
       style: {
         textAlign: 'center', padding: '12px',
@@ -271,15 +252,17 @@ export function previewInventory(item, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '🧵 ' + item.name, body, actions, closable: true, variant: 'sheet' });
+  modal.open({
+    title: '🧵 ' + item.name,
+    body, actions, closable: true,
+    variant: 'sheet',
+  });
+}
 
 /* ==========================================================================
    6. previewWorker
    ========================================================================== */
 
-/**
- * معاينة سريعة لعامل.
- */
 export function previewWorker(worker, onEdit) {
   if (!worker) return;
 
@@ -289,7 +272,7 @@ export function previewWorker(worker, onEdit) {
     row('👤', 'الدور', worker.role || '—'),
     worker.phone ? row('📞', 'الهاتف', worker.phone) : null,
     worker.salary ? row('💰', 'الراتب', formatEGP(worker.salary)) : null,
-    title('📊 الحالة'),
+    sectionTitle('📊 الحالة'),
     el('div', {
       style: {
         textAlign: 'center', padding: '12px',
@@ -314,4 +297,9 @@ export function previewWorker(worker, onEdit) {
     { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() },
   ].filter(Boolean);
 
-  modal.open({ title: '👷 ' + worker.name, body, actions, closable: true, variant: 'sheet' });
+  modal.open({
+    title: '👷 ' + worker.name,
+    body, actions, closable: true,
+    variant: 'sheet',
+  });
+}
