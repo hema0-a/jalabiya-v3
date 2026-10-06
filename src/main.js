@@ -53,6 +53,7 @@ async function loadPageModule(pageId) {
       case 'portfolio':          return await import('./pages/portfolio.js');
       case 'commitments':        return await import('./pages/commitments.js');
       case 'house-expenses':     return await import('./pages/house-expenses.js');
+      case 'tests':              return await import('./tests/index.js');
       default:                   return null;
     }
   } catch (e) {
@@ -160,6 +161,41 @@ function buildPlaceholderPage(title, icon) {
   ]);
 }
 
+async function buildTestsPage(testsIndex) {
+  const wrap = el('div', {});
+  const pre = el('pre', {
+    style: {
+      padding: '16px', margin: '0',
+      fontFamily: 'monospace', direction: 'ltr',
+      textAlign: 'left', fontSize: '12px', lineHeight: '1.5',
+      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      background: '#111', color: '#0f0',
+      borderRadius: '8px', boxSizing: 'border-box',
+    },
+  });
+  const lines = [];
+  const paint = () => { pre.textContent = lines.join('\n'); };
+  lines.push('🚀 Running tests...');
+  paint();
+  wrap.appendChild(pre);
+  try {
+    const result = await testsIndex.runAll((header, body) => {
+      lines.push(header);
+      if (body) lines.push(body);
+      paint();
+    });
+    lines.push('');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
+    paint();
+  } catch (err) {
+    lines.push('');
+    lines.push('❌ Failed: ' + (err.message || String(err)));
+    paint();
+  }
+  return wrap;
+}
+
 const PLACEHOLDER_PAGES = {
   'referrals':    ['الإحالات', '🤝'],
   'loans':        ['القروض', '💵'],
@@ -170,12 +206,6 @@ const PLACEHOLDER_PAGES = {
 };
 
 async function renderPage(id) {
-  /* تحويل #/tests → لوحة التحكم (الاختبارات معطَّلة على Safari) */
-  if (id === 'tests') {
-    location.hash = '#/dashboard';
-    return;
-  }
-
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
     layout.setTitle(item.label);
@@ -186,6 +216,15 @@ async function renderPage(id) {
     try { currentPage.destroy(); } catch (e) { console.error(e); }
   }
   currentPage = null;
+
+  if (id === 'tests') {
+    layout.setTitle('الاختبارات');
+    const testsMod = await loadPageModule('tests');
+    layout.setContent(testsMod
+      ? await buildTestsPage(testsMod)
+      : buildPlaceholderPage('الاختبارات', '🧪'));
+    return;
+  }
 
   const mod = await loadPageModule(id);
   const exportName = MODULE_EXPORT_MAP[id];
