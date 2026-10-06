@@ -9,6 +9,7 @@ import { orders } from '../data/repos/orders.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
 let state = {
