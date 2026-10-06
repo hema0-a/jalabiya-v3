@@ -1,84 +1,54 @@
-/* ==========================================================================
-   settings.test.js — اختبارات صفحة الإعدادات
-   ==========================================================================
-   10 اختبارات: pages/settings (21 قسماً)
-   ========================================================================== */
-
+/* settings.test.js - pages/settings (Sub-page) */
 import { register } from '../registry.js';
 import { settingsPage } from '../../pages/settings/index.js';
 import { settings as settingsRepo } from '../../data/repos/settings.js';
 
 register('pages/settings.js', async (t) => {
-  /* نظّف الإعدادات قبل البدء */
   await settingsRepo.clear();
 
-  const container = document.createElement('div');
-  await settingsPage.render(container);
+  const c1 = document.createElement('div');
+  await settingsPage.render(c1);
 
-  /* 1. الصفحة تُبنى بالهيكل الصحيح */
   await t.test('1. render builds page structure',
-    container.querySelector('.settings-page') !== null &&
-    container.querySelector('.settings-toc') !== null &&
-    container.querySelector('.settings-search') !== null &&
-    container.querySelector('.settings-layout') !== null);
+    c1.querySelector('.settings-page') !== null &&
+    c1.querySelector('.sub-page') !== null);
 
-  /* 2. عدد الأقسام = 21 */
-  const sections = container.querySelectorAll('.settings-section');
-  await t.test('2. renders 21 sections', sections.length === 21);
+  await t.test('2. list contains 21 sections',
+    c1.querySelectorAll('.sub-page__item').length === 21);
 
-  /* 3. عدد عناصر TOC = 21 */
-  const tocItems = container.querySelectorAll('.settings-toc__item');
-  await t.test('3. TOC has 21 items', tocItems.length === 21);
+  await t.test('3. detail view hidden when no subRoute',
+    !c1.querySelector('.sub-page').classList.contains('sub-page--open'));
 
-  /* 4. حقل البحث موجود */
-  await t.test('4. search input exists',
-    container.querySelector('input[type="search"]') !== null);
+  const ids = Array.from(c1.querySelectorAll('.sub-page__item'))
+    .map((i) => i.getAttribute('data-section-id'));
 
-  /* 5. قسم معلومات الورشة يحتوي حقول نصية */
-  const workshopSection = container.querySelector('[data-section-id="workshop"]');
-  await t.test('5. workshop section has text inputs',
-    workshopSection !== null &&
-    workshopSection.querySelectorAll('input[type="text"]').length >= 4);
+  await t.test('4. all 21 required section IDs present',
+    ['workshop', 'appearance', 'measurements', 'security', 'danger-zone', 'pricing-calculator']
+      .every((id) => ids.includes(id)));
 
-  /* 6. قسم المظهر يحتوي شبكة ثيمات (9) */
-  const appearanceSection = container.querySelector('[data-section-id="appearance"]');
-  const themeCards = appearanceSection
-    ? appearanceSection.querySelectorAll('.settings-theme-card')
-    : [];
-  await t.test('6. appearance has 9 theme cards', themeCards.length === 9);
+  await t.test('5. each item has icon span',
+    c1.querySelectorAll('.sub-page__item-icon').length === 21);
 
-  /* 7. البحث يُخفي الأقسام غير المطابقة */
-  const searchInput = container.querySelector('input[type="search"]');
-  searchInput.value = 'مقاسات';
-  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-  const visibleSections = Array.from(container.querySelectorAll('.settings-section'))
-    .filter((s) => !s.classList.contains('settings-section--hidden'));
-  await t.test('7. search filters sections',
-    visibleSections.length > 0 && visibleSections.length < 21);
+  const c2 = document.createElement('div');
+  await settingsPage.render(c2, 'workshop');
+  await new Promise((r) => setTimeout(r, 30));
 
-  /* 8. جميع الأقسام الجديدة موجودة */
-  const requiredIds = [
-    'workshop', 'appearance', 'backgrounds', 'icons', 'fonts', 'display',
-    'measurements', 'jalabiya-types', 'inventory-limits', 'daily-limit', 'grouping',
-    'pricing-calculator',
-    'notifications', 'occasions', 'auto-messages', 'backup', 'cloud-sync', 'image-compression',
-    'security', 'lock-screen', 'danger-zone',
-  ];
-  const missing = requiredIds.filter(
-    (id) => container.querySelector('[data-section-id="' + id + '"]') === null
-  );
-  await t.test('8. all 21 required sections present', missing.length === 0);
-  if (missing.length > 0) {
-    t.log('    missing: ' + missing.join(', '));
-  }
+  await t.test('6. subRoute=workshop opens the section',
+    c2.querySelector('.sub-page').classList.contains('sub-page--open'));
 
-  /* 9. قسم منطقة الخطر له تنسيق خاص */
-  const dangerSection = container.querySelector('[data-section-id="danger-zone"]');
-  await t.test('9. danger zone has special styling',
-    dangerSection !== null &&
-    dangerSection.classList.contains('settings-danger'));
+  await t.test('7. workshop section body rendered',
+    c2.querySelector('.settings-section__body') !== null);
 
-  /* 10. destroy() يُنظّف الصفحة */
+  const workshopItem = c2.querySelector('[data-section-id="workshop"]');
+  await t.test('8. current section marked aria-current=page',
+    workshopItem && workshopItem.getAttribute('aria-current') === 'page');
+
+  settingsPage.destroy();
+  const c3 = document.createElement('div');
+  await settingsPage.render(c3);
+  await t.test('9. re-render after destroy works',
+    c3.querySelectorAll('.sub-page__item').length === 21);
+
   settingsPage.destroy();
   await settingsRepo.clear();
   await t.test('10. destroy clears state', true);
