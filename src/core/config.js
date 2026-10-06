@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 5,
+  version: 6,
 };
 
 /* --- 4. Stores --- */
