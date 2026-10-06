@@ -218,12 +218,27 @@ async function renderPage(id) {
   currentPage = null;
 
   if (id === 'tests') {
-    layout.setTitle('الاختبارات');
-    const testsMod = await loadPageModule('tests');
-    layout.setContent(testsMod
-      ? await buildTestsPage(testsMod)
-      : buildPlaceholderPage('الاختبارات', '🧪'));
-    return;
+  layout.setTitle('الاختبارات');
+  let testsMod = null;
+  let errMsg = '';
+  let errStack = '';
+  try {
+    testsMod = await import('./tests/index.js');
+  } catch (e) {
+    errMsg = (e && e.message) ? e.message : String(e);
+    errStack = (e && e.stack) ? e.stack : '';
+  }
+  if (testsMod) {
+    layout.setContent(await buildTestsPage(testsMod));
+  } else {
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#2a0000;color:#ff8080;border-radius:8px;box-sizing:border-box;max-height:80vh;overflow:auto';
+    pre.textContent = '❌ فشل تحميل الاختبارات:\n\n' + errMsg + '\n\n' + errStack;
+    const wrap = el('div', {});
+    wrap.appendChild(pre);
+    layout.setContent(wrap);
+  }
+  return;
   }
 
   const mod = await loadPageModule(id);
