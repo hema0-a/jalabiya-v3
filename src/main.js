@@ -160,51 +160,22 @@ function buildPlaceholderPage(title, icon) {
   ]);
 }
 
-async function buildTestsPage(testsIndex) {
-  const wrap = el('div', {});
-  const pre = el('pre', {
-    style: {
-      padding: '16px', margin: '0',
-      fontFamily: 'monospace', direction: 'ltr',
-      textAlign: 'left', fontSize: '12px', lineHeight: '1.5',
-      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-      background: '#111', color: '#0f0',
-      borderRadius: '8px', boxSizing: 'border-box',
-    },
-  });
-  const lines = [];
-  const paint = () => { pre.textContent = lines.join('\n'); };
-  lines.push('🚀 Running tests...');
-  paint();
-  wrap.appendChild(pre);
-  try {
-    const result = await testsIndex.runAll((header, body) => {
-      lines.push(header);
-      if (body) lines.push(body);
-      paint();
-    });
-    lines.push('');
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push('🏁 TOTAL: ' + result.totalPassed + '/' + result.totalTests + ' tests passed');
-    paint();
-  } catch (err) {
-    lines.push('');
-    lines.push('❌ Failed: ' + (err.message || String(err)));
-    paint();
-  }
-  return wrap;
-}
-
 const PLACEHOLDER_PAGES = {
-  'referrals': ['الإحالات', '🤝'],
-  'loans':     ['القروض', '💵'],
-  'occasions': ['المواسم والأعياد', '🎉'],
+  'referrals':    ['الإحالات', '🤝'],
+  'loans':        ['القروض', '💵'],
+  'occasions':    ['المواسم والأعياد', '🎉'],
   'activity-log': ['سجل النشاط', '📜'],
-  'trash':     ['سلة المحذوفات', '🗑️'],
-  'cloud-sync': ['المزامنة السحابية', '☁️'],
+  'trash':        ['سلة المحذوفات', '🗑️'],
+  'cloud-sync':   ['المزامنة السحابية', '☁️'],
 };
 
 async function renderPage(id) {
+  /* تحويل #/tests → لوحة التحكم (الاختبارات معطَّلة على Safari) */
+  if (id === 'tests') {
+    location.hash = '#/dashboard';
+    return;
+  }
+
   const item = ALL_ITEMS.find((i) => i.id === id);
   if (item) {
     layout.setTitle(item.label);
@@ -215,48 +186,6 @@ async function renderPage(id) {
     try { currentPage.destroy(); } catch (e) { console.error(e); }
   }
   currentPage = null;
-
-  if (id === 'tests') {
-  layout.setTitle('الاختبارات');
-  const wrap = el('div', {});
-  const pre = document.createElement('pre');
-  pre.style.cssText = 'padding:16px;margin:0;font-family:monospace;direction:ltr;text-align:left;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:#111;color:#0f0;border-radius:8px;box-sizing:border-box;max-height:80vh;overflow:auto';
-  wrap.appendChild(pre);
-  layout.setContent(wrap);
-
-  const files = [
-    './tests/modules/core.test.js',
-    './tests/modules/data.test.js',
-    './tests/modules/repos.test.js',
-    './tests/modules/security.test.js',
-    './tests/modules/ui.test.js',
-    './tests/modules/pages.test.js',
-    './tests/modules/orders.test.js',
-    './tests/modules/dashboard.test.js',
-    './tests/modules/pages2.test.js',
-    './tests/modules/settings.test.js',
-    './tests/modules/appointments-page.test.js',
-    './tests/modules/pricing.test.js',
-    './tests/modules/financial.test.js',
-    './tests/modules/kpis.test.js',
-    './tests/modules/portfolio.test.js',
-    './tests/modules/commitments.test.js',
-    './tests/modules/house-expenses.test.js',
-  ];
-
-  const lines = [];
-  for (const f of files) {
-    try {
-      await import(f);
-      lines.push('✅ ' + f);
-    } catch (e) {
-      lines.push('❌ ' + f);
-      lines.push('   → ' + ((e && e.message) ? e.message : String(e)));
-    }
-    pre.textContent = lines.join('\n');
-  }
-  return;
-  }
 
   const mod = await loadPageModule(id);
   const exportName = MODULE_EXPORT_MAP[id];
