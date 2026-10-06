@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 6,
+  version: 7,
 };
 
 /* --- 4. Stores --- */
@@ -46,7 +46,8 @@ export const STORES = {
   SAVINGS_GOALS:       'savingsGoals',
   HOUSE_EXPENSES:      'houseExpenses',
   PERSONAL_LOANS:      'personalLoans',
-  LOAN_PAYMENTS:       'loanPayments',
+    LOAN_PAYMENTS:       'loanPayments',
+  REFERRALS:           'referrals',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
