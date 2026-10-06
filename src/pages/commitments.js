@@ -737,3 +737,173 @@ function buildGoalCard(goal) {
     onClick: (e) => e.stopPropagation(),
   }, [
     !completed ? el('button', {
+      className: 'btn btn--sm btn--primary', type: 'button',
+      onClick: () => openGoalDeposit(goal),
+    }, '💰 إيداع') : null,
+    el('button', {
+      className: 'btn btn--sm btn--secondary', type: 'button',
+      onClick: () => openGoalForm(goal),
+    }, '✏️'),
+    el('button', {
+      className: 'btn btn--sm btn--danger', type: 'button',
+      onClick: async () => {
+        const ok = await modal.confirm({
+          title: 'حذف هدف',
+          message: 'حذف "' + goal.name + '"؟',
+          confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
+        });
+        if (!ok) return;
+        try {
+          await savingsGoals.remove(goal.id);
+          toast.success('تم الحذف');
+          invalidateCache();
+          await refreshAll();
+        } catch (e) { toast.danger('فشل: ' + e.message); }
+      },
+    }, '🗑️'),
+  ]));
+
+  return card;
+}
+
+function renderGoalsList() {
+  const wrap = state.container?.querySelector('#cm-list');
+  if (!wrap) return;
+  clear(wrap);
+
+  let list = state.goals;
+  const q = state.searchQuery.trim().toLowerCase();
+  if (q) {
+    list = list.filter((g) => String(g.name || '').toLowerCase().includes(q));
+  }
+
+  if (list.length === 0) {
+    wrap.appendChild(el('div', { className: 'empty-state' }, [
+      el('div', { className: 'empty-state__icon' }, '🏦'),
+      el('h2', { className: 'empty-state__title' }, q ? 'لا نتائج' : 'لا توجد أهداف ادخار'),
+      el('p', { className: 'empty-state__text' }, q ? 'جرّب كلمة أخرى' : 'اضغط "إضافة هدف" للبدء'),
+    ]));
+    return;
+  }
+
+  list.forEach((g) => wrap.appendChild(buildGoalCard(g)));
+}
+
+/* ==========================================================================
+   13. الصفحة الرئيسية
+   ========================================================================== */
+
+function renderPage() {
+  const c = state.container;
+  if (!c) return;
+  clear(c);
+
+  c.appendChild(el('div', { style: { marginBottom: '12px' } }, [
+    el('h1', { style: { fontSize: '22px', color: '#123C2F', margin: '0 0 4px 0' } }, '💳 المالية الشخصية'),
+    el('p', { style: { fontSize: '13px', color: '#2E8B6F', margin: '0' } }, 'الالتزامات الشهرية وأهداف الادخار'),
+  ]));
+
+  if (!state.stats.hasData) {
+    c.appendChild(el('div', { className: 'empty-state' }, [
+      el('div', { className: 'empty-state__icon' }, '💳'),
+      el('h2', { className: 'empty-state__title' }, 'لا توجد بيانات'),
+      el('p', { className: 'empty-state__text' }, 'ابدأ بإضافة أول التزام أو هدف ادخار'),
+    ]));
+    c.appendChild(el('button', {
+      className: 'btn btn--primary btn--block', type: 'button',
+      style: { marginTop: '12px' },
+      onClick: () => openCommitmentForm(),
+    }, '➕ إضافة التزام'));
+    return;
+  }
+
+  c.appendChild(renderTabs());
+
+  if (state.activeTab === 'commitments') {
+    c.appendChild(renderStats());
+    c.appendChild(renderHealth());
+    const alerts = renderAlerts();
+    if (alerts) c.appendChild(alerts);
+
+    c.appendChild(el('button', {
+      className: 'btn btn--primary btn--block', type: 'button',
+      style: { marginBottom: '12px' },
+      onClick: () => openCommitmentForm(),
+    }, '➕ إضافة التزام'));
+
+    c.appendChild(renderSearchBox());
+    c.appendChild(renderCategoryFilters());
+
+    c.appendChild(el('div', { id: 'cm-list' }));
+    renderCommitmentsList();
+  }
+  else {
+    c.appendChild(el('button', {
+      className: 'btn btn--primary btn--block', type: 'button',
+      style: { marginBottom: '12px' },
+      onClick: () => openGoalForm(),
+    }, '➕ إضافة هدف'));
+
+    if (state.stats.goalsCount > 0) {
+      c.appendChild(el('div', {
+        className: 'card', style: { marginBottom: '12px' },
+      }, [
+        el('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' } }, [
+          el('span', { style: { fontWeight: '600', color: '#123C2F' } }, '🏦 إجمالي الأهداف'),
+          el('span', { style: { color: '#2E8B6F' } }, state.stats.goalsCount + ' هدف'),
+        ]),
+        el('div', {
+          style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' },
+        }, [
+          el('span', {}, 'المجموع: ' + formatEGP(state.stats.totalGoalCurrent)),
+          el('span', {}, 'الهدف: ' + formatEGP(state.stats.totalGoalTarget)),
+        ]),
+      ]));
+    }
+
+    c.appendChild(renderSearchBox());
+    c.appendChild(el('div', { id: 'cm-list' }));
+    renderGoalsList();
+  }
+}
+
+/* ==========================================================================
+   14. تحميل + تحديث
+   ========================================================================== */
+
+async function refreshAll() {
+  try {
+    await loadData();
+    renderPage();
+  } catch (e) {
+    toast.danger('فشل التحميل: ' + e.message);
+    console.error(e);
+  }
+}
+
+/* ==========================================================================
+   15. API
+   ========================================================================== */
+
+export const commitmentsPage = {
+  async render(container) {
+    clear(container);
+    state.container = container;
+    state.activeTab = 'commitments';
+    state.activeCategory = 'all';
+    state.searchQuery = '';
+    await refreshAll();
+  },
+
+  destroy() {
+    state = {
+      container: null,
+      activeTab: 'commitments',
+      activeCategory: 'all',
+      searchQuery: '',
+      stats: null,
+      withPayments: [],
+      goals: [],
+    };
+  },
+};
