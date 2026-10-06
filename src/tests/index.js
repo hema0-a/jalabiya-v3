@@ -22,5 +22,6 @@ import './modules/portfolio.test.js';
 import './modules/commitments.test.js';
 import './modules/house-expenses.test.js';
 import './modules/collapsible.test.js';
+import './modules/sub-page.test.js';
 
 export { runAll, register } from './registry.js';
