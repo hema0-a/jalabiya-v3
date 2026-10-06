@@ -1,4 +1,4 @@
-/* pages.test.js - pages/customers */
+/* pages.test.js */
 import { register } from '../registry.js';
 import { customersPage, filterCustomers } from '../../pages/customers.js';
 import { customers as customersRepo } from '../../data/repos/customers.js';
