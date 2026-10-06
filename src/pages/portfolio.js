@@ -1,9 +1,10 @@
 /* ==========================================================================
-   portfolio.js — صفحة معرض الأعمال
+   portfolio.js — صفحة معرض الأعمال (CRUD + معاينة سريعة)
    ==========================================================================
    - 8 فئات + ربط اختياري بعميل + تاريخ تلقائي.
    - ضغط تلقائي + thumbnails + lazy loading.
    - مشاركة WhatsApp + حفظ الصورة + حماية من الصور المكرّرة.
+   - معاينة سريعة (previewPortfolio).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -14,6 +15,7 @@ import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
 import { formatEGP, formatDate } from '../core/utils.js';
+import { previewPortfolio } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
 let state = {
@@ -75,7 +77,6 @@ async function loadData() {
    ========================================================================== */
 
 function openAddForm() {
-  /* معاينة الصورة */
   const preview = el('div', {
     style: {
       width: '100%', height: '200px', borderRadius: '12px',
@@ -95,20 +96,17 @@ function openAddForm() {
     style: { fontSize: '12px', color: '#2E8B6F', marginBottom: '8px', display: 'none' },
   });
 
-  /* زر اختيار الصورة */
   const chooseBtn = el('button', {
     className: 'btn btn--secondary btn--block', type: 'button',
     onClick: () => fileInput.click(),
   }, '📁 اختر صورة');
 
-  /* معالجة الملف */
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
     chooseBtn.disabled = true;
     chooseBtn.textContent = '⏳ جارٍ المعالجة...';
     try {
-      /* hash للتحقق من التكرار */
       imageHash = await hashImage(file);
       const dup = await portfolio.findByHash(imageHash);
       if (dup) {
@@ -138,7 +136,6 @@ function openAddForm() {
     chooseBtn.textContent = '📁 تغيير الصورة';
   });
 
-  /* الحقول */
   const titleInput = el('input', { className: 'input', type: 'text', placeholder: 'مثال: جلابية سادة رجالي' });
 
   const categorySelect = el('select', { className: 'select' });
@@ -207,7 +204,7 @@ function openAddForm() {
 }
 
 /* ==========================================================================
-   4. تفاصيل + تعديل + حذف
+   4. تفاصيل + تعديل + حذف (Modal داخلي قديم)
    ========================================================================== */
 
 function openDetail(item) {
@@ -396,7 +393,7 @@ function buildCard(item) {
     className: 'card',
     style: { padding: '0', overflow: 'hidden', cursor: 'pointer', marginBottom: '0' },
     'data-id': item.id,
-    onClick: () => openDetail(item),
+    onClick: () => previewPortfolio(item, () => openEditForm(item)),
   });
 
   card.appendChild(el('img', {
@@ -454,26 +451,22 @@ export const portfolioPage = {
     state.activeCategory = 'all';
     state.searchQuery = '';
 
-    /* Header */
     container.appendChild(el('div', { style: { marginBottom: '12px' } }, [
       el('h1', { style: { fontSize: '22px', color: '#123C2F', margin: '0 0 4px 0' } }, '📸 معرض الأعمال'),
       el('p', { style: { fontSize: '13px', color: '#2E8B6F', margin: '0' } }, 'عرض أعمال الورشة'),
     ]));
 
-    /* زر إضافة */
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
       style: { marginBottom: '12px' },
       onClick: () => openAddForm(),
     }, '➕ إضافة صورة'));
 
-    /* إحصائيات */
     container.appendChild(el('div', {
       id: 'pf-stats',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
 
-    /* بحث */
     const searchInput = el('input', {
       className: 'input', type: 'search',
       placeholder: '🔍 ابحث بالعنوان...',
@@ -485,13 +478,11 @@ export const portfolioPage = {
     });
     container.appendChild(searchInput);
 
-    /* فلاتر */
     container.appendChild(el('div', {
       id: 'pf-filters',
       style: { display: 'flex', flexWrap: 'wrap', marginBottom: '12px' },
     }));
 
-    /* شبكة الصور */
     container.appendChild(el('div', {
       id: 'pf-grid',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
