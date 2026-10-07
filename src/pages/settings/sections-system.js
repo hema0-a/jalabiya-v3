@@ -9,8 +9,13 @@ import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
+import { formatDate, formatEGP } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
 import * as firestoreSync from '../../sync/firestore-sync.js';
+import {
+  createBackup, listBackups, restoreBackup, deleteBackup,
+  clearAllBackups, exportBackupToFile,
+} from '../../services/auto-backup.js';
 
 /* ==========================================================================
    1. التنبيهات
@@ -299,7 +304,7 @@ function openTemplateEditor(tpl, current, onSave) {
 }
 
 /* ==========================================================================
-   4. النسخ الاحتياطي
+   4. النسخ الاحتياطي (مُحسَّن)
    ========================================================================== */
 const backupSection = {
   id: 'backup',
@@ -307,6 +312,11 @@ const backupSection = {
   title: 'النسخ الاحتياطي',
   async render(body, currentSettings, saveFn) {
     const bk = currentSettings.backup || DEFAULT_SETTINGS.backup;
+
+    /* --- 1. الإعدادات --- */
+    body.appendChild(el('h4', {
+      style: { fontSize: '13px', color: '#123C2F', margin: '0 0 8px 0', fontWeight: '600' },
+    }, '⚙️ الإعدادات'));
 
     const autoToggle = createToggle({
       label: 'النسخ التلقائي',
@@ -335,11 +345,152 @@ const backupSection = {
       intervalSelect,
     ]));
 
-    body.appendChild(el('button', {
+    /* --- 2. زر إنشاء نسخة يدوية --- */
+    const createBtn = el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
       style: { marginTop: '8px' },
+      onClick: async () => {
+        createBtn.disabled = true;
+        createBtn.textContent = '⏳ جارٍ الإنشاء...';
+        try {
+          const res = await createBackup({ label: 'نسخة يدوية' });
+          if (res.ok) {
+            toast.success('تم إنشاء نسخة (' + res.sizeKB + ' KB)');
+            await renderBackupsList();
+          } else {
+            toast.danger('فشل: ' + (res.error || 'خطأ'));
+          }
+        } finally {
+          createBtn.disabled = false;
+          createBtn.textContent = '💾 إنشاء نسخة الآن';
+        }
+      },
+    }, '💾 إنشاء نسخة الآن');
+    body.appendChild(createBtn);
+
+    /* --- 3. قائمة النسخ --- */
+    body.appendChild(el('h4', {
+      style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
+    }, '📋 النسخ المحفوظة'));
+
+    const listWrap = el('div', { id: 'backup-list-wrap' });
+    body.appendChild(listWrap);
+
+    async function renderBackupsList() {
+      clear(listWrap);
+      const backups = await listBackups();
+
+      if (backups.length === 0) {
+        listWrap.appendChild(el('div', {
+          style: {
+            textAlign: 'center', padding: '20px', color: '#999',
+            fontSize: '13px', background: '#F6F1E6', borderRadius: '8px',
+          },
+        }, 'لا توجد نسخ محفوظة بعد'));
+        return;
+      }
+
+      backups.forEach((b) => {
+        const row = el('div', {
+          style: {
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px', background: '#F6F1E6',
+            borderRadius: '8px', marginBottom: '6px',
+          },
+        });
+
+        /* أيقونة + معلومات */
+        row.appendChild(el('div', { style: { flex: '1', minWidth: '0' } }, [
+          el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#123C2F' } },
+            '💾 ' + (b.label || 'نسخة')),
+          el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
+            '📅 ' + formatDate(b.createdAt) + ' · 📦 ' + (b.sizeKB || 0) + ' KB'),
+        ]));
+
+        /* زر التحميل */
+        row.appendChild(el('button', {
+          className: 'btn btn--sm btn--ghost', type: 'button',
+          title: 'تحميل كملف',
+          onClick: async () => {
+            const ok = await exportBackupToFile(b.id);
+            if (ok) toast.success('تم التحميل');
+            else toast.danger('فشل التحميل');
+          },
+        }, '⬇️'));
+
+        /* زر الاسترجاع */
+        row.appendChild(el('button', {
+          className: 'btn btn--sm btn--secondary', type: 'button',
+          title: 'استرجاع',
+          onClick: async () => {
+            const ok = await modal.confirm({
+              title: 'استرجاع نسخة احتياطية',
+              message: '⚠️ سيتم استبدال كل البيانات الحالية ببيانات هذه النسخة. لا يمكن التراجع!',
+              confirmText: 'استرجاع', cancelText: 'إلغاء', danger: true,
+            });
+            if (!ok) return;
+            const res = await restoreBackup(b.id);
+            if (res.ok) {
+              toast.success('تم الاسترجاع — جارٍ إعادة التحميل...');
+              setTimeout(() => location.reload(), 1500);
+            } else {
+              toast.danger('فشل: ' + (res.error || 'خطأ'));
+            }
+          },
+        }, '♻️'));
+
+        /* زر الحذف */
+        row.appendChild(el('button', {
+          className: 'btn btn--sm btn--danger', type: 'button',
+          title: 'حذف',
+          onClick: async () => {
+            const ok = await modal.confirm({
+              title: 'حذف نسخة',
+              message: 'حذف "' + (b.label || 'نسخة') + '" نهائياً؟',
+              confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
+            });
+            if (!ok) return;
+            await deleteBackup(b.id);
+            toast.success('تم الحذف');
+            await renderBackupsList();
+          },
+        }, '🗑️'));
+
+        listWrap.appendChild(row);
+      });
+
+      /* زر حذف الكل */
+      if (backups.length > 1) {
+        listWrap.appendChild(el('button', {
+          className: 'btn btn--ghost btn--block', type: 'button',
+          style: { marginTop: '8px', color: '#C62828', fontSize: '12px' },
+          onClick: async () => {
+            const ok = await modal.confirm({
+              title: 'حذف كل النسخ',
+              message: 'سيتم حذف ' + backups.length + ' نسخة. لا يمكن التراجع!',
+              confirmText: 'حذف الكل', cancelText: 'إلغاء', danger: true,
+            });
+            if (!ok) return;
+            await clearAllBackups();
+            toast.success('تم حذف كل النسخ');
+            await renderBackupsList();
+          },
+        }, '🗑️ حذف كل النسخ (' + backups.length + ')'));
+      }
+    }
+
+    await renderBackupsList();
+
+    /* --- 4. تصدير / استيراد JSON --- */
+    body.appendChild(el('h4', {
+      style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
+    }, '📦 تصدير / استيراد JSON (كامل البيانات)'));
+
+    body.appendChild(el('button', {
+      className: 'btn btn--secondary btn--block', type: 'button',
+      style: { marginBottom: '8px' },
       onClick: () => exportAllData(),
-    }, '💾 تنزيل نسخة احتياطية (JSON)'));
+    }, '⬇️ تنزيل نسخة JSON'));
 
     const importInput = el('input', { type: 'file', accept: '.json', style: { display: 'none' } });
     importInput.addEventListener('change', () => {
@@ -350,9 +501,8 @@ const backupSection = {
     });
     body.appendChild(el('button', {
       className: 'btn btn--secondary btn--block', type: 'button',
-      style: { marginTop: '8px' },
       onClick: () => importInput.click(),
-    }, '📂 استيراد من JSON'));
+    }, '⬆️ استيراد من JSON'));
     body.appendChild(importInput);
   },
 };
@@ -360,8 +510,13 @@ const backupSection = {
 async function exportAllData() {
   try {
     const db = await import('../../data/idb.js');
-    const stores = ['customers', 'orders', 'payments', 'inventory', 'workers', 'expenses', 'appointments', 'settings'];
-    const data = { version: 3, exportedAt: Date.now(), stores: {} };
+    const stores = [
+      'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
+      'appointments', 'settings', 'portfolio', 'commitments', 'commitmentPayments',
+      'savingsGoals', 'houseExpenses', 'personalLoans', 'loanPayments',
+      'referrals', 'workerPayments',
+    ];
+    const data = { version: 9, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
