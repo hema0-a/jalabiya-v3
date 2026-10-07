@@ -25,7 +25,10 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 7,
+  version: 8,
+};
+  REFERRALS:           'referrals',
+  WORKER_PAYMENTS:     'workerPayments',   // ← جديد
 };
 
 /* --- 4. Stores --- */
