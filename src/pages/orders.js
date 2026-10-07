@@ -1,10 +1,10 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD + فلاتر + معاينة + طباعة + رسائل + مؤقت)
+   orders.js — صفحة الطلبات (CRUD كامل + كل الميزات)
    ==========================================================================
-   - نموذج متعدد العناصر (items[]) + خصم + رسوم + مقدم + تاريخ القماش.
-   - زر 🖨️ طباعة + 📱 رسائل + ⏱️ مؤقت العمل.
-   - شارات الموعد (متأخر/اليوم/غداً) + شارة استلام القماش.
-   - توافق خلفي مع الطلبات القديمة.
+   - نموذج متعدد العناصر + خصم + رسوم + مقدم + تاريخ القماش.
+   - معاينة + طباعة + رسائل WhatsApp + مؤقت العمل.
+   - شارات الموعد + استلام القماش.
+   - زر "✅ تسليم + توقيع" (signature-pad).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -15,16 +15,12 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
+import { openSignaturePad } from '../ui/signature-pad.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import {
-  getDeadlineInfo,
-  getPickupInfo,
-  formatDuration,
-  getTotalWorkTime,
-  getActiveSession,
-  startSession,
-  stopSession,
+  getDeadlineInfo, getPickupInfo, formatDuration,
+  getTotalWorkTime, getActiveSession, startSession, stopSession,
 } from '../services/order-timing.js';
 
 /* --- الحالة --- */
@@ -432,7 +428,7 @@ function openOrderForm(existing = null) {
 }
 
 /* ==========================================================================
-   5. حذف + حالة + طباعة + رسالة + مؤقت
+   5. حذف + حالة + طباعة + رسالة + مؤقت + تسليم
    ========================================================================== */
 
 async function deleteOrder(order) {
@@ -468,12 +464,66 @@ async function advanceStatus(order) {
 
 async function printInvoice(order) {
   const c = state.customerMap[order.customerId] || null;
-  try {
-    await printOrderInvoice(order, c);
-  } catch (err) {
-    console.error('[printInvoice]', err);
-    toast.danger('فشل فتح نافذة الطباعة');
+  try { await printOrderInvoice(order, c); }
+  catch (err) { console.error('[printInvoice]', err); toast.danger('فشل فتح نافذة الطباعة'); }
+}
+
+/**
+ * تسليم الطلب مع توقيع العميل.
+ * @param {Object} order
+ */
+async function deliverWithSignature(order) {
+  const customer = state.customerMap[order.customerId];
+  const confirmed = await modal.confirm({
+    title: 'تأكيد التسليم',
+    message: 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟',
+    confirmText: 'نعم، ابدأ التوقيع', cancelText: 'إلغاء',
+  });
+  if (!confirmed) return;
+
+  const signature = await openSignaturePad({
+    title: '✍️ توقيع استلام الطلب',
+    hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
+  });
+
+  if (!signature) {
+    toast.info('تم إلغاء التسليم');
+    return;
   }
+
+  try {
+    await orders.update(order.id, {
+      status: 'delivered',
+      signature,
+      deliveredAt: Date.now(),
+    });
+    toast.success('تم التسليم مع التوقيع ✅');
+    await refreshAll();
+  } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
+}
+
+/**
+ * عرض التوقيع المحفوظ في نافذة.
+ * @param {string} dataUrl
+ */
+function showSignature(dataUrl) {
+  if (!dataUrl) return;
+  const body = el('div', {}, [
+    el('img', {
+      src: dataUrl, alt: 'التوقيع',
+      style: { width: '100%', maxWidth: '100%', borderRadius: '12px',
+        border: '1px solid #E5DDD0', background: '#fff', display: 'block' },
+    }),
+    el('div', {
+      style: { fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '8px' },
+    }, 'توقيع العميل عند التسليم'),
+  ]);
+  modal.open({
+    title: '✍️ التوقيع المحفوظ',
+    body,
+    closable: true,
+    actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
+  });
 }
 
 async function openMessageMenu(order) {
@@ -534,14 +584,9 @@ async function openMessageMenu(order) {
   });
 }
 
-/**
- * بدء/إيقاف المؤقت لطلب.
- * @param {Object} order
- */
 async function toggleTimer(order) {
   const sessions = Array.isArray(order.workSessions) ? order.workSessions : [];
   const isActive = getActiveSession(sessions);
-
   try {
     const newSessions = isActive ? stopSession(sessions) : startSession(sessions);
     await orders.update(order.id, { workSessions: newSessions });
@@ -561,15 +606,14 @@ function buildOrderCard(o) {
   const statusInfo = STATUS_MAP[o.status] || { label: o.status, badge: 'badge--info' };
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
 
-  /* --- معلومات التوقيت --- */
   const isDelivered = o.status === 'delivered' || o.status === 'cancelled';
+  const canDeliver = o.status === 'ready' || o.status === 'in_progress';
   const deadline = getDeadlineInfo(o.dueDate);
   const pickup = getPickupInfo(o.receivedDate);
   const sessions = Array.isArray(o.workSessions) ? o.workSessions : [];
   const isRunning = getActiveSession(sessions);
   const totalMs = getTotalWorkTime(sessions);
 
-  /* --- الرأس --- */
   const headerChildren = [
     el('div', { style: { flex: '1', minWidth: '0' } }, [
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
@@ -578,7 +622,7 @@ function buildOrderCard(o) {
     el('span', { className: 'badge ' + statusInfo.badge }, statusInfo.label),
   ];
 
-  /* --- شارات الحالة الزمنية --- */
+  /* شارات الحالة الزمنية */
   const badgesRow = el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
   });
@@ -591,9 +635,6 @@ function buildOrderCard(o) {
         color: deadline.color, background: deadline.bg,
       },
     }, deadline.icon + ' ' + deadline.label));
-  }
-
-  if (!isDelivered) {
     badgesRow.appendChild(el('span', {
       style: {
         fontSize: '11px', fontWeight: '600',
@@ -615,13 +656,23 @@ function buildOrderCard(o) {
     }, (isRunning ? '⏱️ يعمل · ' : '⏱️ ') + formatDuration(totalMs)));
   }
 
-  /* --- بيانات أساسية --- */
+  /* شارة "موقّع" */
+  if (o.signature) {
+    badgesRow.appendChild(el('span', {
+      style: {
+        fontSize: '11px', fontWeight: '600',
+        padding: '3px 8px', borderRadius: '10px',
+        color: '#2E7D32', background: '#E8F5E9', cursor: 'pointer',
+      },
+      onClick: (e) => { e.stopPropagation(); showSignature(o.signature); },
+    }, '✍️ موقّع'));
+  }
+
   const metaChildren = [];
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
   if (itemsCount > 0) metaChildren.push(el('span', {}, '📦 ' + itemsCount + ' بند'));
 
-  /* --- البطاقة --- */
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '8px', cursor: 'pointer' },
@@ -649,7 +700,7 @@ function buildOrderCard(o) {
     }, o.notes));
   }
 
-  /* --- الأزرار --- */
+  /* الأزرار */
   const actionChildren = [
     el('button', {
       className: 'btn btn--sm btn--secondary',
@@ -670,14 +721,23 @@ function buildOrderCard(o) {
     }, '📱') : null,
   ].filter(Boolean);
 
-  /* زر المؤقت — للطلبات غير المُسلَّمة */
   if (!isDelivered) {
     actionChildren.push(el('button', {
-      className: 'btn btn--sm ' + (isRunning ? 'btn--danger' : 'btn--primary'),
+      className: 'btn btn--sm ' + (isRunning ? 'btn--danger' : 'btn--ghost'),
       'data-action': 'timer',
       title: isRunning ? 'إيقاف المؤقت' : 'بدء المؤقت',
       onClick: () => toggleTimer(o),
     }, isRunning ? '⏸️' : '⏱️'));
+  }
+
+  /* زر تسليم + توقيع — يظهر عندما ready أو in_progress */
+  if (canDeliver) {
+    actionChildren.push(el('button', {
+      className: 'btn btn--sm btn--primary',
+      'data-action': 'deliver',
+      title: 'تسليم + توقيع',
+      onClick: () => deliverWithSignature(o),
+    }, '✅ تسليم'));
   }
 
   if (!isDelivered) {
@@ -786,9 +846,6 @@ function renderList() {
   filtered.forEach((o) => listContainer.appendChild(buildOrderCard(o)));
 }
 
-/**
- * تحديث المؤقتات الحية كل ثانية.
- */
 function startLiveTimer() {
   stopLiveTimer();
   state._timerInterval = setInterval(() => {
