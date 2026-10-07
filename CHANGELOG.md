@@ -5,13 +5,114 @@
 
 ---
 
+## [3.3.0] — 2026-10-07 — UX & Reliability Enhancements 🌙
+
+**الإصدار الخامس — Dark Mode كامل + Autosave في 5 نماذج + Offline Indicator.**
+
+### ملخص
+
+- **8 ملفات** معدَّلة/مُنشأة (3 جديدة + 5 تعديلات)
+- **270 اختباراً** — كلها ناجحة ✅
+- **Dark Mode** كامل مع حفظ التفضيل
+- **Autosave** مُفعَّل في 5 نماذج
+- **Offline Indicator** مع تنبيه بصري
+- **Chrome + Safari** — يعمل على كليهما
+
+### 🌙 التحسين 1: Dark Mode (الوضع الليلي)
+
+**`src/ui/theme.js`** (جديد):
+- قراءة/كتابة التفضيل في `localStorage` (`jalabiya_v3_theme`).
+- يتبع تفضيل النظام تلقائيًا (`prefers-color-scheme`).
+- يحدّث `meta theme-color` مع الوضع.
+- API: `applyTheme()`, `toggleTheme()`, `isDarkMode()`, `getThemeIcon()`.
+
+**`styles/base.css`**:
+- إضافة كتلة `body.dark-mode` كاملة (~55 سطرًا).
+- إعادة تعريف كل متغيرات الألوان للوضع الداكن.
+- تحسينات إضافية: Badges، Toasts، Skeleton، Pre، Modal Backdrop.
+
+**`src/main.js`**:
+- استبدال زر Topbar الوهمي بزر فعلي + أيقونة ديناميكية (🌙 ⇄ ☀️).
+- تفعيل `applyTheme()` عند بدء التشغيل.
+
+### 💾 التحسين 2: Draft Autosave في 5 نماذج
+
+**`src/services/draft-manager.js`** (جديد — من v3.2.0):
+- API: `save()`, `get()`, `has()`, `clear()`, `clearAll()`, `list()`.
+- صلاحية 24 ساعة — حذف تلقائي عند الانتهاء.
+
+**مُفعَّل في 5 نماذج**:
+- `src/pages/orders.js` — `order-form`.
+- `src/pages/expenses.js` — `expense-form`.
+- `src/pages/payments.js` — `payment-form`.
+- `src/pages/inventory.js` — `inventory-form`.
+- `src/pages/customers.js` — `customer-form`.
+
+**السلوك**:
+- حفظ تلقائي أثناء الكتابة (debounce 500ms).
+- استرجاع تلقائي عند إعادة فتح النموذج.
+- مسح المسودة عند نجاح الحفظ.
+- Toast إرشادي "📝 تم استرجاع مسودة سابقة".
+
+### 🔴 التحسين 3: Offline Indicator
+
+**`src/ui/offline-indicator.js`** (جديد):
+- يستمع لـ `window.online` / `window.offline`.
+- يُنشئ شريطًا ثابتًا أعلى الصفحة.
+- يختفي تلقائيًا بعد 3 ثوانٍ من عودة الاتصال.
+- API: `mount()`, `unmount()`, `isOnline()`, `isMounted()`.
+
+**`styles/components.css`**:
+- إضافة قسم `.offline-banner` كامل (~50 سطرًا).
+- دعم Dark Mode + `prefers-reduced-motion` + notch.
+
+**`src/main.js`**:
+- تفعيل `mountOffline()` بعد FAB.
+
+### 🛠️ تحسينات جانبية
+
+- **`sw.js`**:
+  - `CACHE_VERSION`: `'v3.2.0'` → `'v3.3.0'`.
+  - إضافة `theme.js` + `offline-indicator.js` إلى `PRECACHE_URLS`.
+
+### 📁 الملفات المتأثرة
+
+| # | الملف | الإجراء |
+|---|---|---|
+| 1 | `src/ui/theme.js` | 🆕 جديد |
+| 2 | `styles/base.css` | ✏️ كتلة `body.dark-mode` |
+| 3 | `src/main.js` | ✏️ 4 تعديلات (Dark Mode + Offline) |
+| 4 | `src/ui/offline-indicator.js` | 🆕 جديد |
+| 5 | `styles/components.css` | ✏️ قسم `.offline-banner` |
+| 6 | `src/pages/orders.js` | ✏️ Autosave (من v3.2.0) |
+| 7 | `src/pages/expenses.js` | ✏️ Autosave |
+| 8 | `src/pages/payments.js` | ✏️ Autosave |
+| 9 | `src/pages/inventory.js` | ✏️ Autosave |
+| 10 | `src/pages/customers.js` | ✏️ Autosave + `setValues` |
+| 11 | `sw.js` | ✏️ Cache v3.3.0 + Precache |
+| 12 | `CHANGELOG.md` | ✏️ هذا الملف |
+| 13 | `README.md` | ✏️ سيُحدَّث |
+
+### الاختبارات
+
+- **270 اختباراً** في 39 وحدة — كلها ناجحة ✅
+- **Chrome 120+** ✅
+- **Safari 17+** ✅
+
+### ملاحظات تقنية
+
+- **static imports فقط** في `tests/`, `core/`, `data/`, `ui/`, `pages/` (القاعدة 14).
+- **Draft Autosave** يعمل حتى في Private Mode (fallback في الذاكرة — لا يُحفظ).
+
+---
+
 ## [3.2.0] — 2026-10-07 — Priority Enhancements 🚀
 
 **الإصدار الرابع — 4 تحسينات أولوية قصوى + 270 اختبار ناجح.**
 
 ### ملخص
 
-- **8 ملفات** معدَّلة/مُنشأة (4 جديدة + 4 تعديلات)
+- **9 ملفات** معدَّلة/مُنشأة (4 جديدة + 5 تعديلات)
 - **270 اختباراً** — كلها ناجحة (كانت 189)
 - **25 صفحة** (24 + صفحة الاختبارات)
 - **20 مخزناً** IndexedDB
@@ -22,61 +123,39 @@
 **المشكلة**: صفحة الاختبارات كانت معطَّلة بشكل صريح في `main.js`.
 
 **الحل**:
-- **`src/pages/tests.js`** (جديد) — صفحة عرض نتائج الاختبارات مع زر تشغيل + ملخص.
-- **`src/tests/index.js`** — إضافة استيراد `loans.test.js`.
-- **`src/main.js`** — 4 تعديلات:
-  - إضافة `case 'tests'` في `loadPageModule`.
-  - إضافة `'tests': 'testsPage'` في `MODULE_EXPORT_MAP`.
-  - إزالة كتلة التعطيل في `renderPage`.
-  - تحديث تعليق الرأس.
-- **`src/tests/modules/data.test.js`** — استخدام `STORE_NAMES.length` بدل الثابت `15`.
-- **`src/pages/orders.js`** — إضافة `data-filter` لأزرار الفلترة (لإصلاح اختبار 6/7).
+- `src/pages/tests.js` (جديد) — صفحة عرض نتائج الاختبارات.
+- `src/tests/index.js` — إضافة استيراد `loans.test.js`.
+- `src/main.js` — 4 تعديلات لتفعيل `#/tests`.
+- `src/tests/modules/data.test.js` — استخدام `STORE_NAMES.length` بدل الثابت `15`.
+- `src/pages/orders.js` — إضافة `data-filter` لأزرار الفلترة.
 
 **النتيجة**: `#/tests` يعمل → **270/270 اختبار ✅**
 
 ### 🔴 التحسين 2: Global Error Handler
 
 **`src/core/error-handler.js`** (جديد):
-- التقاط `window.error` (sync).
-- التقاط `window.unhandledrejection` (async).
-- تسجيل في: Console + `activity-log` + حلقة ذاكرة (20 خطأ).
-- API: `install()`, `report(err, context)`, `getRecent()`, `clear()`, `isInstalled()`.
-
-**`src/main.js`** — تفعيل عند بدء التشغيل.
+- التقاط `window.error` + `window.unhandledrejection`.
+- تسجيل في Console + `activity-log` + حلقة ذاكرة.
+- API: `install()`, `report()`, `getRecent()`, `clear()`, `isInstalled()`.
 
 ### 🔴 التحسين 3: FAB (إجراءات سريعة)
 
 **`src/ui/fab.js`** (جديد):
-- زر عائم أسفل يسار → bottom-sheet بـ 4 إجراءات:
-  - 📋 طلب جديد → `#/orders`
-  - 👤 عميل جديد → `#/customers`
-  - 💰 دفعة جديدة → `#/payments`
-  - 💸 مصروف جديد → `#/expenses`
+- زر عائم أسفل يسار → bottom-sheet بـ 4 إجراءات.
+- طلب جديد / عميل جديد / دفعة جديدة / مصروف جديد.
 - لا يظهر في `#/tests`.
-- Toast إرشادي بعد كل تنقّل.
-
-**`src/main.js`** — تفعيل بعد Error Handler.
 
 ### 🔴 التحسين 4: Draft Autosave
 
 **`src/services/draft-manager.js`** (جديد):
-- API: `save(key, data, {ttl})`, `get(key)`, `has(key)`, `clear(key)`, `clearAll()`, `list()`.
-- تخزين في `localStorage` (مفتاح `jalabiya_v3_draft_*`).
-- صلاحية افتراضية 24 ساعة — حذف تلقائي عند الانتهاء.
+- حفظ مسودات النماذج في localStorage (TTL 24 ساعة).
+- API: `save()`, `get()`, `has()`, `clear()`, `clearAll()`, `list()`.
 
-**`src/pages/orders.js`** — تفعيل Autosave في `openOrderForm`:
-- استرجاع تلقائي للمسودة عند فتح نموذج جديد.
-- حفظ تلقائي أثناء الكتابة (debounce 500ms).
-- مسح المسودة عند الحفظ الناجح.
+**`src/pages/orders.js`** — تفعيل Autosave في `openOrderForm`.
 
 ### 🛠️ تحسينات جانبية
 
-- **`sw.js`**:
-  - `CACHE_VERSION`: `'v3.0.0-p28'` → `'v3.2.0'`.
-  - إضافة الملفات الجديدة إلى `PRECACHE_URLS`:
-    - `./src/core/error-handler.js`
-    - `./src/ui/fab.js`
-    - `./src/services/draft-manager.js`
+- **`sw.js`**: `CACHE_VERSION` → `'v3.2.0'` + إضافة الملفات الجديدة إلى `PRECACHE_URLS`.
 
 ### 📁 الملفات المتأثرة
 
