@@ -1,10 +1,10 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD كامل + كل الميزات)
+   orders.js — صفحة الطلبات (كل الميزات + 3 طرق عرض)
    ==========================================================================
-   - نموذج متعدد العناصر + خصم + رسوم + مقدم + تاريخ القماش.
-   - معاينة + طباعة + رسائل WhatsApp + مؤقت العمل.
+   - 3 طرق عرض: قائمة / كانبان / تجميع.
+   - نموذج متعدد العناصر + خصم + رسوم + مقدم.
+   - معاينة + طباعة + رسائل + مؤقت + تسليم + توقيع.
    - شارات الموعد + استلام القماش.
-   - زر "✅ تسليم + توقيع" (signature-pad).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -12,6 +12,7 @@ import { uid, formatEGP, formatDate } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
+import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
@@ -29,17 +30,19 @@ let state = {
   customers: [],
   customerMap: {},
   activeFilter: 'all',
+  activeView: 'list',           // 'list' | 'kanban' | 'grouping'
+  groupingConfig: { enabled: false, tolerance: 2, sameTypeOnly: true },
   container: null,
   _timerInterval: null,
 };
 
 /* --- الحالات --- */
 const STATUS_MAP = {
-  pending:     { label: 'قيد الانتظار', badge: 'badge--warning' },
-  in_progress: { label: 'قيد التنفيذ',  badge: 'badge--info'    },
-  ready:       { label: 'جاهز للتسليم', badge: 'badge--accent'  },
-  delivered:   { label: 'تم التسليم',   badge: 'badge--success' },
-  cancelled:   { label: 'ملغي',         badge: 'badge--danger'  },
+  pending:     { label: 'قيد الانتظار', badge: 'badge--warning', color: '#F57C00' },
+  in_progress: { label: 'قيد التنفيذ',  badge: 'badge--info',    color: '#1565C0' },
+  ready:       { label: 'جاهز للتسليم', badge: 'badge--accent',  color: '#6A1B9A' },
+  delivered:   { label: 'تم التسليم',   badge: 'badge--success', color: '#2E7D32' },
+  cancelled:   { label: 'ملغي',         badge: 'badge--danger',  color: '#C62828' },
 };
 
 const STATUS_ORDER = ['pending', 'in_progress', 'ready', 'delivered', 'cancelled'];
@@ -53,12 +56,56 @@ const EXTRA_FEE_TYPES = [
 ];
 
 /* ==========================================================================
-   1. الفلترة
+   1. الفلترة + التجميع
    ========================================================================== */
 
 export function filterOrders(list, filterId) {
   if (filterId === 'all') return list;
   return list.filter((o) => o.status === filterId);
+}
+
+/**
+ * استخراج "نوع" الطلب (اسم البند الأول).
+ * @param {Object} order
+ * @returns {string}
+ */
+function orderType(order) {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return String(order.items[0].name || '').trim() || 'بدون نوع';
+  }
+  return String(order.garmentType || order.notes || 'بدون نوع').trim();
+}
+
+/**
+ * تجميع الطلبات المتشابهة (نفس العميل + نفس النوع).
+ * @param {Array} list — الطلبات النشطة فقط
+ * @returns {Array<{key:string, customerId:string, type:string, orders:Array, totalAmount:number}>}
+ */
+export function groupOrders(list) {
+  const groups = new Map();
+
+  list.forEach((o) => {
+    const cid = o.customerId || 'unknown';
+    const type = orderType(o).toLowerCase();
+    const key = cid + '::' + type;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        customerId: cid,
+        type: orderType(o),
+        orders: [],
+        totalAmount: 0,
+      });
+    }
+    const g = groups.get(key);
+    g.orders.push(o);
+    g.totalAmount += Number(o.amount) || 0;
+  });
+
+  return Array.from(groups.values())
+    .filter((g) => g.orders.length > 1)
+    .sort((a, b) => b.orders.length - a.orders.length);
 }
 
 /* ==========================================================================
@@ -110,19 +157,28 @@ function itemsFromOrder(order) {
    ========================================================================== */
 
 async function loadData() {
-  const [ordersList, customersList] = await Promise.all([
+  const [ordersList, customersList, s] = await Promise.all([
     orders.list(),
     customers.list(),
+    settings.get().catch(() => ({ grouping: {} })),
   ]);
   ordersList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   state.orders = ordersList;
   state.customers = customersList;
   state.customerMap = {};
   customersList.forEach((c) => { state.customerMap[c.id] = c; });
+
+  if (s && s.grouping) {
+    state.groupingConfig = {
+      enabled: !!s.grouping.enabled,
+      tolerance: Number(s.grouping.tolerance) || 2,
+      sameTypeOnly: s.grouping.sameTypeOnly !== false,
+    };
+  }
 }
 
 /* ==========================================================================
-   4. النموذج
+   4. النموذج (كما هو)
    ========================================================================== */
 
 function buildItemRow(item, onRemove) {
@@ -428,7 +484,7 @@ function openOrderForm(existing = null) {
 }
 
 /* ==========================================================================
-   5. حذف + حالة + طباعة + رسالة + مؤقت + تسليم
+   5. عمليات (كما هي)
    ========================================================================== */
 
 async function deleteOrder(order) {
@@ -468,12 +524,7 @@ async function printInvoice(order) {
   catch (err) { console.error('[printInvoice]', err); toast.danger('فشل فتح نافذة الطباعة'); }
 }
 
-/**
- * تسليم الطلب مع توقيع العميل.
- * @param {Object} order
- */
 async function deliverWithSignature(order) {
-  const customer = state.customerMap[order.customerId];
   const confirmed = await modal.confirm({
     title: 'تأكيد التسليم',
     message: 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟',
@@ -486,26 +537,17 @@ async function deliverWithSignature(order) {
     hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
   });
 
-  if (!signature) {
-    toast.info('تم إلغاء التسليم');
-    return;
-  }
+  if (!signature) { toast.info('تم إلغاء التسليم'); return; }
 
   try {
     await orders.update(order.id, {
-      status: 'delivered',
-      signature,
-      deliveredAt: Date.now(),
+      status: 'delivered', signature, deliveredAt: Date.now(),
     });
     toast.success('تم التسليم مع التوقيع ✅');
     await refreshAll();
   } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
 }
 
-/**
- * عرض التوقيع المحفوظ في نافذة.
- * @param {string} dataUrl
- */
 function showSignature(dataUrl) {
   if (!dataUrl) return;
   const body = el('div', {}, [
@@ -520,8 +562,7 @@ function showSignature(dataUrl) {
   ]);
   modal.open({
     title: '✍️ التوقيع المحفوظ',
-    body,
-    closable: true,
+    body, closable: true,
     actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
   });
 }
@@ -540,7 +581,6 @@ async function openMessageMenu(order) {
   }
 
   const body = el('div', {});
-
   body.appendChild(el('div', {
     style: {
       padding: '10px 12px', background: '#F6F1E6', borderRadius: '8px',
@@ -557,7 +597,7 @@ async function openMessageMenu(order) {
       },
     }, opt.text);
 
-    const btn = el('button', {
+    body.appendChild(el('button', {
       type: 'button',
       style: {
         display: 'block', width: '100%', textAlign: 'right',
@@ -570,16 +610,12 @@ async function openMessageMenu(order) {
       el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' } },
         opt.icon + ' ' + opt.name),
       preview,
-    ]);
-
-    body.appendChild(btn);
+    ]));
   });
 
   modal.open({
     title: '📱 إرسال رسالة',
-    body,
-    closable: true,
-    variant: 'sheet',
+    body, closable: true, variant: 'sheet',
     actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
   });
 }
@@ -596,7 +632,7 @@ async function toggleTimer(order) {
 }
 
 /* ==========================================================================
-   6. بطاقة الطلب
+   6. بطاقة الطلب (كما هي)
    ========================================================================== */
 
 function buildOrderCard(o) {
@@ -622,48 +658,34 @@ function buildOrderCard(o) {
     el('span', { className: 'badge ' + statusInfo.badge }, statusInfo.label),
   ];
 
-  /* شارات الحالة الزمنية */
   const badgesRow = el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
   });
 
   if (!isDelivered) {
     badgesRow.appendChild(el('span', {
-      style: {
-        fontSize: '11px', fontWeight: '600',
-        padding: '3px 8px', borderRadius: '10px',
-        color: deadline.color, background: deadline.bg,
-      },
+      style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
+        borderRadius: '10px', color: deadline.color, background: deadline.bg },
     }, deadline.icon + ' ' + deadline.label));
     badgesRow.appendChild(el('span', {
-      style: {
-        fontSize: '11px', fontWeight: '600',
-        padding: '3px 8px', borderRadius: '10px',
-        color: pickup.color, background: pickup.bg,
-      },
+      style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
+        borderRadius: '10px', color: pickup.color, background: pickup.bg },
     }, pickup.icon + ' ' + pickup.label));
   }
 
   if (totalMs > 0 || isRunning) {
     badgesRow.appendChild(el('span', {
       'data-timer-id': o.id,
-      style: {
-        fontSize: '11px', fontWeight: '600',
-        padding: '3px 8px', borderRadius: '10px',
-        color: isRunning ? '#2E7D32' : '#1565C0',
-        background: isRunning ? '#E8F5E9' : '#E3F2FD',
-      },
+      style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
+        borderRadius: '10px', color: isRunning ? '#2E7D32' : '#1565C0',
+        background: isRunning ? '#E8F5E9' : '#E3F2FD' },
     }, (isRunning ? '⏱️ يعمل · ' : '⏱️ ') + formatDuration(totalMs)));
   }
 
-  /* شارة "موقّع" */
   if (o.signature) {
     badgesRow.appendChild(el('span', {
-      style: {
-        fontSize: '11px', fontWeight: '600',
-        padding: '3px 8px', borderRadius: '10px',
-        color: '#2E7D32', background: '#E8F5E9', cursor: 'pointer',
-      },
+      style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
+        borderRadius: '10px', color: '#2E7D32', background: '#E8F5E9', cursor: 'pointer' },
       onClick: (e) => { e.stopPropagation(); showSignature(o.signature); },
     }, '✍️ موقّع'));
   }
@@ -680,17 +702,13 @@ function buildOrderCard(o) {
     onClick: () => previewOrder(o, c, () => openOrderForm(o)),
   }, [
     el('div', {
-      style: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: '8px', marginBottom: '8px',
-      },
+      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '8px', marginBottom: '8px' },
     }, headerChildren),
     badgesRow.children.length > 0 ? badgesRow : null,
     el('div', {
-      style: {
-        display: 'flex', gap: '12px', flexWrap: 'wrap',
-        fontSize: '12px', color: '#666', marginBottom: '8px',
-      },
+      style: { display: 'flex', gap: '12px', flexWrap: 'wrap',
+        fontSize: '12px', color: '#666', marginBottom: '8px' },
     }, metaChildren),
   ]);
 
@@ -700,41 +718,26 @@ function buildOrderCard(o) {
     }, o.notes));
   }
 
-  /* الأزرار */
   const actionChildren = [
-    el('button', {
-      className: 'btn btn--sm btn--secondary',
-      'data-action': 'edit',
-      onClick: () => openOrderForm(o),
-    }, '✏️'),
-    el('button', {
-      className: 'btn btn--sm btn--ghost',
-      'data-action': 'print',
-      title: 'طباعة الفاتورة',
-      onClick: () => printInvoice(o),
-    }, '🖨️'),
-    phone ? el('button', {
-      className: 'btn btn--sm btn--ghost',
-      'data-action': 'message',
-      title: 'إرسال رسالة',
-      onClick: () => openMessageMenu(o),
-    }, '📱') : null,
+    el('button', { className: 'btn btn--sm btn--secondary',
+      onClick: () => openOrderForm(o) }, '✏️'),
+    el('button', { className: 'btn btn--sm btn--ghost',
+      title: 'طباعة الفاتورة', onClick: () => printInvoice(o) }, '🖨️'),
+    phone ? el('button', { className: 'btn btn--sm btn--ghost',
+      title: 'إرسال رسالة', onClick: () => openMessageMenu(o) }, '📱') : null,
   ].filter(Boolean);
 
   if (!isDelivered) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm ' + (isRunning ? 'btn--danger' : 'btn--ghost'),
-      'data-action': 'timer',
       title: isRunning ? 'إيقاف المؤقت' : 'بدء المؤقت',
       onClick: () => toggleTimer(o),
     }, isRunning ? '⏸️' : '⏱️'));
   }
 
-  /* زر تسليم + توقيع — يظهر عندما ready أو in_progress */
   if (canDeliver) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
-      'data-action': 'deliver',
       title: 'تسليم + توقيع',
       onClick: () => deliverWithSignature(o),
     }, '✅ تسليم'));
@@ -743,14 +746,12 @@ function buildOrderCard(o) {
   if (!isDelivered) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
-      'data-action': 'advance',
       onClick: () => advanceStatus(o),
     }, '▶️'));
   }
 
   actionChildren.push(el('button', {
     className: 'btn btn--sm btn--danger',
-    'data-action': 'delete',
     onClick: () => deleteOrder(o),
   }, '🗑️'));
 
@@ -763,7 +764,206 @@ function buildOrderCard(o) {
 }
 
 /* ==========================================================================
-   7. الرسم + المؤقت الحيّ
+   7. بطاقة مصغّرة (للكانبان والتجميع)
+   ========================================================================== */
+
+/**
+ * بطاقة مصغّرة بسيطة (للكانبان والتجميع).
+ * @param {Object} o
+ * @param {Object} [opts]
+ * @returns {HTMLElement}
+ */
+function buildMiniCard(o, opts = {}) {
+  const c = state.customerMap[o.customerId];
+  const name = c ? c.name : 'عميل محذوف';
+  const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
+  const isRunning = getActiveSession(o.workSessions);
+
+  const card = el('div', {
+    className: 'card',
+    style: {
+      marginBottom: '6px', cursor: 'pointer', padding: '8px 10px',
+      borderRight: '3px solid ' + (opts.color || '#1F6D57'),
+    },
+    onClick: () => previewOrder(o, c, () => openOrderForm(o)),
+  });
+
+  card.appendChild(el('div', {
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      gap: '6px', marginBottom: '4px' },
+  }, [
+    el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#123C2F',
+      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '1' } },
+      name),
+    isRunning ? el('span', { style: { fontSize: '11px', color: '#2E7D32' } }, '⏱️') : null,
+  ]));
+
+  card.appendChild(el('div', {
+    style: { fontSize: '11px', color: '#666', display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  }, [
+    o.amount ? el('span', {}, formatEGP(o.amount)) : null,
+    o.dueDate ? el('span', {}, '📅 ' + formatDate(o.dueDate)) : null,
+    itemsCount > 0 ? el('span', {}, '📦 ' + itemsCount) : null,
+  ].filter(Boolean)));
+
+  return card;
+}
+
+/* ==========================================================================
+   8. عرض الكانبان
+   ========================================================================== */
+
+function renderKanban() {
+  const wrap = state.container?.querySelector('#orders-list');
+  if (!wrap) return;
+  clear(wrap);
+
+  /* على الجوال: عمود واحد قابل للتمرير الأفقي */
+  const board = el('div', {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))',
+      gap: '8px',
+      overflowX: 'auto',
+      paddingBottom: '12px',
+    },
+  });
+
+  STATUS_ORDER.forEach((status) => {
+    const sInfo = STATUS_MAP[status];
+    const items = state.orders.filter((o) => o.status === status);
+
+    const column = el('div', {
+      style: {
+        background: '#F6F1E6', borderRadius: '12px',
+        padding: '10px', minHeight: '200px',
+      },
+    });
+
+    column.appendChild(el('div', {
+      style: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: '8px', paddingBottom: '6px',
+        borderBottom: '2px solid ' + sInfo.color,
+      },
+    }, [
+      el('span', { style: { fontSize: '13px', fontWeight: '700', color: sInfo.color } },
+        sInfo.label),
+      el('span', {
+        style: { fontSize: '11px', fontWeight: '600', color: '#fff',
+          background: sInfo.color, padding: '2px 8px', borderRadius: '10px' },
+      }, String(items.length)),
+    ]));
+
+    if (items.length === 0) {
+      column.appendChild(el('div', {
+        style: { fontSize: '11px', color: '#999', textAlign: 'center', padding: '20px 0' },
+      }, 'لا يوجد'));
+    } else {
+      items.slice(0, 30).forEach((o) => {
+        column.appendChild(buildMiniCard(o, { color: sInfo.color }));
+      });
+      if (items.length > 30) {
+        column.appendChild(el('div', {
+          style: { fontSize: '11px', color: '#999', textAlign: 'center', padding: '4px' },
+        }, '+ ' + (items.length - 30) + ' طلب آخر'));
+      }
+    }
+
+    board.appendChild(column);
+  });
+
+  wrap.appendChild(board);
+}
+
+/* ==========================================================================
+   9. عرض التجميع
+   ========================================================================== */
+
+function renderGrouping() {
+  const wrap = state.container?.querySelector('#orders-list');
+  if (!wrap) return;
+  clear(wrap);
+
+  const active = state.orders.filter((o) =>
+    o.status !== 'delivered' && o.status !== 'cancelled'
+  );
+  const groups = groupOrders(active);
+
+  if (groups.length === 0) {
+    wrap.appendChild(el('div', { className: 'empty-state' }, [
+      el('div', { className: 'empty-state__icon' }, '🎯'),
+      el('h2', { className: 'empty-state__title' }, 'لا توجد مجموعات'),
+      el('p', { className: 'empty-state__text' },
+        'لم يتم العثور على طلبات متشابهة (نفس العميل + نفس النوع).'),
+    ]));
+    return;
+  }
+
+  groups.forEach((g) => {
+    const c = state.customerMap[g.customerId];
+    const customerName = c ? c.name : 'عميل محذوف';
+
+    const card = el('div', {
+      className: 'card',
+      style: { marginBottom: '12px', borderRight: '4px solid #1F6D57' },
+    });
+
+    /* رأس المجموعة */
+    card.appendChild(el('div', {
+      style: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        gap: '8px', marginBottom: '10px', paddingBottom: '8px',
+        borderBottom: '1px solid #E5DDD0',
+      },
+    }, [
+      el('div', { style: { flex: '1', minWidth: '0' } }, [
+        el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } },
+          '👤 ' + customerName),
+        el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } },
+          '📦 ' + g.type + ' — ' + g.orders.length + ' طلب'),
+      ]),
+      el('div', { style: { textAlign: 'left' } }, [
+        el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#2E7D32' } },
+          formatEGP(g.totalAmount)),
+        el('span', {
+          style: { fontSize: '10px', fontWeight: '600', color: '#1F6D57',
+            background: '#E8F5E9', padding: '2px 8px', borderRadius: '10px' },
+        }, '🎯 قابلة للتجميع'),
+      ]),
+    ]));
+
+    /* الطلبات داخل المجموعة */
+    g.orders.forEach((o) => {
+      const sInfo = STATUS_MAP[o.status] || STATUS_MAP.pending;
+      card.appendChild(el('div', {
+        style: {
+          padding: '8px 10px', background: '#F9F6EF',
+          borderRadius: '8px', marginBottom: '6px',
+          cursor: 'pointer',
+        },
+        onClick: () => previewOrder(o, c, () => openOrderForm(o)),
+      }, [
+        el('div', { style: { display: 'flex', justifyContent: 'space-between',
+          gap: '8px', marginBottom: '4px' } }, [
+          el('span', { style: { fontSize: '12px', fontWeight: '500', color: '#123C2F' } },
+            '#' + String(o.id).slice(-6)),
+          el('span', { className: 'badge ' + sInfo.badge }, sInfo.label),
+        ]),
+        el('div', { style: { fontSize: '11px', color: '#666', display: 'flex',
+          gap: '8px', flexWrap: 'wrap' } }, [
+          o.amount ? el('span', {}, formatEGP(o.amount)) : null,
+          o.dueDate ? el('span', {}, '📅 ' + formatDate(o.dueDate)) : null,
+        ].filter(Boolean)),
+      ]));
+    });
+
+    wrap.appendChild(card);
+  });
+}
+
+/* ==========================================================================
+   10. الرسم الرئيسي + طرق العرض
    ========================================================================== */
 
 function renderStats() {
@@ -797,10 +997,47 @@ function renderStats() {
   ]));
 }
 
+/**
+ * شريط تبديل طريقة العرض.
+ * @returns {HTMLElement}
+ */
+function buildViewToggle() {
+  const wrap = el('div', {
+    style: {
+      display: 'flex', gap: '4px', marginBottom: '12px',
+      background: '#F6F1E6', padding: '4px', borderRadius: '10px',
+    },
+  });
+
+  const views = [
+    { id: 'list',     icon: '📋', label: 'قائمة' },
+    { id: 'kanban',   icon: '🗂️', label: 'كانبان' },
+    { id: 'grouping', icon: '🎯', label: 'تجميع' },
+  ];
+
+  views.forEach((v) => {
+    const isActive = state.activeView === v.id;
+    wrap.appendChild(el('button', {
+      type: 'button',
+      className: 'btn btn--sm ' + (isActive ? 'btn--primary' : 'btn--ghost'),
+      style: { flex: '1' },
+      onClick: () => {
+        state.activeView = v.id;
+        renderView();
+      },
+    }, v.icon + ' ' + v.label));
+  });
+
+  return wrap;
+}
+
 function renderFilters() {
   const wrap = state.container?.querySelector('#orders-filters');
   if (!wrap) return;
   clear(wrap);
+
+  /* في كانبان/تجميع، لا نُظهر الفلاتر (تقسيم الحالات ضمني) */
+  if (state.activeView !== 'list') return;
 
   const counts = { all: state.orders.length };
   STATUS_ORDER.forEach((s) => { counts[s] = 0; });
@@ -816,7 +1053,6 @@ function renderFilters() {
     wrap.appendChild(el('button', {
       type: 'button',
       className: 'btn btn--sm ' + (isActive ? 'btn--primary' : 'btn--ghost'),
-      'data-filter': it.id,
       style: { marginInlineEnd: '4px', marginBottom: '4px' },
       onClick: () => {
         state.activeFilter = it.id;
@@ -846,6 +1082,28 @@ function renderList() {
   filtered.forEach((o) => listContainer.appendChild(buildOrderCard(o)));
 }
 
+/**
+ * إعادة رسم طريقة العرض الحالية.
+ */
+function renderView() {
+  /* تحديث أزرار التبديل */
+  const toggleWrap = state.container.querySelector('#orders-view-toggle');
+  if (toggleWrap) {
+    clear(toggleWrap);
+    toggleWrap.appendChild(buildViewToggle());
+  }
+
+  renderFilters();
+
+  if (state.activeView === 'kanban') renderKanban();
+  else if (state.activeView === 'grouping') renderGrouping();
+  else renderList();
+}
+
+/* ==========================================================================
+   11. المؤقت الحيّ
+   ========================================================================== */
+
 function startLiveTimer() {
   stopLiveTimer();
   state._timerInterval = setInterval(() => {
@@ -871,13 +1129,12 @@ function stopLiveTimer() {
 async function refreshAll() {
   await loadData();
   renderStats();
-  renderFilters();
-  renderList();
+  renderView();
   startLiveTimer();
 }
 
 /* ==========================================================================
-   8. API
+   12. API
    ========================================================================== */
 
 export const ordersPage = {
@@ -885,6 +1142,7 @@ export const ordersPage = {
     clear(container);
     state.container = container;
     state.activeFilter = 'all';
+    state.activeView = 'list';
 
     container.appendChild(el('div', {
       id: 'orders-stats',
@@ -897,11 +1155,11 @@ export const ordersPage = {
       onClick: () => openOrderForm(),
     }, '➕ إضافة طلب'));
 
+    container.appendChild(el('div', { id: 'orders-view-toggle' }));
     container.appendChild(el('div', {
       id: 'orders-filters',
       style: { display: 'flex', flexWrap: 'wrap', marginBottom: '12px' },
     }));
-
     container.appendChild(el('div', { id: 'orders-list' }));
 
     await refreshAll();
@@ -911,8 +1169,9 @@ export const ordersPage = {
     stopLiveTimer();
     state = {
       orders: [], customers: [], customerMap: {},
-      activeFilter: 'all', container: null,
-      _timerInterval: null,
+      activeFilter: 'all', activeView: 'list',
+      groupingConfig: { enabled: false, tolerance: 2, sameTypeOnly: true },
+      container: null, _timerInterval: null,
     };
   },
 };
