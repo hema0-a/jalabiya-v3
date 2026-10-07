@@ -5,6 +5,7 @@
    - صفحة الاختبارات متاحة عبر #/tests (أداة تطوير — لا تظهر في السايدبار).
    - معالج الأخطاء العالمي مُفعَّل لالتقاط أخطاء التشغيل.
    - FAB (إجراءات سريعة) مُفعَّل على كل الصفحات عدا #/tests.
+   - الوضع الليلي (Dark Mode) مع حفظ التفضيل.
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
@@ -30,6 +31,7 @@ let toggleClientMode, isClientMode, applyClientMode;
 let startNotificationCheck;
 let installErrorHandler;
 let mountFab;
+let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -43,6 +45,7 @@ try {
   ({ startAutoCheck: startNotificationCheck } = await import('./services/notifications.js'));
   ({ install: installErrorHandler } = await import('./core/error-handler.js'));
   ({ mount: mountFab } = await import('./ui/fab.js'));
+  ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -170,11 +173,26 @@ function buildClientModeAction() {
   };
 }
 
+/* --- زر الوضع الليلي --- */
+function buildThemeAction() {
+  const dark = document.body.classList.contains('dark-mode');
+  return {
+    id: 'theme',
+    icon: dark ? '☀️' : '🌙',
+    label: dark ? 'الوضع النهاري' : 'الوضع الليلي',
+    onClick: () => {
+      const nowDark = toggleTheme();
+      layout.topbar.setActions(buildTopbarActions());
+      toast.info(nowDark ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري');
+    },
+  };
+}
+
 function buildTopbarActions() {
   return [
     { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
     buildClientModeAction(),
-    { id: 'theme', icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
+    buildThemeAction(),
   ];
 }
 
@@ -208,6 +226,17 @@ try {
   }
 } catch (err) {
   console.warn('[ErrorHandler] فشل التثبيت:', err);
+}
+
+/* 🌙 تفعيل الوضع الليلي — قبل أي رسم للصفحات */
+try {
+  if (typeof applyTheme === 'function') {
+    applyTheme();
+    /* إعادة بناء أزرار Topbar بعد التطبيق (لضبط الأيقونة) */
+    layout.topbar.setActions(buildTopbarActions());
+  }
+} catch (err) {
+  console.warn('[Theme] فشل التطبيق:', err);
 }
 
 /* ⚡ FAB — إجراءات سريعة على كل الصفحات عدا #/tests */
