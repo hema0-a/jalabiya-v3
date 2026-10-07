@@ -5,6 +5,7 @@
    - كل صنف: name, category, quantity, minQuantity, price, unit, notes.
    - إحصائيات: عدد + قيمة المخزون + نواقص.
    - Quick Preview.
+   - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -14,6 +15,10 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewInventory } from '../ui/quick-preview.js';
 import { formatEGP } from '../core/utils.js';
+import * as draft from '../services/draft-manager.js';
+
+/* --- مفتاح المسودة --- */
+const DRAFT_KEY = 'inventory-form';
 
 /* --- الفئات (7) --- */
 const CATEGORIES = [
@@ -146,6 +151,7 @@ function openItemForm(existing = null) {
           try {
             if (isEdit) { await inventory.update(existing.id, data); toast.success('تم التحديث'); }
             else { await inventory.create(data); toast.success('تم الإضافة'); }
+            draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
           } catch (err) { toast.danger('فشل: ' + err.message); }
@@ -153,6 +159,63 @@ function openItemForm(existing = null) {
       },
     ],
   });
+
+  /* --- 📝 Autosave: حفظ + استرجاع المسودة (فقط للنماذج الجديدة) --- */
+  if (!isEdit) {
+    /* 1. استرجاع المسودة إن وُجدت */
+    const savedDraft = draft.get(DRAFT_KEY);
+    if (savedDraft && typeof savedDraft === 'object') {
+      try {
+        if (typeof savedDraft.name === 'string') nameInput.value = savedDraft.name;
+        if (savedDraft.category) categorySelect.value = savedDraft.category;
+        if (savedDraft.quantity != null) qtyInput.value = String(savedDraft.quantity);
+        if (savedDraft.minQuantity != null) minQtyInput.value = String(savedDraft.minQuantity);
+        if (savedDraft.price != null) priceInput.value = String(savedDraft.price);
+        if (typeof savedDraft.unit === 'string') unitInput.value = savedDraft.unit;
+        if (typeof savedDraft.notes === 'string') notesInput.value = savedDraft.notes;
+
+        toast.info('📝 تم استرجاع مسودة سابقة');
+      } catch (e) {
+        console.warn('[InventoryForm] draft restore failed:', e);
+      }
+    }
+
+    /* 2. حفظ تلقائي أثناء الكتابة (debounce 500ms) */
+    let _saveTimer = null;
+    const scheduleSave = () => {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => {
+        try {
+          const payload = {
+            name: nameInput.value,
+            category: categorySelect.value,
+            quantity: Number(qtyInput.value) || 0,
+            minQuantity: Number(minQtyInput.value) || 0,
+            price: Number(priceInput.value) || 0,
+            unit: unitInput.value,
+            notes: notesInput.value,
+          };
+          draft.save(DRAFT_KEY, payload);
+        } catch (e) {
+          console.warn('[InventoryForm] draft save failed:', e);
+        }
+      }, 500);
+    };
+
+    /* ربط المراقبة بمحتوى النموذج */
+    body.addEventListener('input', scheduleSave);
+    body.addEventListener('change', scheduleSave);
+
+    /* حفظ أولي بعد فتح النموذج بلحظة */
+    setTimeout(scheduleSave, 100);
+
+    /* حفظ عند إغلاق النافذة */
+    const origHandleClose = handle.close;
+    handle.close = function () {
+      try { scheduleSave(); } catch { /* ignore */ }
+      return origHandleClose.apply(this, arguments);
+    };
+  }
 }
 
 /* ==========================================================================
