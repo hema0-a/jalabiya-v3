@@ -1,5 +1,5 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + Ctrl+K
+   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup
    ==========================================================================
    Service Worker معطَّل مؤقتاً أثناء التطوير (V3.1 يُعيد تفعيله).
    ⚠️ صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
@@ -21,13 +21,14 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-let el, toast, createLayout, events, openUniversalSearch;
+let el, toast, createLayout, events, openUniversalSearch, runAutoBackupIfDue;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
   ({ events } = await import('./core/events.js'));
   ({ openUniversalSearch } = await import('./ui/universal-search.js'));
+  ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -191,21 +192,11 @@ function buildPlaceholderPage(title, icon) {
 
 const PLACEHOLDER_PAGES = {};
 
-/**
- * استخراج المسار الأساسي من الـ hash الكامل.
- * @param {string} fullRoute
- * @returns {string}
- */
 function getBaseRoute(fullRoute) {
   const s = String(fullRoute || '').replace(/^#\/?/, '');
   return s.split('/')[0] || 'dashboard';
 }
 
-/**
- * استخراج المسار الفرعي من الـ hash الكامل.
- * @param {string} fullRoute
- * @returns {string|null}
- */
 function getSubRoute(fullRoute) {
   const s = String(fullRoute || '').replace(/^#\/?/, '');
   const parts = s.split('/');
@@ -261,4 +252,25 @@ window.addEventListener('hashchange', () => {
   renderPage(getHashPage());
 });
 
+/* ⚡ تشغيل أولي */
 renderPage(getHashPage());
+
+/* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين من فتح التطبيق (لا يُعطّل البدء) */
+setTimeout(() => {
+  (async () => {
+    try {
+      const res = await runAutoBackupIfDue();
+      if (res && res.ran) {
+        console.log('[AutoBackup] ✅ تم إنشاء نسخة:', res.id, '(' + (res.sizeKB || 0) + ' KB)');
+      } else if (res && res.reason === 'not-due') {
+        console.log('[AutoBackup] ℹ️ غير مستحق بعد');
+      } else if (res && res.reason === 'disabled') {
+        console.log('[AutoBackup] ⏸️ معطَّل من الإعدادات');
+      } else {
+        console.log('[AutoBackup] ⚠️ لم يُنشأ:', res && res.reason);
+      }
+    } catch (err) {
+      console.warn('[AutoBackup] ❌ فشل:', err);
+    }
+  })();
+}, 2000);
