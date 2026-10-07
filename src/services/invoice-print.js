@@ -1,11 +1,12 @@
 /* ==========================================================================
    invoice-print.js — طباعة فواتير + كشوف حساب
    ==========================================================================
-   - printOrderInvoice(order, customer) — فاتورة طلب (A4)
-   - printCustomerStatement(customer, orders, payments) — كشف حساب عميل
+   - printOrderInvoice(order, customer) — فاتورة A4 (بنود متعددة + خصم + رسوم).
+   - printCustomerStatement(customer, orders, payments) — كشف حساب عميل.
    - يفتح نافذة جديدة + window.print() (مع زر إغلاق).
    - يقرأ بيانات الورشة من settings (name, logo, address, phone, whatsapp).
    - خط IBM Plex Sans Arabic + تصميم RTL احترافي.
+   - توافق خلفي مع الطلبات القديمة (amount فقط).
    ========================================================================== */
 
 import { settings } from '../data/repos/settings.js';
@@ -35,6 +36,15 @@ const STATUS_LABELS = {
   cancelled:   { label: 'ملغي', cls: 'cancelled' },
 };
 
+/** خرائط الرسوم الإضافية. */
+const FEE_TYPE_LABELS = {
+  urgency:   '⚡ استعجال',
+  modify:    '✏️ تعديلات',
+  delivery:  '🚚 توصيل',
+  packaging: '📦 تغليف مميز',
+  other:     '📌 أخرى',
+};
+
 /**
  * قراءة بيانات الورشة من الإعدادات.
  * @returns {Promise<Object>}
@@ -46,6 +56,26 @@ async function getWorkshop() {
   } catch {
     return {};
   }
+}
+
+/**
+ * تحويل الطلب إلى قائمة بنود (يدعم items أو amount القديم).
+ * @param {Object} order
+ * @returns {Array<{name:string, price:number, quantity:number}>}
+ */
+function orderItems(order) {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return order.items.map((it) => ({
+      name: it.name || 'بند',
+      price: Number(it.price) || 0,
+      quantity: Number(it.quantity) || 1,
+    }));
+  }
+  return [{
+    name: order.notes || order.garmentType || 'طلب جلابية',
+    price: Number(order.amount) || 0,
+    quantity: Number(order.quantity) || 1,
+  }];
 }
 
 /* ==========================================================
@@ -100,10 +130,13 @@ th {
 td { padding: 10px 8px; border-bottom: 1px solid #E5DDD0; font-size: 13px; }
 tr:last-child td { border-bottom: none; }
 .totals { margin-top: 16px; display: flex; justify-content: flex-end; }
-.totals-table { width: 340px; border: 1px solid #E5DDD0; border-radius: 8px; overflow: hidden; }
+.totals-table { width: 380px; border: 1px solid #E5DDD0; border-radius: 8px; overflow: hidden; }
 .totals-table td { padding: 8px 12px; }
 .totals-table tr.grand td { background: #1F6D57; color: #fff; font-weight: 700; font-size: 15px; }
 .totals-table tr.highlight td { background: #FFF3E0; color: #E65100; font-weight: 700; }
+.totals-table tr.discount td { color: #C62828; }
+.totals-table tr.fees td { color: #F57C00; }
+.totals-table tr.deposit td { color: #2E7D32; }
 .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
 .badge.pending { background: #FFF3E0; color: #F57C00; }
 .badge.in_progress { background: #E3F2FD; color: #1565C0; }
@@ -236,11 +269,12 @@ function buildFooter(workshop) {
 }
 
 /* ==========================================================
-   5. printOrderInvoice — فاتورة طلب
+   5. printOrderInvoice — فاتورة طلب (متعددة البنود)
    ========================================================== */
 
 /**
  * طباعة فاتورة A4 لطلب واحد.
+ * يدعم البنود المتعددة + الخصم + الرسوم الإضافية + المقدم.
  * @param {Object} order — سجل الطلب
  * @param {Object} [customer] — سجل العميل (اختياري)
  * @returns {Promise<void>}
@@ -250,26 +284,18 @@ export async function printOrderInvoice(order, customer) {
 
   const workshop = await getWorkshop();
 
-  /* استخراج البنود — يدعم items (للمستقبل) أو amount (الحالي) */
-  let items;
-  if (Array.isArray(order.items) && order.items.length > 0) {
-    items = order.items.map((it) => ({
-      name: it.name || it.garmentType || 'بند',
-      qty: Number(it.quantity) || 1,
-      price: Number(it.price) || 0,
-    }));
-  } else {
-    items = [{
-      name: order.notes || order.garmentType || 'طلب جلابية',
-      qty: Number(order.quantity) || 1,
-      price: Number(order.amount) || 0,
-    }];
-  }
+  /* البنود (توافق خلفي) */
+  const items = orderItems(order);
 
-  const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
-  const total = Number(order.amount) || subtotal;
+  /* المجاميع */
+  const subtotalFromItems = items.reduce((s, it) => s + it.price * it.quantity, 0);
+  const subtotal = Number(order.subtotal) > 0 ? Number(order.subtotal) : subtotalFromItems;
+  const discountAmount = Number(order.discountAmount) || 0;
+  const extraFeesTotal = Number(order.extraFeesTotal) || 0;
+  const total = Number(order.amount) || 0;
   const deposit = Number(order.deposit) || 0;
   const remaining = Math.max(0, total - deposit);
+
   const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
 
   /* صفوف البنود */
@@ -279,11 +305,72 @@ export async function printOrderInvoice(order, customer) {
       '<tr>' +
         '<td style="text-align:center;color:#999">' + (i + 1) + '</td>' +
         '<td>' + esc(it.name) + '</td>' +
-        '<td style="text-align:center">' + it.qty + '</td>' +
+        '<td style="text-align:center">' + it.quantity + '</td>' +
         '<td style="text-align:center">' + formatEGP(it.price) + '</td>' +
-        '<td style="text-align:center;font-weight:600">' + formatEGP(it.price * it.qty) + '</td>' +
+        '<td style="text-align:center;font-weight:600">' + formatEGP(it.price * it.quantity) + '</td>' +
       '</tr>';
   });
+
+  /* الرسوم الإضافية (بالتفصيل) */
+  let extraFeesRows = '';
+  if (Array.isArray(order.extraFees) && order.extraFees.length > 0) {
+    order.extraFees.forEach((f) => {
+      if (!f.value || f.value <= 0) return;
+      const label = FEE_TYPE_LABELS[f.feeType] || 'رسم';
+      const valStr = (f.type === 'percent')
+        ? (Number(f.value) || 0) + '%'
+        : formatEGP(f.value);
+      extraFeesRows +=
+        '<tr>' +
+          '<td>' + esc(label) + '</td>' +
+          '<td style="text-align:left">' + esc(valStr) + '</td>' +
+        '</tr>';
+    });
+  }
+
+  /* جدول المجاميع */
+  let totalsRows = '';
+  totalsRows +=
+    '<tr><td>المجموع الفرعي</td><td style="text-align:left">' + formatEGP(subtotal) + '</td></tr>';
+
+  if (discountAmount > 0) {
+    const dv = Number(order.discountValue) || 0;
+    const dt = order.discountType || 'fixed';
+    const dvLabel = (dt === 'percent') ? dv + '%' : formatEGP(dv);
+    totalsRows +=
+      '<tr class="discount"><td>خصم (' + esc(dvLabel) + ')</td>' +
+      '<td style="text-align:left">− ' + formatEGP(discountAmount) + '</td></tr>';
+  }
+
+  if (extraFeesTotal > 0) {
+    totalsRows +=
+      '<tr class="fees"><td>رسوم إضافية</td>' +
+      '<td style="text-align:left">+ ' + formatEGP(extraFeesTotal) + '</td></tr>';
+  }
+
+  totalsRows +=
+    '<tr class="' + (deposit > 0 ? '' : (remaining > 0 ? 'highlight' : 'grand')) + '">' +
+      '<td>' + (deposit > 0 ? 'الإجمالي' : (remaining > 0 ? 'المتبقي' : 'مدفوع بالكامل')) + '</td>' +
+      '<td style="text-align:left">' + formatEGP(deposit > 0 ? total : remaining) + '</td>' +
+    '</tr>';
+
+  if (deposit > 0) {
+    totalsRows +=
+      '<tr class="deposit"><td>المقدم</td>' +
+      '<td style="text-align:left">− ' + formatEGP(deposit) + '</td></tr>' +
+      '<tr class="' + (remaining > 0 ? 'highlight' : 'grand') + '">' +
+        '<td>' + (remaining > 0 ? 'المتبقي' : 'مدفوع بالكامل') + '</td>' +
+        '<td style="text-align:left">' + formatEGP(remaining) + '</td>' +
+      '</tr>';
+  }
+
+  /* تفاصيل الرسوم الإضافية */
+  const extraFeesDetail = extraFeesRows
+    ? '<div class="section">' +
+        '<div class="section-title">➕ تفصيل الرسوم الإضافية</div>' +
+        '<table><tbody>' + extraFeesRows + '</tbody></table>' +
+      '</div>'
+    : '';
 
   const html =
     '<div class="invoice">' +
@@ -316,6 +403,9 @@ export async function printOrderInvoice(order, customer) {
           '<div class="info-item"><span class="lbl">الحالة:</span><span class="val">' +
             '<span class="badge ' + statusInfo.cls + '">' + statusInfo.label + '</span>' +
           '</span></div>' +
+          (order.receivedDate
+            ? '<div class="info-item"><span class="lbl">استلام القماش:</span><span class="val">' + esc(formatDate(order.receivedDate)) + '</span></div>'
+            : '') +
           (order.dueDate
             ? '<div class="info-item"><span class="lbl">تاريخ التسليم:</span><span class="val">' + esc(formatDate(order.dueDate)) + '</span></div>'
             : '') +
@@ -324,7 +414,7 @@ export async function printOrderInvoice(order, customer) {
 
       /* البنود */
       '<div class="section">' +
-        '<div class="section-title">📦 البنود</div>' +
+        '<div class="section-title">📦 البنود (' + items.length + ')</div>' +
         '<table>' +
           '<thead><tr>' +
             '<th style="width:40px;text-align:center">#</th>' +
@@ -337,19 +427,19 @@ export async function printOrderInvoice(order, customer) {
         '</table>' +
       '</div>' +
 
+      extraFeesDetail +
+
       /* المجاميع */
       '<div class="totals">' +
-        '<table class="totals-table">' +
-          '<tr><td>الإجمالي</td><td style="text-align:left;font-weight:600">' + formatEGP(total) + '</td></tr>' +
-          (deposit > 0
-            ? '<tr><td>المقدم</td><td style="text-align:left;font-weight:600;color:#2E7D32">' + formatEGP(deposit) + '</td></tr>'
-            : '') +
-          '<tr class="' + (remaining > 0 ? 'highlight' : 'grand') + '">' +
-            '<td>' + (remaining > 0 ? 'المتبقي' : 'مدفوع بالكامل') + '</td>' +
-            '<td style="text-align:left">' + formatEGP(remaining) + '</td>' +
-          '</tr>' +
-        '</table>' +
+        '<table class="totals-table">' + totalsRows + '</table>' +
       '</div>' +
+
+      (order.notes
+        ? '<div class="section" style="margin-top:24px">' +
+            '<div class="section-title">📝 ملاحظات</div>' +
+            '<p style="font-size:13px;color:#666;line-height:1.6">' + esc(order.notes) + '</p>' +
+          '</div>'
+        : '') +
 
       buildFooter(workshop) +
     '</div>';
