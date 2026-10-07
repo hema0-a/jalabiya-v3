@@ -1,5 +1,8 @@
 /* ==========================================================================
    expenses.js — صفحة المصروفات
+   ==========================================================================
+   - CRUD + فلترة بالفترة (أسبوع/شهر/سنة/الكل)
+   - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -8,6 +11,10 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { formatEGP, formatDate } from '../core/utils.js';
+import * as draft from '../services/draft-manager.js';
+
+/* --- مفتاح المسودة --- */
+const DRAFT_KEY = 'expense-form';
 
 let state = { expenses: [], activePeriod: 'month', container: null };
 
@@ -80,6 +87,7 @@ function openExpenseForm(existing = null) {
           try {
             if (isEdit) { await expenses.update(existing.id, data); toast.success('تم التحديث'); }
             else { await expenses.create(data); toast.success('تم الإضافة'); }
+            draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
           } catch (err) { toast.danger('فشل: ' + err.message); }
@@ -87,6 +95,57 @@ function openExpenseForm(existing = null) {
       },
     ],
   });
+
+  /* --- 📝 Autosave: حفظ + استرجاع المسودة (فقط للنماذج الجديدة) --- */
+  if (!isEdit) {
+    /* 1. استرجاع المسودة إن وُجدت */
+    const savedDraft = draft.get(DRAFT_KEY);
+    if (savedDraft && typeof savedDraft === 'object') {
+      try {
+        if (savedDraft.category) categorySelect.value = savedDraft.category;
+        if (savedDraft.amount != null) amountInput.value = String(savedDraft.amount);
+        if (savedDraft.date) dateInput.value = savedDraft.date;
+        if (typeof savedDraft.notes === 'string') notesInput.value = savedDraft.notes;
+
+        toast.info('📝 تم استرجاع مسودة سابقة');
+      } catch (e) {
+        console.warn('[ExpenseForm] draft restore failed:', e);
+      }
+    }
+
+    /* 2. حفظ تلقائي أثناء الكتابة (debounce 500ms) */
+    let _saveTimer = null;
+    const scheduleSave = () => {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => {
+        try {
+          const payload = {
+            category: categorySelect.value,
+            amount: Number(amountInput.value) || 0,
+            date: dateInput.value,
+            notes: notesInput.value,
+          };
+          draft.save(DRAFT_KEY, payload);
+        } catch (e) {
+          console.warn('[ExpenseForm] draft save failed:', e);
+        }
+      }, 500);
+    };
+
+    /* ربط المراقبة بمحتوى النموذج */
+    body.addEventListener('input', scheduleSave);
+    body.addEventListener('change', scheduleSave);
+
+    /* حفظ أولي بعد فتح النموذج بلحظة */
+    setTimeout(scheduleSave, 100);
+
+    /* حفظ عند إغلاق النافذة */
+    const origHandleClose = handle.close;
+    handle.close = function () {
+      try { scheduleSave(); } catch { /* ignore */ }
+      return origHandleClose.apply(this, arguments);
+    };
+  }
 }
 
 async function deleteExpense(e) {
