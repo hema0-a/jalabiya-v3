@@ -5,9 +5,10 @@
      - HTML (navigations): Network-first → fallback لـ index.html
      - Static (CSS/JS/SVG/JSON): Cache-first → ثم network → تخزين
      - External (fonts, Firebase): لا يُخزَّن
+   الإصدار: v3.3.0 (270 اختبار + Error Handler + FAB + Autosave + Dark Mode + Offline Indicator)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.2.0';
+const CACHE_VERSION = 'v3.3.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* --- الأصول المُخزَّنة مسبقاً عند التثبيت --- */
@@ -27,6 +28,8 @@ const PRECACHE_URLS = [
   './src/core/error-handler.js',
   './src/ui/fab.js',
   './src/services/draft-manager.js',
+  './src/ui/theme.js',
+  './src/ui/offline-indicator.js',
 ];
 
 /* ==========================================================================
@@ -76,7 +79,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          /* خزّن نسخة محدَّثة */
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(req, clone));
           return res;
@@ -93,7 +95,6 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(req)
         .then((res) => {
-          /* خزّن فقط الاستجابات الصالحة من نفس الأصل */
           if (res && res.status === 200 && res.type === 'basic') {
             const clone = res.clone();
             caches.open(CACHE_NAME).then((c) => c.put(req, clone));
@@ -101,7 +102,6 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => {
-          /* Offline ولا يوجد كاش */
           return new Response(
             JSON.stringify({ error: 'offline', url: url.pathname }),
             { status: 503, headers: { 'Content-Type': 'application/json' } }
