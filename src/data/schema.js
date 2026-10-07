@@ -1,7 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   v6: إضافة مخزني personalLoans + loanPayments.
+   v8: إضافة مخزن workerPayments (دفعات العمال).
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
@@ -129,7 +129,7 @@ export const SCHEMA = {
       idx('by_createdAt', 'createdAt'),
     ],
   },
-    [STORES.LOAN_PAYMENTS]: {
+  [STORES.LOAN_PAYMENTS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_loanId', 'loanId'),
@@ -142,6 +142,15 @@ export const SCHEMA = {
     indexes: [
       idx('by_referrer', 'referrerName'),
       idx('by_status', 'status'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v8 --- */
+  [STORES.WORKER_PAYMENTS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_workerId', 'workerId'),
+      idx('by_date', 'date'),
       idx('by_createdAt', 'createdAt'),
     ],
   },
