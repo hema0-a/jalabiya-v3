@@ -2,6 +2,10 @@
    sections-system.js — أقسام النظام (6)
    ==========================================================================
    التنبيهات، المواسم والأعياد، الرسائل التلقائية، النسخ، Sync، ضغط الصور
+
+   ⚠️ إصلاح حرج (v3.3.1):
+   - لا spread للمفاتيح القديمة (`...n`, `...am`, `...bk`, `...ic`).
+   - الحفظ بحقل واحد فقط — `settings.update` يدمج مع DB الحيّ.
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
@@ -20,6 +24,7 @@ import {
 /* ==========================================================================
    1. التنبيهات
    ========================================================================== */
+
 const notificationsSection = {
   id: 'notifications',
   icon: '🔔',
@@ -31,7 +36,10 @@ const notificationsSection = {
       const t = createToggle({
         label,
         checked: n[key] !== false,
-        onChange: (v) => saveFn({ notifications: { ...n, [key]: v } }),
+        onChange: (v) => {
+          /* ⚠️ حقل واحد فقط */
+          saveFn({ notifications: { [key]: v } });
+        },
       });
       return el('div', { className: 'settings-row' }, [
         el('div', { style: { flex: '1' } }, [
@@ -54,8 +62,10 @@ const notificationsSection = {
       periodSelect.appendChild(o);
     });
     periodSelect.addEventListener('change', () => {
-      saveFn({ notifications: { ...n, leadDays: Number(periodSelect.value) } });
+      /* ⚠️ حقل واحد فقط */
+      saveFn({ notifications: { leadDays: Number(periodSelect.value) } });
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'فترة التنبيه المسبق'),
       periodSelect,
@@ -66,6 +76,7 @@ const notificationsSection = {
 /* ==========================================================================
    2. المواسم والأعياد
    ========================================================================== */
+
 const occasionsSection = {
   id: 'occasions',
   icon: '🎉',
@@ -87,8 +98,8 @@ const occasionsSection = {
         list.appendChild(el('div', {
           style: {
             display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '8px 10px', background: '#F6F1E6',
-            borderRadius: '8px', opacity: enabled ? '1' : '0.5',
+            padding: '8px 10px', background: '#F6F1E6', borderRadius: '8px',
+            opacity: enabled ? '1' : '0.5',
           },
         }, [
           el('span', { style: { fontSize: '20px' } }, o.icon || '🎉'),
@@ -101,7 +112,8 @@ const occasionsSection = {
             className: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => {
               occasions[idx].enabled = !enabled;
-              saveFn({ occasions });
+              /* ⚠️ مصفوفة — saveFn المصفوفة كاملة */
+              saveFn({ occasions: [...occasions] });
               rebuild();
             },
           }, enabled ? '✅' : '⬜'),
@@ -113,7 +125,7 @@ const occasionsSection = {
             className: 'btn btn--sm btn--danger', type: 'button',
             onClick: () => {
               occasions.splice(idx, 1);
-              saveFn({ occasions });
+              saveFn({ occasions: [...occasions] });
               rebuild();
             },
           }, '🗑️'),
@@ -127,20 +139,36 @@ const occasionsSection = {
       style: { marginTop: '8px' },
       onClick: () => openOccasionForm(occasions, -1, saveFn, rebuild),
     }, '➕ إضافة مناسبة جديدة'));
-
     rebuild();
   },
 };
 
 function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
   const isEdit = editIdx >= 0;
-  const existing = isEdit ? occasions[editIdx] : { month: 1, day: 1, alertDays: 14, recurring: true, enabled: true };
+  const existing = isEdit ? occasions[editIdx] : {
+    month: 1, day: 1, alertDays: 14, recurring: true, enabled: true,
+  };
 
-  const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'مثال: رمضان', value: existing.name || '' });
-  const iconInput = el('input', { className: 'input', type: 'text', placeholder: '🎉', maxLength: 4, value: existing.icon || '🎉' });
-  const monthInput = el('input', { className: 'input', type: 'number', min: '1', max: '12', value: String(existing.month) });
-  const dayInput = el('input', { className: 'input', type: 'number', min: '1', max: '31', value: String(existing.day) });
-  const alertInput = el('input', { className: 'input', type: 'number', min: '1', max: '90', value: String(existing.alertDays) });
+  const nameInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'مثال: رمضان',
+    value: existing.name || '',
+  });
+  const iconInput = el('input', {
+    className: 'input', type: 'text', placeholder: '🎉', maxLength: 4,
+    value: existing.icon || '🎉',
+  });
+  const monthInput = el('input', {
+    className: 'input', type: 'number', min: '1', max: '12',
+    value: String(existing.month),
+  });
+  const dayInput = el('input', {
+    className: 'input', type: 'number', min: '1', max: '31',
+    value: String(existing.day),
+  });
+  const alertInput = el('input', {
+    className: 'input', type: 'number', min: '1', max: '90',
+    value: String(existing.alertDays),
+  });
 
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم المناسبة *'), nameInput]),
@@ -158,8 +186,7 @@ function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
-        text: isEdit ? 'حفظ' : 'إضافة',
-        variant: 'primary', action: 'save',
+        text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
         onClick: () => {
           const name = nameInput.value.trim();
           if (!name) return toast.warning('الاسم مطلوب');
@@ -172,9 +199,12 @@ function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
             recurring: true,
             enabled: isEdit ? (occasions[editIdx].enabled !== false) : true,
           };
-          if (isEdit) occasions[editIdx] = { ...occasions[editIdx], ...data };
-          else occasions.push({ id: 'occ_' + Date.now(), ...data });
-          saveFn({ occasions });
+          if (isEdit) {
+            occasions[editIdx] = { ...occasions[editIdx], ...data };
+          } else {
+            occasions.push({ id: 'occ_' + Date.now(), ...data });
+          }
+          saveFn({ occasions: [...occasions] });
           handle.close();
           rebuild();
         },
@@ -186,12 +216,13 @@ function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
 /* ==========================================================================
    3. الرسائل التلقائية
    ========================================================================== */
+
 const AUTO_MESSAGES = [
-  { id: 'new_order',   name: 'طلب جديد',        text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
-  { id: 'start_work',  name: 'بدء التنفيذ',     text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك.' },
-  { id: 'ready',       name: 'جاهز للتسليم',    text: 'طلبك جاهز للتسليم يا {customer}!' },
-  { id: 'thanks',      name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}!' },
-  { id: 'payment_due', name: 'تذكير بالدفع',    text: 'تذكير ودّي: متبقي عليك {amount} ج.م.' },
+  { id: 'new_order', name: 'طلب جديد', text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
+  { id: 'start_work', name: 'بدء التنفيذ', text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك.' },
+  { id: 'ready', name: 'جاهز للتسليم', text: 'طلبك جاهز للتسليم يا {customer}!' },
+  { id: 'thanks', name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}!' },
+  { id: 'payment_due', name: 'تذكير بالدفع', text: 'تذكير ودّي: متبقي عليك {amount} ج.م.' },
 ];
 
 const autoMessagesSection = {
@@ -201,10 +232,14 @@ const autoMessagesSection = {
   async render(body, currentSettings, saveFn) {
     const am = currentSettings.autoMessages || { enabled: true, templates: {} };
 
+    /* تفعيل عام */
     const mainToggle = createToggle({
       label: 'تفعيل الرسائل التلقائية',
       checked: am.enabled !== false,
-      onChange: (v) => saveFn({ autoMessages: { ...am, enabled: v } }),
+      onChange: (v) => {
+        /* ⚠️ حقل واحد */
+        saveFn({ autoMessages: { enabled: v } });
+      },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'تفعيل الرسائل التلقائية'),
@@ -212,17 +247,20 @@ const autoMessagesSection = {
     ]));
 
     const templates = am.templates || {};
+
     AUTO_MESSAGES.forEach((tpl) => {
       const current = templates[tpl.id] || { enabled: true, text: tpl.text };
 
       const t = createToggle({
-        label: '',
-        checked: current.enabled !== false,
+        label: '', checked: current.enabled !== false,
         onChange: (v) => {
+          /* ⚠️ حقل عميق — نبني templates جديدة */
           saveFn({
             autoMessages: {
-              ...am,
-              templates: { ...templates, [tpl.id]: { ...current, enabled: v } },
+              templates: {
+                ...templates,
+                [tpl.id]: { ...current, enabled: v },
+              },
             },
           });
         },
@@ -231,8 +269,8 @@ const autoMessagesSection = {
       const preview = el('div', {
         style: {
           fontSize: '12px', color: '#666', padding: '8px',
-          background: '#F6F1E6', borderRadius: '6px',
-          marginTop: '6px', lineHeight: '1.5', whiteSpace: 'pre-wrap',
+          background: '#F6F1E6', borderRadius: '6px', marginTop: '6px',
+          lineHeight: '1.5', whiteSpace: 'pre-wrap',
         },
       }, current.text);
 
@@ -241,8 +279,10 @@ const autoMessagesSection = {
         onClick: () => openTemplateEditor(tpl, current, (newText) => {
           saveFn({
             autoMessages: {
-              ...am,
-              templates: { ...templates, [tpl.id]: { ...current, text: newText } },
+              templates: {
+                ...templates,
+                [tpl.id]: { ...current, text: newText },
+              },
             },
           });
           preview.textContent = newText;
@@ -252,10 +292,16 @@ const autoMessagesSection = {
       body.appendChild(el('div', {
         style: {
           padding: '12px', background: '#FFF',
-          border: '1px solid #E5DDD0', borderRadius: '8px', marginBottom: '8px',
+          border: '1px solid #E5DDD0', borderRadius: '8px',
+          marginBottom: '8px',
         },
       }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' } }, [
+        el('div', {
+          style: {
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', marginBottom: '4px',
+          },
+        }, [
           el('span', { style: { fontWeight: '500', fontSize: '14px' } }, tpl.name),
           el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [t, editBtn]),
         ]),
@@ -304,8 +350,9 @@ function openTemplateEditor(tpl, current, onSave) {
 }
 
 /* ==========================================================================
-   4. النسخ الاحتياطي (مُحسَّن)
+   4. النسخ الاحتياطي
    ========================================================================== */
+
 const backupSection = {
   id: 'backup',
   icon: '💾',
@@ -313,7 +360,6 @@ const backupSection = {
   async render(body, currentSettings, saveFn) {
     const bk = currentSettings.backup || DEFAULT_SETTINGS.backup;
 
-    /* --- 1. الإعدادات --- */
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '0 0 8px 0', fontWeight: '600' },
     }, '⚙️ الإعدادات'));
@@ -321,7 +367,10 @@ const backupSection = {
     const autoToggle = createToggle({
       label: 'النسخ التلقائي',
       checked: bk.autoBackup !== false,
-      onChange: (v) => saveFn({ backup: { ...bk, autoBackup: v } }),
+      onChange: (v) => {
+        /* ⚠️ حقل واحد */
+        saveFn({ backup: { autoBackup: v } });
+      },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'النسخ التلقائي'),
@@ -330,22 +379,27 @@ const backupSection = {
 
     const intervalSelect = el('select', { className: 'select' });
     [
-      ['6', 'كل 6 ساعات'], ['12', 'كل 12 ساعة'],
-      ['24', 'كل يوم'], ['48', 'كل يومين'], ['168', 'كل أسبوع'],
+      ['6', 'كل 6 ساعات'],
+      ['12', 'كل 12 ساعة'],
+      ['24', 'كل يوم'],
+      ['48', 'كل يومين'],
+      ['168', 'كل أسبوع'],
     ].forEach(([v, l]) => {
       const o = el('option', { value: v }, l);
       if (String(bk.intervalHours || 24) === v) o.selected = true;
       intervalSelect.appendChild(o);
     });
     intervalSelect.addEventListener('change', () => {
-      saveFn({ backup: { ...bk, intervalHours: Number(intervalSelect.value) } });
+      /* ⚠️ حقل واحد */
+      saveFn({ backup: { intervalHours: Number(intervalSelect.value) } });
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'فترة النسخ التلقائي'),
       intervalSelect,
     ]));
 
-    /* --- 2. زر إنشاء نسخة يدوية --- */
+    /* إنشاء نسخة يدوية */
     const createBtn = el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
       style: { marginTop: '8px' },
@@ -368,7 +422,7 @@ const backupSection = {
     }, '💾 إنشاء نسخة الآن');
     body.appendChild(createBtn);
 
-    /* --- 3. قائمة النسخ --- */
+    /* قائمة النسخ */
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
     }, '📋 النسخ المحفوظة'));
@@ -399,7 +453,6 @@ const backupSection = {
           },
         });
 
-        /* أيقونة + معلومات */
         row.appendChild(el('div', { style: { flex: '1', minWidth: '0' } }, [
           el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#123C2F' } },
             '💾 ' + (b.label || 'نسخة')),
@@ -407,10 +460,8 @@ const backupSection = {
             '📅 ' + formatDate(b.createdAt) + ' · 📦 ' + (b.sizeKB || 0) + ' KB'),
         ]));
 
-        /* زر التحميل */
         row.appendChild(el('button', {
-          className: 'btn btn--sm btn--ghost', type: 'button',
-          title: 'تحميل كملف',
+          className: 'btn btn--sm btn--ghost', type: 'button', title: 'تحميل كملف',
           onClick: async () => {
             const ok = await exportBackupToFile(b.id);
             if (ok) toast.success('تم التحميل');
@@ -418,10 +469,8 @@ const backupSection = {
           },
         }, '⬇️'));
 
-        /* زر الاسترجاع */
         row.appendChild(el('button', {
-          className: 'btn btn--sm btn--secondary', type: 'button',
-          title: 'استرجاع',
+          className: 'btn btn--sm btn--secondary', type: 'button', title: 'استرجاع',
           onClick: async () => {
             const ok = await modal.confirm({
               title: 'استرجاع نسخة احتياطية',
@@ -439,10 +488,8 @@ const backupSection = {
           },
         }, '♻️'));
 
-        /* زر الحذف */
         row.appendChild(el('button', {
-          className: 'btn btn--sm btn--danger', type: 'button',
-          title: 'حذف',
+          className: 'btn btn--sm btn--danger', type: 'button', title: 'حذف',
           onClick: async () => {
             const ok = await modal.confirm({
               title: 'حذف نسخة',
@@ -459,7 +506,6 @@ const backupSection = {
         listWrap.appendChild(row);
       });
 
-      /* زر حذف الكل */
       if (backups.length > 1) {
         listWrap.appendChild(el('button', {
           className: 'btn btn--ghost btn--block', type: 'button',
@@ -481,7 +527,7 @@ const backupSection = {
 
     await renderBackupsList();
 
-    /* --- 4. تصدير / استيراد JSON --- */
+    /* تصدير / استيراد */
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
     }, '📦 تصدير / استيراد JSON (كامل البيانات)'));
@@ -492,13 +538,16 @@ const backupSection = {
       onClick: () => exportAllData(),
     }, '⬇️ تنزيل نسخة JSON'));
 
-    const importInput = el('input', { type: 'file', accept: '.json', style: { display: 'none' } });
+    const importInput = el('input', {
+      type: 'file', accept: '.json', style: { display: 'none' },
+    });
     importInput.addEventListener('change', () => {
       const file = importInput.files[0];
       if (!file) return;
       importAllData(file);
       importInput.value = '';
     });
+
     body.appendChild(el('button', {
       className: 'btn btn--secondary btn--block', type: 'button',
       onClick: () => importInput.click(),
@@ -512,9 +561,9 @@ async function exportAllData() {
     const db = await import('../../data/idb.js');
     const stores = [
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
-      'appointments', 'settings', 'portfolio', 'commitments', 'commitmentPayments',
-      'savingsGoals', 'houseExpenses', 'personalLoans', 'loanPayments',
-      'referrals', 'workerPayments',
+      'appointments', 'settings', 'portfolio', 'commitments',
+      'commitmentPayments', 'savingsGoals', 'houseExpenses',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
     ];
     const data = { version: 9, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
@@ -527,7 +576,9 @@ async function exportAllData() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('تم تنزيل النسخة');
-  } catch (err) { toast.danger('فشل: ' + err.message); }
+  } catch (err) {
+    toast.danger('فشل: ' + err.message);
+  }
 }
 
 async function importAllData(file) {
@@ -537,6 +588,7 @@ async function importAllData(file) {
     confirmText: 'استيراد', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
+
   try {
     const data = JSON.parse(await file.text());
     if (!data || !data.stores) throw new Error('ملف غير صالح');
@@ -544,15 +596,21 @@ async function importAllData(file) {
     let total = 0;
     for (const [sn, recs] of Object.entries(data.stores)) {
       if (!Array.isArray(recs)) continue;
-      for (const r of recs) { await db.put(sn, r); total++; }
+      for (const r of recs) {
+        await db.put(sn, r);
+        total++;
+      }
     }
     toast.success('تم استيراد ' + total + ' عنصر');
-  } catch (err) { toast.danger('فشل: ' + err.message); }
+  } catch (err) {
+    toast.danger('فشل: ' + err.message);
+  }
 }
 
 /* ==========================================================================
    5. المزامنة السحابية
    ========================================================================== */
+
 const cloudSyncSection = {
   id: 'cloud-sync',
   icon: '☁️',
@@ -586,17 +644,23 @@ const cloudSyncSection = {
     const user = await authSync.current();
 
     if (!user) {
-      const emailInput = el('input', { className: 'input', type: 'email', placeholder: 'example@mail.com' });
-      const passInput = el('input', { className: 'input', type: 'password', placeholder: '••••••••' });
-
+      /* نموذج تسجيل الدخول */
+      const emailInput = el('input', {
+        className: 'input', type: 'email', placeholder: 'example@mail.com',
+      });
+      const passInput = el('input', {
+        className: 'input', type: 'password', placeholder: '••••••••',
+      });
       const loginBtn = el('button', {
         className: 'btn btn--primary btn--block', type: 'button',
         onClick: async () => {
           loginBtn.disabled = true;
           loginBtn.textContent = '⏳ جارٍ الدخول...';
           const res = await authSync.login(emailInput.value.trim(), passInput.value);
-          if (res.ok) { toast.success('تم تسجيل الدخول'); await redraw(); }
-          else {
+          if (res.ok) {
+            toast.success('تم تسجيل الدخول');
+            await redraw();
+          } else {
             toast.danger(res.error || 'فشل الدخول');
             loginBtn.disabled = false;
             loginBtn.textContent = '🔓 تسجيل الدخول';
@@ -616,6 +680,7 @@ const cloudSyncSection = {
       return;
     }
 
+    /* مسجل الدخول */
     body.appendChild(el('div', {
       style: {
         padding: '12px', background: '#E8F5E9', borderRadius: '8px',
@@ -635,9 +700,7 @@ const cloudSyncSection = {
         padding: '10px', background: '#F6F1E6', borderRadius: '8px',
         marginBottom: '12px', fontSize: '12px', color: '#123C2F',
       },
-    }, lastSync
-      ? '🕐 آخر مزامنة: ' + new Date(Number(lastSync)).toLocaleString('ar-EG')
-      : '⚠️ لم تتم المزامنة بعد'));
+    }, lastSync ? '🕐 آخر مزامنة: ' + new Date(Number(lastSync)).toLocaleString('ar-EG') : '⚠️ لم تتم المزامنة بعد'));
 
     const pushBtn = el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
@@ -714,6 +777,7 @@ const cloudSyncSection = {
 /* ==========================================================================
    6. ضغط الصور
    ========================================================================== */
+
 const imageCompressionSection = {
   id: 'image-compression',
   icon: '🖼️',
@@ -723,48 +787,3 @@ const imageCompressionSection = {
 
     function selectField(label, key, options, currentValue) {
       const sel = el('select', { className: 'select' });
-      options.forEach(([v, l]) => {
-        const o = el('option', { value: String(v) }, l);
-        if (String(currentValue) === String(v)) o.selected = true;
-        sel.appendChild(o);
-      });
-      sel.addEventListener('change', () => {
-        const val = isNaN(Number(sel.value)) ? sel.value : Number(sel.value);
-        saveFn({ imageCompression: { ...ic, [key]: val } });
-      });
-      return el('div', { className: 'settings-field' }, [
-        el('label', { className: 'settings-field__label' }, label),
-        sel,
-      ]);
-    }
-
-    body.appendChild(selectField('الجودة', 'quality', [
-      ['0.60', '60%'], ['0.75', '75%'], ['0.85', '85%'], ['0.95', '95%'],
-    ], ic.quality));
-
-    body.appendChild(selectField('الحجم الأقصى', 'maxSizeKB', [
-      [200, '200 KB'], [500, '500 KB'], [800, '800 KB'], [1500, '1.5 MB'],
-    ], ic.maxSizeKB));
-
-    body.appendChild(selectField('الأبعاد القصوى', 'maxDimensionPx', [
-      [800, '800 px'], [1200, '1200 px'], [1600, '1600 px'], [2000, '2000 px'],
-    ], ic.maxDimensionPx));
-
-    body.appendChild(el('div', {
-      style: {
-        fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
-      },
-    }, '📊 التوفير المتوقع: ~' + Math.round((1 - (ic.quality || 0.85)) * 100) + '%'));
-  },
-};
-
-/* --- تصدير --- */
-export const SYSTEM_SECTIONS = [
-  notificationsSection,
-  occasionsSection,
-  autoMessagesSection,
-  backupSection,
-  cloudSyncSection,
-  imageCompressionSection,
-];
