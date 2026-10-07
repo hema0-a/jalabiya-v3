@@ -1,7 +1,7 @@
 /* ==========================================================================
    idb.js — غلاف IndexedDB (Promise-based)
    ==========================================================================
-   Migration v7 → v8: إضافة مخزن workerPayments (دفعات العمال).
+   Migration v8 → v9: إضافة مخزن backups.
    ⚠️ لا نلمس المخازن الموجودة.
    ========================================================================== */
 
@@ -131,6 +131,16 @@ export function openDB() {
           });
           store.createIndex('by_workerId', 'workerId');
           store.createIndex('by_date', 'date');
+          store.createIndex('by_createdAt', 'createdAt');
+        }
+      }
+
+      /* --- Migration v8 → v9: إضافة النسخ الاحتياطية --- */
+      if (oldVersion >= 8 && oldVersion < 9) {
+        if (!db.objectStoreNames.contains(STORES.BACKUPS)) {
+          const store = db.createObjectStore(STORES.BACKUPS, {
+            keyPath: 'id', autoIncrement: false,
+          });
           store.createIndex('by_createdAt', 'createdAt');
         }
       }
