@@ -1,5 +1,8 @@
 /* ==========================================================================
    payments.js — صفحة الدفعات (CRUD + ربط الطلب + معاينة)
+   ==========================================================================
+   - CRUD كامل + ربط بعميل وطلب.
+   - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -11,6 +14,10 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
+import * as draft from '../services/draft-manager.js';
+
+/* --- مفتاح المسودة --- */
+const DRAFT_KEY = 'payment-form';
 
 /* --- الحالة --- */
 let state = {
@@ -172,6 +179,7 @@ function openPaymentForm(existing = null) {
           try {
             if (isEdit) { await payments.update(existing.id, data); toast.success('تم التحديث'); }
             else { await payments.create(data); toast.success('تم الإضافة'); }
+            draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
           } catch (err) { toast.danger('فشل: ' + err.message); }
@@ -179,6 +187,66 @@ function openPaymentForm(existing = null) {
       },
     ],
   });
+
+  /* --- 📝 Autosave: حفظ + استرجاع المسودة (فقط للنماذج الجديدة) --- */
+  if (!isEdit) {
+    /* 1. استرجاع المسودة إن وُجدت */
+    const savedDraft = draft.get(DRAFT_KEY);
+    if (savedDraft && typeof savedDraft === 'object') {
+      try {
+        /* العميل أولاً — لأن قائمة الطلبات تعتمد عليه */
+        if (savedDraft.customerId) {
+          customerSelect.value = savedDraft.customerId;
+          refreshOrderOptions();
+        }
+        /* ثم الطلب (بعد تعبئة القائمة) */
+        if (savedDraft.orderId) {
+          orderSelect.value = savedDraft.orderId;
+        }
+        if (savedDraft.amount != null) amountInput.value = String(savedDraft.amount);
+        if (savedDraft.method) methodSelect.value = savedDraft.method;
+        if (typeof savedDraft.notes === 'string') notesInput.value = savedDraft.notes;
+
+        toast.info('📝 تم استرجاع مسودة سابقة');
+      } catch (e) {
+        console.warn('[PaymentForm] draft restore failed:', e);
+      }
+    }
+
+    /* 2. حفظ تلقائي أثناء الكتابة (debounce 500ms) */
+    let _saveTimer = null;
+    const scheduleSave = () => {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => {
+        try {
+          const payload = {
+            customerId: customerSelect.value,
+            orderId: orderSelect.value,
+            amount: Number(amountInput.value) || 0,
+            method: methodSelect.value,
+            notes: notesInput.value,
+          };
+          draft.save(DRAFT_KEY, payload);
+        } catch (e) {
+          console.warn('[PaymentForm] draft save failed:', e);
+        }
+      }, 500);
+    };
+
+    /* ربط المراقبة بمحتوى النموذج */
+    body.addEventListener('input', scheduleSave);
+    body.addEventListener('change', scheduleSave);
+
+    /* حفظ أولي بعد فتح النموذج بلحظة */
+    setTimeout(scheduleSave, 100);
+
+    /* حفظ عند إغلاق النافذة */
+    const origHandleClose = handle.close;
+    handle.close = function () {
+      try { scheduleSave(); } catch { /* ignore */ }
+      return origHandleClose.apply(this, arguments);
+    };
+  }
 }
 
 /* ==========================================================================
