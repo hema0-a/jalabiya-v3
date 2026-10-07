@@ -1,8 +1,9 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD كامل + فلاتر + معاينة + طباعة + رسائل)
+   orders.js — صفحة الطلبات (CRUD + فلاتر + معاينة + طباعة + رسائل + مؤقت)
    ==========================================================================
    - نموذج متعدد العناصر (items[]) + خصم + رسوم + مقدم + تاريخ القماش.
-   - زر 🖨️ طباعة + زر 📱 رسالة (WhatsApp Templates).
+   - زر 🖨️ طباعة + 📱 رسائل + ⏱️ مؤقت العمل.
+   - شارات الموعد (متأخر/اليوم/غداً) + شارة استلام القماش.
    - توافق خلفي مع الطلبات القديمة.
    ========================================================================== */
 
@@ -16,6 +17,15 @@ import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
+import {
+  getDeadlineInfo,
+  getPickupInfo,
+  formatDuration,
+  getTotalWorkTime,
+  getActiveSession,
+  startSession,
+  stopSession,
+} from '../services/order-timing.js';
 
 /* --- الحالة --- */
 let state = {
@@ -24,6 +34,7 @@ let state = {
   customerMap: {},
   activeFilter: 'all',
   container: null,
+  _timerInterval: null,
 };
 
 /* --- الحالات --- */
@@ -421,7 +432,7 @@ function openOrderForm(existing = null) {
 }
 
 /* ==========================================================================
-   5. حذف + تغيير الحالة + طباعة + رسالة
+   5. حذف + حالة + طباعة + رسالة + مؤقت
    ========================================================================== */
 
 async function deleteOrder(order) {
@@ -465,10 +476,6 @@ async function printInvoice(order) {
   }
 }
 
-/**
- * فتح نافذة اختيار قالب الرسالة + إرسال WhatsApp.
- * @param {Object} order
- */
 async function openMessageMenu(order) {
   const customer = state.customerMap[order.customerId];
   if (!customer || !customer.phone) {
@@ -508,14 +515,10 @@ async function openMessageMenu(order) {
         borderRadius: '10px', marginBottom: '8px',
         background: '#fff', cursor: 'pointer', fontFamily: 'inherit',
       },
-      onClick: () => {
-        modal.close();
-        opt.send();
-      },
+      onClick: () => { modal.close(); opt.send(); },
     }, [
-      el('div', {
-        style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' },
-      }, opt.icon + ' ' + opt.name),
+      el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' } },
+        opt.icon + ' ' + opt.name),
       preview,
     ]);
 
@@ -527,12 +530,24 @@ async function openMessageMenu(order) {
     body,
     closable: true,
     variant: 'sheet',
-    actions: [_closeAction()],
+    actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
   });
 }
 
-function _closeAction() {
-  return { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() };
+/**
+ * بدء/إيقاف المؤقت لطلب.
+ * @param {Object} order
+ */
+async function toggleTimer(order) {
+  const sessions = Array.isArray(order.workSessions) ? order.workSessions : [];
+  const isActive = getActiveSession(sessions);
+
+  try {
+    const newSessions = isActive ? stopSession(sessions) : startSession(sessions);
+    await orders.update(order.id, { workSessions: newSessions });
+    toast.info(isActive ? 'تم إيقاف المؤقت' : 'بدأ المؤقت ⏱️');
+    await refreshAll();
+  } catch (err) { toast.danger('فشل: ' + err.message); }
 }
 
 /* ==========================================================================
@@ -546,6 +561,15 @@ function buildOrderCard(o) {
   const statusInfo = STATUS_MAP[o.status] || { label: o.status, badge: 'badge--info' };
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
 
+  /* --- معلومات التوقيت --- */
+  const isDelivered = o.status === 'delivered' || o.status === 'cancelled';
+  const deadline = getDeadlineInfo(o.dueDate);
+  const pickup = getPickupInfo(o.receivedDate);
+  const sessions = Array.isArray(o.workSessions) ? o.workSessions : [];
+  const isRunning = getActiveSession(sessions);
+  const totalMs = getTotalWorkTime(sessions);
+
+  /* --- الرأس --- */
   const headerChildren = [
     el('div', { style: { flex: '1', minWidth: '0' } }, [
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
@@ -554,11 +578,50 @@ function buildOrderCard(o) {
     el('span', { className: 'badge ' + statusInfo.badge }, statusInfo.label),
   ];
 
+  /* --- شارات الحالة الزمنية --- */
+  const badgesRow = el('div', {
+    style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
+  });
+
+  if (!isDelivered) {
+    badgesRow.appendChild(el('span', {
+      style: {
+        fontSize: '11px', fontWeight: '600',
+        padding: '3px 8px', borderRadius: '10px',
+        color: deadline.color, background: deadline.bg,
+      },
+    }, deadline.icon + ' ' + deadline.label));
+  }
+
+  if (!isDelivered) {
+    badgesRow.appendChild(el('span', {
+      style: {
+        fontSize: '11px', fontWeight: '600',
+        padding: '3px 8px', borderRadius: '10px',
+        color: pickup.color, background: pickup.bg,
+      },
+    }, pickup.icon + ' ' + pickup.label));
+  }
+
+  if (totalMs > 0 || isRunning) {
+    badgesRow.appendChild(el('span', {
+      'data-timer-id': o.id,
+      style: {
+        fontSize: '11px', fontWeight: '600',
+        padding: '3px 8px', borderRadius: '10px',
+        color: isRunning ? '#2E7D32' : '#1565C0',
+        background: isRunning ? '#E8F5E9' : '#E3F2FD',
+      },
+    }, (isRunning ? '⏱️ يعمل · ' : '⏱️ ') + formatDuration(totalMs)));
+  }
+
+  /* --- بيانات أساسية --- */
   const metaChildren = [];
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
   if (itemsCount > 0) metaChildren.push(el('span', {}, '📦 ' + itemsCount + ' بند'));
 
+  /* --- البطاقة --- */
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '8px', cursor: 'pointer' },
@@ -571,6 +634,7 @@ function buildOrderCard(o) {
         gap: '8px', marginBottom: '8px',
       },
     }, headerChildren),
+    badgesRow.children.length > 0 ? badgesRow : null,
     el('div', {
       style: {
         display: 'flex', gap: '12px', flexWrap: 'wrap',
@@ -585,6 +649,7 @@ function buildOrderCard(o) {
     }, o.notes));
   }
 
+  /* --- الأزرار --- */
   const actionChildren = [
     el('button', {
       className: 'btn btn--sm btn--secondary',
@@ -605,13 +670,24 @@ function buildOrderCard(o) {
     }, '📱') : null,
   ].filter(Boolean);
 
-  if (o.status !== 'delivered' && o.status !== 'cancelled') {
+  /* زر المؤقت — للطلبات غير المُسلَّمة */
+  if (!isDelivered) {
+    actionChildren.push(el('button', {
+      className: 'btn btn--sm ' + (isRunning ? 'btn--danger' : 'btn--primary'),
+      'data-action': 'timer',
+      title: isRunning ? 'إيقاف المؤقت' : 'بدء المؤقت',
+      onClick: () => toggleTimer(o),
+    }, isRunning ? '⏸️' : '⏱️'));
+  }
+
+  if (!isDelivered) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
       'data-action': 'advance',
       onClick: () => advanceStatus(o),
     }, '▶️'));
   }
+
   actionChildren.push(el('button', {
     className: 'btn btn--sm btn--danger',
     'data-action': 'delete',
@@ -627,7 +703,7 @@ function buildOrderCard(o) {
 }
 
 /* ==========================================================================
-   7. الرسم
+   7. الرسم + المؤقت الحيّ
    ========================================================================== */
 
 function renderStats() {
@@ -710,11 +786,37 @@ function renderList() {
   filtered.forEach((o) => listContainer.appendChild(buildOrderCard(o)));
 }
 
+/**
+ * تحديث المؤقتات الحية كل ثانية.
+ */
+function startLiveTimer() {
+  stopLiveTimer();
+  state._timerInterval = setInterval(() => {
+    if (!state.container) return;
+    state.orders.forEach((o) => {
+      const sessions = Array.isArray(o.workSessions) ? o.workSessions : [];
+      if (!getActiveSession(sessions)) return;
+      const badge = state.container.querySelector('[data-timer-id="' + o.id + '"]');
+      if (!badge) return;
+      const totalMs = getTotalWorkTime(sessions);
+      badge.textContent = '⏱️ يعمل · ' + formatDuration(totalMs);
+    });
+  }, 1000);
+}
+
+function stopLiveTimer() {
+  if (state._timerInterval) {
+    clearInterval(state._timerInterval);
+    state._timerInterval = null;
+  }
+}
+
 async function refreshAll() {
   await loadData();
   renderStats();
   renderFilters();
   renderList();
+  startLiveTimer();
 }
 
 /* ==========================================================================
@@ -749,6 +851,11 @@ export const ordersPage = {
   },
 
   destroy() {
-    state = { orders: [], customers: [], customerMap: {}, activeFilter: 'all', container: null };
+    stopLiveTimer();
+    state = {
+      orders: [], customers: [], customerMap: {},
+      activeFilter: 'all', container: null,
+      _timerInterval: null,
+    };
   },
 };
