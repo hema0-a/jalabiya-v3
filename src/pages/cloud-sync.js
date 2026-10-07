@@ -2,7 +2,7 @@
    cloud-sync.js — صفحة المزامنة السحابية
    ==========================================================================
    - حالة Firebase + حالة الاتصال.
-   - تسجيل دخول / خروج (Email + Password).
+   - تسجيل دخول / خروج (Email + Password) مع استماع تلقائي للجلسة.
    - رفع / تنزيل البيانات.
    - آخر مزامنة.
    - يعتمد على: sync/firebase-config.js + sync/auth-sync.js + sync/firestore-sync.js
@@ -21,16 +21,15 @@ let state = {
   user: null,
   lastSyncAt: null,
   online: true,
+  _unsubAuth: null,
+  _unsubOnline: null,
+  _unsubOffline: null,
 };
 
 /* ==========================================================================
    1. أدوات
    ========================================================================== */
 
-/**
- * قراءة آخر وقت مزامنة من localStorage.
- * @returns {number|null}
- */
 function readLastSync() {
   try {
     const v = localStorage.getItem(STORAGE_KEYS.V3_LAST_SYNC);
@@ -40,20 +39,12 @@ function readLastSync() {
   }
 }
 
-/**
- * حفظ آخر وقت مزامنة.
- */
 function writeLastSync() {
   try {
     localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
   } catch (e) { /* ignore */ }
 }
 
-/**
- * تنسيق تاريخ عربي كامل.
- * @param {number} ts
- * @returns {string}
- */
 function formatDateTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
@@ -64,21 +55,7 @@ function formatDateTime(ts) {
 }
 
 /* ==========================================================================
-   2. تحميل الحالة
-   ========================================================================== */
-
-async function loadState() {
-  state.online = navigator.onLine;
-  state.lastSyncAt = readLastSync();
-  try {
-    state.user = await authSync.current();
-  } catch {
-    state.user = null;
-  }
-}
-
-/* ==========================================================================
-   3. عمليات
+   2. عمليات
    ========================================================================== */
 
 async function doPush() {
@@ -95,7 +72,8 @@ async function doPush() {
   if (res.ok) {
     writeLastSync();
     toast.success('تم الرفع');
-    await refreshAll();
+    state.lastSyncAt = readLastSync();
+    renderPage();
   } else {
     toast.danger('فشل الرفع: ' + (res.error || 'خطأ غير معروف'));
   }
@@ -123,8 +101,10 @@ async function doPull() {
   const applyRes = await firestoreSync.apply(res.data);
   if (applyRes.ok) {
     writeLastSync();
-    toast.success('تم التنزيل — إعادة تحميل الصفحة...');
-    setTimeout(() => location.reload(), 1200);
+    toast.success('تم التنزيل — افتح أي صفحة لرؤية البيانات');
+    state.lastSyncAt = readLastSync();
+    /* ⚠️ لا نُعيد تحميل الصفحة — لا حاجة، كل صفحة تُحدّث بياناتها عند فتحها */
+    renderPage();
   } else {
     toast.danger('فشل التطبيق: ' + (applyRes.error || 'خطأ غير معروف'));
   }
@@ -136,7 +116,7 @@ async function doLogin(email, password) {
   const res = await authSync.login(email, password);
   if (res.ok) {
     toast.success('تم تسجيل الدخول');
-    await refreshAll();
+    /* onAuthChange سيُحدّث state.user تلقائياً */
   } else {
     toast.danger(res.error || 'فشل الدخول');
   }
@@ -152,14 +132,14 @@ async function doLogout() {
   const res = await authSync.logout();
   if (res.ok) {
     toast.info('تم تسجيل الخروج');
-    await refreshAll();
+    /* onAuthChange سيُحدّث state.user تلقائياً */
   } else {
     toast.danger(res.error || 'فشل الخروج');
   }
 }
 
 /* ==========================================================================
-   4. الرسم
+   3. الرسم
    ========================================================================== */
 
 function buildStatusCards() {
@@ -167,13 +147,8 @@ function buildStatusCards() {
     style: { display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '16px' },
   });
 
-  /* الاتصال */
   wrap.appendChild(el('div', { className: 'card', style: { padding: '12px' } }, [
-    el('div', {
-      style: {
-        display: 'flex', alignItems: 'center', gap: '10px',
-      },
-    }, [
+    el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
       el('span', { style: { fontSize: '24px' } }, state.online ? '🟢' : '🔴'),
       el('div', { style: { flex: '1' } }, [
         el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' } },
@@ -184,7 +159,6 @@ function buildStatusCards() {
     ]),
   ]));
 
-  /* Firebase */
   const configured = authSync.isConfigured();
   wrap.appendChild(el('div', { className: 'card', style: { padding: '12px' } }, [
     el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
@@ -198,7 +172,6 @@ function buildStatusCards() {
     ]),
   ]));
 
-  /* آخر مزامنة */
   wrap.appendChild(el('div', { className: 'card', style: { padding: '12px' } }, [
     el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
       el('span', { style: { fontSize: '24px' } }, '🕐'),
@@ -299,10 +272,8 @@ function renderPage() {
     el('p', { style: { fontSize: '13px', color: '#2E8B6F', margin: '0' } }, 'احفظ بياناتك في السحابة'),
   ]));
 
-  /* الحالة */
   c.appendChild(buildStatusCards());
 
-  /* Firebase غير مُهيّأ → توقف هنا */
   if (!authSync.isConfigured()) {
     c.appendChild(el('div', {
       style: {
@@ -313,7 +284,6 @@ function renderPage() {
     return;
   }
 
-  /* تسجيل الدخول أو الأزرار */
   if (!state.user) {
     c.appendChild(buildLoginCard());
   } else {
@@ -323,42 +293,54 @@ function renderPage() {
 }
 
 /* ==========================================================================
-   5. API
+   4. API
    ========================================================================== */
-
-async function refreshAll() {
-  await loadState();
-  renderPage();
-}
 
 export const cloudSyncPage = {
   async render(container) {
     clear(container);
     state.container = container;
-    await refreshAll();
+    state.online = navigator.onLine;
+    state.lastSyncAt = readLastSync();
+
+    /* ⚠️ لا نستدعي current() — onAuthChange يُحدّث state.user تلقائياً */
+    /* (يُستدعى فوراً بـ null، ثم يُستدعى بـ user عند استعادة الجلسة) */
+    state._unsubAuth = authSync.onAuthChange((user) => {
+      if (!state.container) return;
+      state.user = user;
+      renderPage();
+    });
 
     /* تحديث تلقائي عند تغير حالة الاتصال */
-    const onOnline = () => { state.online = true; renderPage(); };
-    const onOffline = () => { state.online = false; renderPage(); };
+    const onOnline = () => { state.online = true; if (state.container) renderPage(); };
+    const onOffline = () => { state.online = false; if (state.container) renderPage(); };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    state._unsubOnline = onOnline;
+    state._unsubOffline = onOffline;
 
-    /* تخزين المراجع لإزالتها في destroy */
-    state._cleanup = () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-    };
+    /* أول رسم فوري */
+    renderPage();
   },
 
   destroy() {
-    if (state._cleanup) {
-      try { state._cleanup(); } catch (e) { /* ignore */ }
+    if (state._unsubAuth) {
+      try { state._unsubAuth(); } catch (e) { /* ignore */ }
+    }
+    if (state._unsubOnline) {
+      try { window.removeEventListener('online', state._unsubOnline); } catch (e) { /* ignore */ }
+    }
+    if (state._unsubOffline) {
+      try { window.removeEventListener('offline', state._unsubOffline); } catch (e) { /* ignore */ }
     }
     state = {
       container: null,
       user: null,
       lastSyncAt: null,
       online: true,
+      _unsubAuth: null,
+      _unsubOnline: null,
+      _unsubOffline: null,
     };
   },
 };
