@@ -2,7 +2,7 @@
    main.js — نقطة الدخول + كل الميزات
    ==========================================================================
    - Router + Ctrl+K + Auto-Backup + PWA + Onboarding + Client Mode + Notifications
-   - صفحة الاختبارات معطَّلة مؤقتاً.
+   - صفحة الاختبارات متاحة عبر #/tests (أداة تطوير — لا تظهر في السايدبار).
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
@@ -67,6 +67,7 @@ async function loadPageModule(pageId) {
       case 'activity-log':       return await import('./pages/activity-log.js');
       case 'trash':              return await import('./pages/trash.js');
       case 'cloud-sync':         return await import('./pages/cloud-sync.js');
+      case 'tests':              return await import('./pages/tests.js');
       default:                   return null;
     }
   } catch (e) {
@@ -143,6 +144,7 @@ const MODULE_EXPORT_MAP = {
   'activity-log':       'activityLogPage',
   'trash':              'trashPage',
   'cloud-sync':         'cloudSyncPage',
+  'tests':              'testsPage',
 };
 
 let currentPage = null;
@@ -233,12 +235,6 @@ function getSubRoute(fullRoute) {
 }
 
 async function renderPage(fullRoute) {
-  /* ⚠️ صفحة الاختبارات معطَّلة مؤقتاً */
-  if (fullRoute === 'tests' || fullRoute === '#/tests') {
-    location.hash = '#/dashboard';
-    return;
-  }
-
   const id = getBaseRoute(fullRoute);
   const subRoute = getSubRoute(fullRoute);
 
@@ -246,6 +242,8 @@ async function renderPage(fullRoute) {
   if (item) {
     layout.setTitle(item.label);
     layout.setActivePage(id);
+  } else if (id === 'tests') {
+    layout.setTitle('🧪 الاختبارات');
   }
 
   if (currentPage && typeof currentPage.destroy === 'function') {
