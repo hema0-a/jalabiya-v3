@@ -2,19 +2,25 @@
    sections-workshop.js — أقسام الورشة (6)
    ==========================================================================
    معلومات الورشة، المظهر، الخلفيات، الأيقونات، الخطوط، أوضاع العرض
+
+   ⚠️ إصلاح حرج (v3.3.1):
+   - لا تستخدم spread للمفاتيح القديمة (`...ws`, `...ap`, `...dp`).
+     السبب: stale closure — بعد أول حفظ، المفاتيح القديمة تُلغي التغييرات السابقة.
+   - أرسل الحقل المتغير فقط — `settings.update` يدمج مع DB الحيّ.
+   - استخدم `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
 import {
-  THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES,
-  FONT_FAMILIES, FONT_SIZES,
+  THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES, FONT_FAMILIES, FONT_SIZES,
 } from '../../core/config.js';
 
 /* ==========================================================================
    1. معلومات الورشة
    ========================================================================== */
+
 const workshopInfoSection = {
   id: 'workshop',
   icon: '🏢',
@@ -24,14 +30,32 @@ const workshopInfoSection = {
 
     function textField(label, key, placeholder = '') {
       const inp = el('input', {
-        className: 'input',
-        type: 'text',
-        placeholder,
+        className: 'input', type: 'text', placeholder,
         value: ws[key] || '',
       });
+
+      /* ✅ إصلاح: حفظ آمن بـ debounce + blur */
+      let lastSaved = String(ws[key] || '');
+      let saveTimer = null;
+
+      const doSave = () => {
+        const newValue = inp.value.trim();
+        if (newValue === lastSaved) return;
+        lastSaved = newValue;
+        /* ⚠️ نرسل الحقل المتغير فقط — لا spread */
+        saveFn({ workshop: { [key]: newValue } });
+      };
+
       inp.addEventListener('blur', () => {
-        saveFn({ workshop: { ...ws, [key]: inp.value.trim() } });
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        doSave();
       });
+
+      inp.addEventListener('input', () => {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(doSave, 800);
+      });
+
       return el('div', { className: 'settings-field' }, [
         el('label', { className: 'settings-field__label' }, label),
         inp,
@@ -53,7 +77,10 @@ const workshopInfoSection = {
       },
     }, ws.logo ? '' : '🧵');
 
-    const logoInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+    const logoInput = el('input', {
+      type: 'file', accept: 'image/*', style: { display: 'none' },
+    });
+
     logoInput.addEventListener('change', () => {
       const file = logoInput.files[0];
       if (!file) return;
@@ -62,7 +89,8 @@ const workshopInfoSection = {
         const dataUrl = reader.result;
         logoPreview.style.background = 'url(' + dataUrl + ') center/cover';
         logoPreview.textContent = '';
-        saveFn({ workshop: { ...ws, logo: dataUrl } });
+        /* ⚠️ حقل واحد فقط */
+        saveFn({ workshop: { logo: dataUrl } });
       };
       reader.readAsDataURL(file);
     });
@@ -82,8 +110,9 @@ const workshopInfoSection = {
 };
 
 /* ==========================================================================
-   2. المظهر والتخصيص (الثيمات + الألوان)
+   2. المظهر والتخصيص
    ========================================================================== */
+
 const appearanceSection = {
   id: 'appearance',
   icon: '🎨',
@@ -91,8 +120,9 @@ const appearanceSection = {
   async render(body, currentSettings, saveFn) {
     const ap = currentSettings.appearance || {};
 
-    /* شبكة الثيمات (9) */
+    /* شبكة الثيمات */
     const themesGrid = el('div', { className: 'settings-themes' });
+
     THEMES.forEach((th) => {
       const isActive = ap.theme === th.id;
       const card = el('button', {
@@ -100,9 +130,9 @@ const appearanceSection = {
         className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
         'data-theme': th.id,
         onClick: () => {
+          /* ⚠️ حقول صريحة فقط — لا spread */
           saveFn({
             appearance: {
-              ...ap,
               theme: th.id,
               primaryColor: th.primary,
               accentColor: th.accent,
@@ -124,17 +154,19 @@ const appearanceSection = {
       ]);
       themesGrid.appendChild(card);
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'الثيم الجاهز'),
       themesGrid,
     ]));
 
-    /* Color Pickers */
+    /* Color Picker — أساسي */
     const primaryPicker = createColorPicker({
       value: ap.primaryColor || '#1F6D57',
       onChange: (v) => {
         document.documentElement.style.setProperty('--color-primary', v);
-        saveFn({ appearance: { ...ap, primaryColor: v } });
+        /* ⚠️ حقل واحد */
+        saveFn({ appearance: { primaryColor: v } });
       },
     });
     body.appendChild(el('div', { className: 'settings-field' }, [
@@ -142,11 +174,13 @@ const appearanceSection = {
       primaryPicker,
     ]));
 
+    /* Color Picker — ثانوي */
     const accentPicker = createColorPicker({
       value: ap.accentColor || '#B8863B',
       onChange: (v) => {
         document.documentElement.style.setProperty('--color-accent', v);
-        saveFn({ appearance: { ...ap, accentColor: v } });
+        /* ⚠️ حقل واحد */
+        saveFn({ appearance: { accentColor: v } });
       },
     });
     body.appendChild(el('div', { className: 'settings-field' }, [
@@ -154,7 +188,7 @@ const appearanceSection = {
       accentPicker,
     ]));
 
-    /* استعادة */
+    /* استعادة الافتراضي */
     body.appendChild(el('div', { className: 'settings-actions' }, [
       el('button', {
         className: 'btn btn--ghost', type: 'button',
@@ -171,8 +205,9 @@ const appearanceSection = {
 };
 
 /* ==========================================================================
-   3. الخلفيات الإبداعية (5)
+   3. الخلفيات الإبداعية
    ========================================================================== */
+
 const backgroundsSection = {
   id: 'backgrounds',
   icon: '🖼️',
@@ -182,13 +217,10 @@ const backgroundsSection = {
     const current = ap.backgroundPattern || 'none';
 
     const grid = el('div', {
-      style: {
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px',
-      },
+      style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' },
     });
 
     function applyBackground(id) {
-      /* إزالة كل الخلفيات السابقة */
       document.body.classList.remove('bg-fabric', 'bg-sewing', 'bg-geometric', 'bg-paper');
       if (id !== 'none') document.body.classList.add('bg-' + id);
     }
@@ -196,7 +228,6 @@ const backgroundsSection = {
     BACKGROUNDS.forEach((bg) => {
       const isActive = current === bg.id;
 
-      /* معاينة مصغرة */
       const previewStyle = {
         width: '100%', height: '48px', borderRadius: '6px',
         background: '#F6F1E6', border: '1px solid #E5DDD0',
@@ -215,17 +246,22 @@ const backgroundsSection = {
         className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
         'data-bg': bg.id,
         onClick: () => {
-          saveFn({ appearance: { ...ap, backgroundPattern: bg.id } });
+          /* ⚠️ حقل واحد */
+          saveFn({ appearance: { backgroundPattern: bg.id } });
           applyBackground(bg.id);
           /* إعادة رسم القسم */
           const parent = grid.parentNode;
           parent.innerHTML = '';
-          backgroundsSection.render(parent, { ...currentSettings, appearance: { ...ap, backgroundPattern: bg.id } }, saveFn);
+          backgroundsSection.render(parent, {
+            ...currentSettings,
+            appearance: { ...ap, backgroundPattern: bg.id },
+          }, saveFn);
         },
       }, [
         el('div', { style: previewStyle }),
         el('span', { className: 'settings-theme-card__name' }, bg.name),
       ]);
+
       grid.appendChild(btn);
     });
 
@@ -238,8 +274,9 @@ const backgroundsSection = {
 };
 
 /* ==========================================================================
-   4. أنماط الأيقونات (3)
+   4. أنماط الأيقونات
    ========================================================================== */
+
 const iconsSection = {
   id: 'icons',
   icon: '✨',
@@ -260,21 +297,27 @@ const iconsSection = {
 
     ICON_STYLES.forEach((st) => {
       const isActive = current === st.id;
+
       const btn = el('button', {
         type: 'button',
         className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
         'data-icon': st.id,
         onClick: () => {
-          saveFn({ appearance: { ...ap, iconStyle: st.id } });
+          /* ⚠️ حقل واحد */
+          saveFn({ appearance: { iconStyle: st.id } });
           applyIconStyle(st.id);
           const parent = grid.parentNode;
           parent.innerHTML = '';
-          iconsSection.render(parent, { ...currentSettings, appearance: { ...ap, iconStyle: st.id } }, saveFn);
+          iconsSection.render(parent, {
+            ...currentSettings,
+            appearance: { ...ap, iconStyle: st.id },
+          }, saveFn);
         },
       }, [
         el('span', { style: { fontSize: '24px', lineHeight: '1', marginBottom: '4px' } }, '👥'),
         el('span', { className: 'settings-theme-card__name' }, st.name),
       ]);
+
       grid.appendChild(btn);
     });
 
@@ -287,8 +330,9 @@ const iconsSection = {
 };
 
 /* ==========================================================================
-   5. الخطوط (5 خطوط + 4 أحجام)
+   5. الخطوط
    ========================================================================== */
+
 const fontsSection = {
   id: 'fonts',
   icon: '🔤',
@@ -308,18 +352,19 @@ const fontsSection = {
         className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
         'data-font': f.id,
         style: {
-          flexDirection: 'row',
-          justifyContent: 'flex-start',
-          gap: '12px',
-          padding: '10px 12px',
-          textAlign: 'right',
+          flexDirection: 'row', justifyContent: 'flex-start', gap: '12px',
+          padding: '10px 12px', textAlign: 'right',
         },
         onClick: () => {
-          saveFn({ display: { ...dp, fontFamily: f.id } });
+          /* ⚠️ حقل واحد */
+          saveFn({ display: { fontFamily: f.id } });
           document.documentElement.setAttribute('data-font', f.id);
           const parent = fontGrid.parentNode;
           parent.innerHTML = '';
-          fontsSection.render(parent, { ...currentSettings, display: { ...dp, fontFamily: f.id } }, saveFn);
+          fontsSection.render(parent, {
+            ...currentSettings,
+            display: { ...dp, fontFamily: f.id },
+          }, saveFn);
         },
       }, [
         el('span', { style: { fontFamily: f.font, fontSize: '18px', fontWeight: '600' } }, 'أ'),
@@ -346,11 +391,15 @@ const fontsSection = {
         className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
         'data-size': sz.id,
         onClick: () => {
-          saveFn({ display: { ...dp, fontSize: sz.id } });
+          /* ⚠️ حقل واحد */
+          saveFn({ display: { fontSize: sz.id } });
           document.documentElement.setAttribute('data-size', sz.id);
           const parent = sizeGrid.parentNode;
           parent.innerHTML = '';
-          fontsSection.render(parent, { ...currentSettings, display: { ...dp, fontSize: sz.id } }, saveFn);
+          fontsSection.render(parent, {
+            ...currentSettings,
+            display: { ...dp, fontSize: sz.id },
+          }, saveFn);
         },
       }, [
         el('span', { style: { fontSize: (16 * sz.factor) + 'px', lineHeight: '1' } }, 'أ'),
@@ -369,6 +418,7 @@ const fontsSection = {
 /* ==========================================================================
    6. أوضاع العرض
    ========================================================================== */
+
 const displaySection = {
   id: 'display',
   icon: '👁️',
@@ -380,7 +430,10 @@ const displaySection = {
       const t = createToggle({
         label,
         checked: !!dp[key],
-        onChange: (v) => saveFn({ display: { ...dp, [key]: v } }),
+        onChange: (v) => {
+          /* ⚠️ حقل واحد */
+          saveFn({ display: { [key]: v } });
+        },
       });
       return el('div', { className: 'settings-row' }, [
         el('div', { style: { flex: '1' } }, [
