@@ -1,8 +1,9 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA + Onboarding + Client Mode
+   main.js — نقطة الدخول + كل الميزات
    ==========================================================================
-   - صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
-   - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1 في URL).
+   - Router + Ctrl+K + Auto-Backup + PWA + Onboarding + Client Mode + Notifications
+   - صفحة الاختبارات معطَّلة مؤقتاً.
+   - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -24,6 +25,7 @@ function showError(title, err) {
 let el, toast, createLayout, events, openUniversalSearch;
 let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 let toggleClientMode, isClientMode, applyClientMode;
+let startAutoCheck as startNotificationCheck;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -34,6 +36,7 @@ try {
   ({ registerServiceWorker } = await import('./pwa.js'));
   ({ maybeStartOnboarding } = await import('./ui/onboarding.js'));
   ({ toggleClientMode, isClientMode, applyClientMode } = await import('./ui/client-mode.js'));
+  ({ startAutoCheck: startNotificationCheck } = await import('./services/notifications.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -144,7 +147,7 @@ const MODULE_EXPORT_MAP = {
 
 let currentPage = null;
 
-/* ---- زر وضع العميل (يُعاد بناؤه عند كل تبديل) ---- */
+/* --- زر وضع العميل --- */
 function buildClientModeAction() {
   const active = isClientMode();
   return {
@@ -190,10 +193,8 @@ const layout = createLayout({
 
 app.appendChild(layout.node);
 
-/* تطبيق وضع العميل بعد بناء الـ layout (لأنه يحتاج DOM جاهز) */
 try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
 
-/* ربط زر الرجوع في Topbar (يُستخدَم من sub-page) */
 events.on('topbar:setBack', (handler) => {
   layout.topbar.setBackAction(typeof handler === 'function' ? handler : null);
 });
@@ -232,7 +233,6 @@ function getSubRoute(fullRoute) {
 }
 
 async function renderPage(fullRoute) {
-  /* ⚠️ صفحة الاختبارات معطَّلة مؤقتاً — تُعاد في نهاية المشروع */
   if (fullRoute === 'tests' || fullRoute === '#/tests') {
     location.hash = '#/dashboard';
     return;
@@ -283,7 +283,7 @@ window.addEventListener('hashchange', () => {
 /* ⚡ تشغيل أولي */
 renderPage(getHashPage());
 
-/* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
+/* 🗄️ النسخ الاحتياطي التلقائي */
 setTimeout(() => {
   (async () => {
     try {
@@ -310,7 +310,7 @@ try {
   console.warn('[PWA] فشل تسجيل SW:', err);
 }
 
-/* ✨ الجولة التعريفية — تظهر عند أول فتح */
+/* ✨ الجولة التعريفية */
 try {
   maybeStartOnboarding({
     onFinish: ({ skipped }) => {
@@ -319,4 +319,11 @@ try {
   });
 } catch (err) {
   console.warn('[Onboarding] فشل التشغيل:', err);
+}
+
+/* 🔔 الإشعارات — فحص دوري كل 30 دقيقة (فقط إن كان الإذن ممنوحاً) */
+try {
+  startNotificationCheck();
+} catch (err) {
+  console.warn('[Notifications] فشل التشغيل:', err);
 }
