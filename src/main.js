@@ -1,5 +1,5 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA
+   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA + Onboarding
    ==========================================================================
    - صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1 في URL).
@@ -21,7 +21,8 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-let el, toast, createLayout, events, openUniversalSearch, runAutoBackupIfDue, registerServiceWorker;
+let el, toast, createLayout, events, openUniversalSearch;
+let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -30,6 +31,7 @@ try {
   ({ openUniversalSearch } = await import('./ui/universal-search.js'));
   ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
   ({ registerServiceWorker } = await import('./pwa.js'));
+  ({ maybeStartOnboarding } = await import('./ui/onboarding.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -281,4 +283,19 @@ try {
   registerServiceWorker();
 } catch (err) {
   console.warn('[PWA] فشل تسجيل SW:', err);
+}
+
+/* ✨ الجولة التعريفية — تظهر عند أول فتح */
+try {
+  maybeStartOnboarding({
+    onFinish: ({ skipped }) => {
+      if (!skipped) {
+        console.log('[Onboarding] ✅ تم إكمال الجولة');
+      } else {
+        console.log('[Onboarding] ⏭️ تم تخطّي الجولة');
+      }
+    },
+  });
+} catch (err) {
+  console.warn('[Onboarding] فشل التشغيل:', err);
 }
