@@ -13,7 +13,10 @@ import { LIMITS } from '../../core/config.js';
 /* ===== schema.js (6) ===== */
 register('schema.js', async (t) => {
   const schemaKeys = Object.keys(SCHEMA);
-await t.test('1. SCHEMA has 15 stores', schemaKeys.length === 15);
+
+  /* ⚠️ عدد المخازن متغيّر — نستخدم STORE_NAMES كمرجع ديناميكي */
+  await t.test('1. SCHEMA stores count matches STORE_NAMES',
+    schemaKeys.length === STORE_NAMES.length);
 
   let validOk = true;
   try { validateSchema(); }
@@ -47,8 +50,8 @@ await t.test('1. SCHEMA has 15 stores', schemaKeys.length === 15);
   await t.test('5. no duplicate index names', noDup);
 
   const idsOk = SETTINGS_ID === 'main';
-const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === 15;
-await t.test('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
+  const namesOk = Array.isArray(STORE_NAMES) && STORE_NAMES.length === schemaKeys.length;
+  await t.test('6. SETTINGS_ID + STORE_NAMES correct', idsOk && namesOk);
 });
 
 /* ===== idb.js (8) ===== */
