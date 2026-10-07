@@ -1,10 +1,9 @@
 /* ==========================================================================
-   customers.js — صفحة العملاء (CRUD + مقاسات + فلترة + ترتيب)
+   customers.js — صفحة العملاء (CRUD + مقاسات + صورة + فلترة + ترتيب)
    ==========================================================================
-   - فلترة: الكل / VIP / عادي.
-   - ترتيب: الأحدث / الأعلى شراءً / أبجدي.
-   - عرض تدريجي (Progressive List).
-   - كشف حساب + Quick Preview + مقاسات.
+   - صورة شخصية للعميل (avatar).
+   - مقاسات ديناميكية + فلترة (VIP/عادي) + ترتيب (الأحدث/الأشرى/أبجدي).
+   - Progressive List + Quick Preview + كشف حساب.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -18,6 +17,7 @@ import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
 import { printCustomerStatement } from '../services/invoice-print.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
+import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { formatEGP } from '../core/utils.js';
 
 /* --- الفلاتر والترتيب --- */
@@ -36,7 +36,7 @@ const SORTS = [
 /* --- الحالة --- */
 let state = {
   customers: [],
-  customerTotals: {},        // { customerId: totalPaid }
+  customerTotals: {},
   activeFilter: 'all',
   activeSort: 'recent',
   searchQuery: '',
@@ -70,7 +70,6 @@ async function loadCustomers() {
     payments.list(),
   ]);
 
-  /* حساب إجمالي المدفوع لكل عميل */
   const totals = {};
   paymentsList.forEach((p) => {
     const cid = p.customerId;
@@ -79,7 +78,6 @@ async function loadCustomers() {
   });
   state.customerTotals = totals;
 
-  /* إحصائيات الطلبات لكل عميل (عدد) */
   const ordersCount = {};
   ordersList.forEach((o) => {
     const cid = o.customerId;
@@ -87,7 +85,6 @@ async function loadCustomers() {
     ordersCount[cid] = (ordersCount[cid] || 0) + 1;
   });
 
-  /* إضافة البيانات المساعدة */
   list.forEach((c) => {
     c._totalPaid = totals[c.id] || 0;
     c._ordersCount = ordersCount[c.id] || 0;
@@ -110,25 +107,17 @@ async function loadMeasurementFields() {
    3. الفلترة والترتيب
    ========================================================================== */
 
-/**
- * تطبيق الفلتر والترتيب على القائمة.
- * @param {Array} list
- * @returns {Array}
- */
 function applyFiltersAndSort(list) {
   let result = list;
 
-  /* الفلترة */
   if (state.activeFilter === 'vip') {
     result = result.filter((c) => c.vip === true);
   } else if (state.activeFilter === 'normal') {
     result = result.filter((c) => !c.vip);
   }
 
-  /* البحث */
   result = filterCustomers(result, state.searchQuery);
 
-  /* الترتيب */
   if (state.activeSort === 'spent') {
     result = [...result].sort((a, b) => (b._totalPaid || 0) - (a._totalPaid || 0));
   } else if (state.activeSort === 'name') {
@@ -136,7 +125,6 @@ function applyFiltersAndSort(list) {
       String(a.name || '').localeCompare(String(b.name || ''), 'ar')
     );
   } else {
-    /* الأحدث */
     result = [...result].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 
@@ -231,6 +219,13 @@ function openCustomerForm(existing = null) {
     el('span', { className: 'toggle__label' }, 'عميل مميز (VIP)'),
   ]);
 
+  /* --- صورة العميل (reuse order-image-picker) --- */
+  const imagePicker = createOrderImagePicker({
+    value: isEdit ? (existing.image || '') : '',
+    label: '🖼️ صورة العميل',
+    hint: 'صورة شخصية (اختياري) — تظهر في البطاقة والكشف',
+  });
+
   const measurements = buildMeasurementsSection(
     isEdit ? existing.measurements : null
   );
@@ -241,6 +236,7 @@ function openCustomerForm(existing = null) {
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العنوان'), addressInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
     el('div', { className: 'field' }, [vipToggle]),
+    imagePicker.node,
     measurements.node,
   ]);
 
@@ -262,6 +258,7 @@ function openCustomerForm(existing = null) {
             address: addressInput.value.trim(),
             notes: notesInput.value.trim(),
             vip: vipCheckbox.checked,
+            image: imagePicker.getValue() || '',
             measurements: measurements.getValues(),
           };
           try {
@@ -319,7 +316,29 @@ async function printStatement(customer) {
 }
 
 /* ==========================================================================
-   6. بطاقة عميل
+   6. عرض صورة العميل (lightbox)
+   ========================================================================== */
+
+function showCustomerImage(dataUrl, name) {
+  if (!dataUrl) return;
+  const body = el('div', {}, [
+    el('img', {
+      src: dataUrl, alt: name,
+      style: { width: '100%', maxHeight: '70vh', objectFit: 'contain',
+        borderRadius: '12px', background: '#fff' },
+    }),
+    el('div', {
+      style: { fontSize: '13px', textAlign: 'center', marginTop: '8px', color: '#666' },
+    }, '👤 ' + (name || 'عميل')),
+  ]);
+  modal.open({
+    title: 'صورة العميل', body, closable: true,
+    actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
+  });
+}
+
+/* ==========================================================================
+   7. بطاقة عميل
    ========================================================================== */
 
 function hasMeasurements(c) {
@@ -332,17 +351,34 @@ function buildCustomerCard(c) {
   const withMeasurements = hasMeasurements(c);
   const totalPaid = Number(c._totalPaid) || 0;
   const ordersCount = Number(c._ordersCount) || 0;
+  const hasImage = !!c.image;
+
+  /* --- الأفاتار: صورة أو حرف --- */
+  const avatar = hasImage
+    ? el('img', {
+        src: c.image, alt: c.name || '',
+        style: {
+          width: '44px', height: '44px', borderRadius: '50%',
+          objectFit: 'cover', flexShrink: '0', cursor: 'pointer',
+          border: '2px solid #1F6D57',
+        },
+        onClick: (e) => {
+          e.stopPropagation();
+          showCustomerImage(c.image, c.name);
+        },
+      })
+    : el('div', {
+        style: {
+          width: '40px', height: '40px', borderRadius: '50%',
+          background: 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
+          color: '#fff', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: '18px', fontWeight: '600',
+          flexShrink: '0',
+        },
+      }, initial);
 
   const headerChildren = [
-    el('div', {
-      style: {
-        width: '40px', height: '40px', borderRadius: '50%',
-        background: 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
-        color: '#fff', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', fontSize: '18px', fontWeight: '600',
-        flexShrink: '0',
-      },
-    }, initial),
+    avatar,
     el('div', { style: { flex: '1', minWidth: '0' } }, [
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } },
         c.name || 'بدون اسم'),
@@ -367,7 +403,7 @@ function buildCustomerCard(c) {
     onClick: () => previewCustomer(c, () => openCustomerForm(c)),
   }, [header]);
 
-  /* شارات المقاسات + الإجمالي */
+  /* شارات */
   const badges = el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
   });
@@ -434,7 +470,7 @@ function buildCustomerCard(c) {
 }
 
 /* ==========================================================================
-   7. الرسم
+   8. الرسم
    ========================================================================== */
 
 function renderStats() {
@@ -563,7 +599,7 @@ async function refreshAll() {
 }
 
 /* ==========================================================================
-   8. API
+   9. API
    ========================================================================== */
 
 export const customersPage = {
@@ -582,7 +618,6 @@ export const customersPage = {
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
 
-    /* بحث */
     const searchInput = el('input', {
       className: 'input', type: 'search',
       placeholder: '🔍 ابحث بالاسم أو الهاتف...',
@@ -596,20 +631,15 @@ export const customersPage = {
     });
     container.appendChild(searchInput);
 
-    /* الفلاتر */
     container.appendChild(el('div', { id: 'customers-filters' }));
-
-    /* الترتيب */
     container.appendChild(el('div', { id: 'customers-sort' }));
 
-    /* زر الإضافة */
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block',
       style: { marginBottom: '16px' },
       onClick: () => openCustomerForm(),
     }, '➕ إضافة عميل'));
 
-    /* القائمة */
     container.appendChild(el('div', { id: 'customers-list' }));
 
     await refreshAll();
