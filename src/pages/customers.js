@@ -4,6 +4,7 @@
    - صورة شخصية للعميل (avatar).
    - مقاسات ديناميكية + فلترة (VIP/عادي) + ترتيب (الأحدث/الأشرى/أبجدي).
    - Progressive List + Quick Preview + كشف حساب.
+   - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -19,6 +20,10 @@ import { printCustomerStatement } from '../services/invoice-print.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { formatEGP } from '../core/utils.js';
+import * as draft from '../services/draft-manager.js';
+
+/* --- مفتاح المسودة --- */
+const DRAFT_KEY = 'customer-form';
 
 /* --- الفلاتر والترتيب --- */
 const FILTERS = [
@@ -146,7 +151,7 @@ function buildMeasurementsSection(existingMeasurements) {
     wrap.appendChild(el('div', {
       style: { fontSize: '11px', color: '#999', padding: '6px 0' },
     }, 'لا توجد حقول مقاسات مفعَّلة. أضفها من الإعدادات → حقول المقاسات.'));
-    return { node: wrap, getValues: () => ({}) };
+    return { node: wrap, getValues: () => ({}), setValues: () => {} };
   }
 
   const grid = el('div', {
@@ -185,6 +190,13 @@ function buildMeasurementsSection(existingMeasurements) {
         if (isFinite(n) && n > 0) out[id] = n;
       });
       return out;
+    },
+    setValues: (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      Object.keys(inputs).forEach((id) => {
+        const v = obj[id];
+        inputs[id].value = (v != null && v !== '') ? String(v) : '';
+      });
     },
   };
 }
@@ -264,6 +276,7 @@ function openCustomerForm(existing = null) {
           try {
             if (isEdit) { await customers.update(existing.id, data); toast.success('تم تحديث العميل'); }
             else { await customers.create(data); toast.success('تم إضافة العميل'); }
+            draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
           } catch (err) { toast.danger('فشل الحفظ: ' + err.message); }
@@ -271,6 +284,68 @@ function openCustomerForm(existing = null) {
       },
     ],
   });
+
+  /* --- 📝 Autosave: حفظ + استرجاع المسودة (فقط للنماذج الجديدة) --- */
+  if (!isEdit) {
+    /* 1. استرجاع المسودة إن وُجدت */
+    const savedDraft = draft.get(DRAFT_KEY);
+    if (savedDraft && typeof savedDraft === 'object') {
+      try {
+        if (typeof savedDraft.name === 'string') nameInput.value = savedDraft.name;
+        if (typeof savedDraft.phone === 'string') phoneInput.value = savedDraft.phone;
+        if (typeof savedDraft.address === 'string') addressInput.value = savedDraft.address;
+        if (typeof savedDraft.notes === 'string') notesInput.value = savedDraft.notes;
+        if (typeof savedDraft.vip === 'boolean') vipCheckbox.checked = savedDraft.vip;
+
+        if (savedDraft.image && typeof imagePicker.setValue === 'function') {
+          imagePicker.setValue(savedDraft.image);
+        }
+        if (savedDraft.measurements && typeof measurements.setValues === 'function') {
+          measurements.setValues(savedDraft.measurements);
+        }
+
+        toast.info('📝 تم استرجاع مسودة سابقة');
+      } catch (e) {
+        console.warn('[CustomerForm] draft restore failed:', e);
+      }
+    }
+
+    /* 2. حفظ تلقائي أثناء الكتابة (debounce 500ms) */
+    let _saveTimer = null;
+    const scheduleSave = () => {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => {
+        try {
+          const payload = {
+            name: nameInput.value,
+            phone: phoneInput.value,
+            address: addressInput.value,
+            notes: notesInput.value,
+            vip: vipCheckbox.checked,
+            image: imagePicker.getValue() || '',
+            measurements: measurements.getValues(),
+          };
+          draft.save(DRAFT_KEY, payload);
+        } catch (e) {
+          console.warn('[CustomerForm] draft save failed:', e);
+        }
+      }, 500);
+    };
+
+    /* ربط المراقبة بمحتوى النموذج */
+    body.addEventListener('input', scheduleSave);
+    body.addEventListener('change', scheduleSave);
+
+    /* حفظ أولي بعد فتح النموذج بلحظة */
+    setTimeout(scheduleSave, 100);
+
+    /* حفظ عند إغلاق النافذة */
+    const origHandleClose = handle.close;
+    handle.close = function () {
+      try { scheduleSave(); } catch { /* ignore */ }
+      return origHandleClose.apply(this, arguments);
+    };
+  }
 }
 
 /* ==========================================================================
