@@ -1,8 +1,8 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup
+   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA
    ==========================================================================
-   Service Worker معطَّل مؤقتاً أثناء التطوير (V3.1 يُعيد تفعيله).
-   ⚠️ صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
+   - صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
+   - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1 في URL).
    ========================================================================== */
 
 const app = document.getElementById('app');
@@ -21,7 +21,7 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-let el, toast, createLayout, events, openUniversalSearch, runAutoBackupIfDue;
+let el, toast, createLayout, events, openUniversalSearch, runAutoBackupIfDue, registerServiceWorker;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -29,6 +29,7 @@ try {
   ({ events } = await import('./core/events.js'));
   ({ openUniversalSearch } = await import('./ui/universal-search.js'));
   ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
+  ({ registerServiceWorker } = await import('./pwa.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -255,7 +256,7 @@ window.addEventListener('hashchange', () => {
 /* ⚡ تشغيل أولي */
 renderPage(getHashPage());
 
-/* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين من فتح التطبيق (لا يُعطّل البدء) */
+/* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
 setTimeout(() => {
   (async () => {
     try {
@@ -274,3 +275,10 @@ setTimeout(() => {
     }
   })();
 }, 2000);
+
+/* 🚀 PWA — تسجيل Service Worker */
+try {
+  registerServiceWorker();
+} catch (err) {
+  console.warn('[PWA] فشل تسجيل SW:', err);
+}
