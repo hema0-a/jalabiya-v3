@@ -4,6 +4,7 @@
    - Router + Ctrl+K + Auto-Backup + PWA + Onboarding + Client Mode + Notifications
    - صفحة الاختبارات متاحة عبر #/tests (أداة تطوير — لا تظهر في السايدبار).
    - معالج الأخطاء العالمي مُفعَّل لالتقاط أخطاء التشغيل.
+   - FAB (إجراءات سريعة) مُفعَّل على كل الصفحات عدا #/tests.
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
@@ -28,6 +29,7 @@ let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 let toggleClientMode, isClientMode, applyClientMode;
 let startNotificationCheck;
 let installErrorHandler;
+let mountFab;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -40,6 +42,7 @@ try {
   ({ toggleClientMode, isClientMode, applyClientMode } = await import('./ui/client-mode.js'));
   ({ startAutoCheck: startNotificationCheck } = await import('./services/notifications.js'));
   ({ install: installErrorHandler } = await import('./core/error-handler.js'));
+  ({ mount: mountFab } = await import('./ui/fab.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -205,6 +208,15 @@ try {
   }
 } catch (err) {
   console.warn('[ErrorHandler] فشل التثبيت:', err);
+}
+
+/* ⚡ FAB — إجراءات سريعة على كل الصفحات عدا #/tests */
+try {
+  if (typeof mountFab === 'function') {
+    mountFab();
+  }
+} catch (err) {
+  console.warn('[FAB] فشل التثبيت:', err);
 }
 
 try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
