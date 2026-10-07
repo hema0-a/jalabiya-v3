@@ -1340,6 +1340,13 @@ export const ordersPage = {
     await refreshAll();
   },
 
-  destroy() {
+    destroy() {
     stopLiveTimer();
-    state
+    state = {
+      orders: [], customers: [], customerMap: {},
+      activeFilter: 'all', activeView: 'list',
+      scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
+      container: null, _timerInterval: null,
+    };
+  },
+};
