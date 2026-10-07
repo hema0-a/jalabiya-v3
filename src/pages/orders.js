@@ -1,11 +1,9 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (كل الميزات + اقتراح موعد)
+   orders.js — صفحة الطلبات (كل الميزات + شريط الحد + تنبيهات عاجلة)
    ==========================================================================
    - 3 طرق عرض: قائمة / كانبان / تجميع.
-   - نموذج متعدد العناصر + خصم + رسوم + مقدم.
-   - معاينة + طباعة + رسائل + مؤقت + تسليم + توقيع.
-   - شارات الموعد + استلام القماش.
-   - زر "✨ اقتراح موعد" يتخطى الإجازة + الحد اليومي.
+   - نموذج كامل + اقتراح موعد + معاينة + طباعة + رسائل + مؤقت + توقيع.
+   - شريط الحد اليومي + بطاقة تنبيهات عاجلة.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -56,6 +54,8 @@ const EXTRA_FEE_TYPES = [
   { id: 'packaging', label: 'تغليف مميز', value: 5  },
   { id: 'other',     label: 'أخرى',       value: 0  },
 ];
+
+const DAY_MS = 86400000;
 
 /* ==========================================================================
    1. الفلترة
@@ -110,11 +110,6 @@ function itemsFromOrder(order) {
   }];
 }
 
-/**
- * استخراج "نوع" الطلب (اسم البند الأول).
- * @param {Object} order
- * @returns {string}
- */
 function orderType(order) {
   if (Array.isArray(order.items) && order.items.length > 0) {
     return String(order.items[0].name || '').trim() || 'بدون نوع';
@@ -122,31 +117,19 @@ function orderType(order) {
   return String(order.garmentType || order.notes || 'بدون نوع').trim();
 }
 
-/**
- * تجميع الطلبات المتشابهة (نفس العميل + نفس النوع).
- * @param {Array} list
- * @returns {Array}
- */
 export function groupOrders(list) {
   const groups = new Map();
-
   list.forEach((o) => {
     const cid = o.customerId || 'unknown';
     const type = orderType(o).toLowerCase();
     const key = cid + '::' + type;
-
     if (!groups.has(key)) {
-      groups.set(key, {
-        key, customerId: cid,
-        type: orderType(o),
-        orders: [], totalAmount: 0,
-      });
+      groups.set(key, { key, customerId: cid, type: orderType(o), orders: [], totalAmount: 0 });
     }
     const g = groups.get(key);
     g.orders.push(o);
     g.totalAmount += Number(o.amount) || 0;
   });
-
   return Array.from(groups.values())
     .filter((g) => g.orders.length > 1)
     .sort((a, b) => b.orders.length - a.orders.length);
@@ -282,7 +265,6 @@ function openOrderForm(existing = null) {
     dueDateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
   }
 
-  /* زر اقتراح الموعد */
   const suggestBtn = el('button', {
     className: 'btn btn--sm btn--secondary', type: 'button',
     title: 'اقتراح موعد تلقائي',
@@ -292,31 +274,21 @@ function openOrderForm(existing = null) {
         const suggestion = suggestDueDate(state.orders, {
           dayOffWeekday: state.scheduleConfig.dayOffWeekday,
           dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
-          minDays: 3,
-          maxLookaheadDays: 30,
+          minDays: 3, maxLookaheadDays: 30,
           excludeOrderId: existing ? existing.id : null,
         });
-        const d = new Date(suggestion.timestamp);
-        dueDateInput.value = d.toISOString().slice(0, 10);
+        dueDateInput.value = new Date(suggestion.timestamp).toISOString().slice(0, 10);
         toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
-      } catch (e) {
-        console.error('[suggestDueDate]', e);
-        toast.danger('فشل الاقتراح');
-      }
+      } catch (e) { toast.danger('فشل الاقتراح'); }
     },
   }, '✨');
 
   const itemsContainer = el('div', {});
-  const initialItems = isEdit ? itemsFromOrder(existing) : [{
-    id: uid(), name: '', price: 0, quantity: 1,
-  }];
+  const initialItems = isEdit ? itemsFromOrder(existing) : [{ id: uid(), name: '', price: 0, quantity: 1 }];
 
   function addItemRow(item) {
     const row = buildItemRow(item, (r) => {
-      if (itemsContainer.children.length <= 1) {
-        toast.warning('يجب بند واحد على الأقل');
-        return;
-      }
+      if (itemsContainer.children.length <= 1) { toast.warning('يجب بند واحد على الأقل'); return; }
       itemsContainer.removeChild(r);
       recalc();
     });
@@ -357,10 +329,7 @@ function openOrderForm(existing = null) {
   const initialFees = isEdit && Array.isArray(existing.extraFees) ? existing.extraFees : [];
 
   function addFeeRow(fee) {
-    const row = buildFeeRow(fee, (r) => {
-      feesContainer.removeChild(r);
-      recalc();
-    });
+    const row = buildFeeRow(fee, (r) => { feesContainer.removeChild(r); recalc(); });
     feesContainer.appendChild(row);
   }
 
@@ -368,10 +337,7 @@ function openOrderForm(existing = null) {
 
   const addFeeBtn = el('button', {
     className: 'btn btn--sm btn--secondary', type: 'button',
-    onClick: () => {
-      addFeeRow({ id: uid(), feeType: 'urgency', type: 'percent', value: 20 });
-      recalc();
-    },
+    onClick: () => { addFeeRow({ id: uid(), feeType: 'urgency', type: 'percent', value: 20 }); recalc(); },
   }, '➕ إضافة رسم');
 
   const depositInput = el('input', {
@@ -384,10 +350,7 @@ function openOrderForm(existing = null) {
   if (isEdit) notesInput.value = existing.notes || '';
 
   const totalsSummary = el('div', {
-    style: {
-      padding: '12px', background: '#F6F1E6',
-      borderRadius: '8px', fontSize: '13px', lineHeight: '1.8',
-    },
+    style: { padding: '12px', background: '#F6F1E6', borderRadius: '8px', fontSize: '13px', lineHeight: '1.8' },
   });
 
   function recalc() {
@@ -427,18 +390,15 @@ function openOrderForm(existing = null) {
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📦 بنود الطلب'),
-      itemsContainer,
-      addItemBtn,
+      itemsContainer, addItemBtn,
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '🎁 خصم'),
-      discountTypeSelect,
-      discountValueInput,
+      discountTypeSelect, discountValueInput,
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '➕ رسوم إضافية'),
-      feesContainer,
-      addFeeBtn,
+      feesContainer, addFeeBtn,
     ]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '💰 المقدم'), depositInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '📝 ملاحظات'), notesInput]),
@@ -450,8 +410,7 @@ function openOrderForm(existing = null) {
 
   const handle = modal.open({
     title: isEdit ? 'تعديل طلب' : 'إضافة طلب',
-    body,
-    closable: true,
+    body, closable: true,
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
@@ -460,15 +419,12 @@ function openOrderForm(existing = null) {
         onClick: async () => {
           const customerId = customerSelect.value;
           if (!customerId) { toast.warning('اختر عميلاً'); return; }
-
           const items = Array.from(itemsContainer.children)
-            .map((r) => r._getValues())
-            .filter((it) => it.name && it.name !== 'بند');
+            .map((r) => r._getValues()).filter((it) => it.name && it.name !== 'بند');
           if (items.length === 0) { toast.warning('أضف بنداً واحداً على الأقل'); return; }
 
           const extraFees = Array.from(feesContainer.children)
-            .map((r) => r._getValues())
-            .filter((f) => f.value > 0);
+            .map((r) => r._getValues()).filter((f) => f.value > 0);
 
           const dt = discountTypeSelect.value;
           const dv = Number(discountValueInput.value) || 0;
@@ -476,19 +432,12 @@ function openOrderForm(existing = null) {
           const totals = computeTotals(items, dt, dv, extraFees);
 
           const data = {
-            customerId,
-            status: statusSelect.value,
+            customerId, status: statusSelect.value,
             dueDate: dueDateInput.value ? new Date(dueDateInput.value).getTime() : null,
             receivedDate: receivedDateInput.value ? new Date(receivedDateInput.value).getTime() : null,
-            items,
-            discountType: dt,
-            discountValue: dv,
-            discountAmount: totals.discountAmount,
-            extraFees,
-            extraFeesTotal: totals.extraFeesTotal,
-            subtotal: totals.subtotal,
-            deposit,
-            amount: totals.amount,
+            items, discountType: dt, discountValue: dv, discountAmount: totals.discountAmount,
+            extraFees, extraFeesTotal: totals.extraFeesTotal,
+            subtotal: totals.subtotal, deposit, amount: totals.amount,
             notes: notesInput.value.trim(),
           };
 
@@ -527,10 +476,7 @@ async function deleteOrder(order) {
 
 async function advanceStatus(order) {
   const idx = STATUS_ORDER.indexOf(order.status);
-  if (idx < 0 || idx >= STATUS_ORDER.length - 1) {
-    toast.info('لا يمكن تغيير الحالة');
-    return;
-  }
+  if (idx < 0 || idx >= STATUS_ORDER.length - 1) { toast.info('لا يمكن تغيير الحالة'); return; }
   const next = STATUS_ORDER[idx + 1];
   try {
     await orders.update(order.id, { status: next });
@@ -542,7 +488,7 @@ async function advanceStatus(order) {
 async function printInvoice(order) {
   const c = state.customerMap[order.customerId] || null;
   try { await printOrderInvoice(order, c); }
-  catch (err) { console.error('[printInvoice]', err); toast.danger('فشل فتح نافذة الطباعة'); }
+  catch (err) { toast.danger('فشل فتح نافذة الطباعة'); }
 }
 
 async function deliverWithSignature(order) {
@@ -552,17 +498,13 @@ async function deliverWithSignature(order) {
     confirmText: 'نعم، ابدأ التوقيع', cancelText: 'إلغاء',
   });
   if (!confirmed) return;
-
   const signature = await openSignaturePad({
     title: '✍️ توقيع استلام الطلب',
     hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
   });
   if (!signature) { toast.info('تم إلغاء التسليم'); return; }
-
   try {
-    await orders.update(order.id, {
-      status: 'delivered', signature, deliveredAt: Date.now(),
-    });
+    await orders.update(order.id, { status: 'delivered', signature, deliveredAt: Date.now() });
     toast.success('تم التسليم مع التوقيع ✅');
     await refreshAll();
   } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
@@ -573,40 +515,22 @@ function showSignature(dataUrl) {
   const body = el('div', {}, [
     el('img', {
       src: dataUrl, alt: 'التوقيع',
-      style: { width: '100%', maxWidth: '100%', borderRadius: '12px',
-        border: '1px solid #E5DDD0', background: '#fff', display: 'block' },
+      style: { width: '100%', borderRadius: '12px', border: '1px solid #E5DDD0', background: '#fff' },
     }),
-    el('div', {
-      style: { fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '8px' },
-    }, 'توقيع العميل عند التسليم'),
   ]);
   modal.open({
-    title: '✍️ التوقيع المحفوظ',
-    body, closable: true,
+    title: '✍️ التوقيع المحفوظ', body, closable: true,
     actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
   });
 }
 
 async function openMessageMenu(order) {
   const customer = state.customerMap[order.customerId];
-  if (!customer || !customer.phone) {
-    toast.warning('لا يوجد هاتف مسجَّل للعميل');
-    return;
-  }
+  if (!customer || !customer.phone) { toast.warning('لا يوجد هاتف مسجَّل للعميل'); return; }
   const options = await getOrderMessageOptions(order, customer);
-  if (options.length === 0) {
-    toast.warning('لا توجد قوالب مفعَّلة');
-    return;
-  }
+  if (options.length === 0) { toast.warning('لا توجد قوالب مفعَّلة'); return; }
 
   const body = el('div', {});
-  body.appendChild(el('div', {
-    style: {
-      padding: '10px 12px', background: '#F6F1E6', borderRadius: '8px',
-      fontSize: '12px', color: '#666', marginBottom: '12px', lineHeight: '1.5',
-    },
-  }, 'سيتم فتح WhatsApp مع رسالة جاهزة. يمكنك تعديلها قبل الإرسال.'));
-
   options.forEach((opt) => {
     body.appendChild(el('button', {
       type: 'button',
@@ -621,15 +545,13 @@ async function openMessageMenu(order) {
       el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' } },
         opt.icon + ' ' + opt.name),
       el('div', {
-        style: { fontSize: '12px', color: '#666', marginTop: '6px',
-          lineHeight: '1.5', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' },
+        style: { fontSize: '12px', color: '#666', marginTop: '6px', whiteSpace: 'pre-wrap' },
       }, opt.text),
     ]));
   });
 
   modal.open({
-    title: '📱 إرسال رسالة',
-    body, closable: true, variant: 'sheet',
+    title: '📱 إرسال رسالة', body, closable: true, variant: 'sheet',
     actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
   });
 }
@@ -646,7 +568,180 @@ async function toggleTimer(order) {
 }
 
 /* ==========================================================================
-   6. بطاقة الطلب (قائمة)
+   6. شريط الحد اليومي
+   ========================================================================== */
+
+/**
+ * شريط الحد اليومي (مبالغ الطلبات المُستلمة اليوم).
+ * @returns {HTMLElement}
+ */
+function buildDailyLimitBar() {
+  const limit = state.scheduleConfig.dailyOrderLimit || 0;
+  if (limit <= 0) return null;
+
+  /* بداية اليوم */
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startMs = startOfToday.getTime();
+  const endMs = startMs + DAY_MS;
+
+  /* مجموع الطلبات المُستلمة اليوم */
+  const todayTotal = state.orders
+    .filter((o) => o.createdAt && o.createdAt >= startMs && o.createdAt < endMs)
+    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
+
+  const percent = Math.min(100, Math.round((todayTotal / limit) * 100));
+  const exceeded = todayTotal > limit;
+  const near = !exceeded && percent >= 80;
+
+  const barColor = exceeded ? '#C62828' : (near ? '#F57C00' : '#2E7D32');
+  const bgColor = exceeded ? '#FFEBEE' : (near ? '#FFF3E0' : '#E8F5E9');
+
+  const card = el('div', {
+    className: 'card',
+    style: {
+      marginBottom: '16px',
+      padding: '12px',
+      background: bgColor,
+      border: '1px solid ' + barColor + '33',
+    },
+  });
+
+  /* الرأس */
+  card.appendChild(el('div', {
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
+  }, [
+    el('div', { style: { fontSize: '13px', fontWeight: '600', color: barColor } },
+      exceeded ? '🚨 تجاوزت الحد اليومي' : (near ? '⚠️ اقتربت من الحد اليومي' : '📊 الحد اليومي')),
+    el('div', { style: { fontSize: '13px', fontWeight: '700', color: barColor } },
+      formatEGP(todayTotal) + ' / ' + formatEGP(limit)),
+  ]));
+
+  /* الشريط */
+  card.appendChild(el('div', {
+    style: { background: 'rgba(0,0,0,0.08)', height: '10px', borderRadius: '5px', overflow: 'hidden' },
+  }, [
+    el('div', {
+      style: { width: percent + '%', height: '100%', background: barColor, transition: 'width 0.4s' },
+    }),
+  ]));
+
+  /* النسبة */
+  card.appendChild(el('div', {
+    style: { fontSize: '11px', color: '#666', marginTop: '4px', textAlign: 'left' },
+  }, percent + '%'));
+
+  return card;
+}
+
+/* ==========================================================================
+   7. بطاقة التنبيهات العاجلة
+   ========================================================================== */
+
+/**
+ * بطاقة التنبيهات العاجلة (متأخرة + قماش ناقص + جاهز للتسليم).
+ * @returns {HTMLElement|null}
+ */
+function buildUrgentAlerts() {
+  const now = Date.now();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayMs = todayStart.getTime();
+
+  /* المتأخرة */
+  const overdue = state.orders.filter((o) =>
+    o.dueDate &&
+    o.dueDate < now &&
+    o.status !== 'delivered' &&
+    o.status !== 'cancelled'
+  );
+
+  /* تحتاج استلام قماش قريباً (خلال 3 أيام، بدون receivedDate) */
+  const needPickup = state.orders.filter((o) =>
+    !o.receivedDate &&
+    o.dueDate &&
+    o.dueDate >= todayMs &&
+    o.dueDate <= todayMs + 3 * DAY_MS &&
+    o.status !== 'delivered' &&
+    o.status !== 'cancelled'
+  );
+
+  /* جاهزة للتسليم */
+  const ready = state.orders.filter((o) => o.status === 'ready');
+
+  if (overdue.length === 0 && needPickup.length === 0 && ready.length === 0) {
+    return null;
+  }
+
+  const card = el('div', {
+    className: 'card',
+    style: { marginBottom: '16px', padding: '12px' },
+  });
+
+  card.appendChild(el('div', {
+    style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', marginBottom: '10px' },
+  }, '🔔 تنبيهات عاجلة'));
+
+  const items = [];
+
+  if (overdue.length > 0) {
+    items.push({
+      icon: '🚨',
+      color: '#C62828',
+      bg: '#FFEBEE',
+      label: overdue.length + ' طلب متأخر',
+      sub: overdue.slice(0, 2).map((o) => {
+        const c = state.customerMap[o.customerId];
+        return (c ? c.name : 'عميل') + ' · ' + formatDate(o.dueDate);
+      }).join(' — '),
+    });
+  }
+
+  if (needPickup.length > 0) {
+    items.push({
+      icon: '🧵',
+      color: '#F57C00',
+      bg: '#FFF3E0',
+      label: needPickup.length + ' طلب يحتاج استلام قماش',
+      sub: 'التسليم خلال 3 أيام',
+    });
+  }
+
+  if (ready.length > 0) {
+    items.push({
+      icon: '✅',
+      color: '#2E7D32',
+      bg: '#E8F5E9',
+      label: ready.length + ' طلب جاهز للتسليم',
+      sub: 'في انتظار العميل',
+    });
+  }
+
+  items.forEach((it) => {
+    card.appendChild(el('div', {
+      style: {
+        padding: '8px 10px', background: it.bg,
+        borderRadius: '8px', marginBottom: '6px',
+        borderRight: '3px solid ' + it.color,
+      },
+    }, [
+      el('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' },
+      }, [
+        el('span', { style: { fontSize: '16px' } }, it.icon),
+        el('span', { style: { fontSize: '13px', fontWeight: '600', color: it.color } }, it.label),
+      ]),
+      it.sub ? el('div', {
+        style: { fontSize: '11px', color: '#666', marginTop: '2px', lineHeight: '1.4' },
+      }, it.sub) : null,
+    ]));
+  });
+
+  return card;
+}
+
+/* ==========================================================================
+   8. بطاقة الطلب
    ========================================================================== */
 
 function buildOrderCard(o) {
@@ -777,7 +872,7 @@ function buildOrderCard(o) {
 }
 
 /* ==========================================================================
-   7. بطاقة مصغّرة (كانبان/تجميع)
+   9. بطاقة مصغّرة (كانبان/تجميع)
    ========================================================================== */
 
 function buildMiniCard(o, opts = {}) {
@@ -817,7 +912,7 @@ function buildMiniCard(o, opts = {}) {
 }
 
 /* ==========================================================================
-   8. عرض الكانبان
+   10. كانبان + تجميع
    ========================================================================== */
 
 function renderKanban() {
@@ -838,8 +933,7 @@ function renderKanban() {
     const items = state.orders.filter((o) => o.status === status);
 
     const column = el('div', {
-      style: { background: '#F6F1E6', borderRadius: '12px',
-        padding: '10px', minHeight: '200px' },
+      style: { background: '#F6F1E6', borderRadius: '12px', padding: '10px', minHeight: '200px' },
     });
 
     column.appendChild(el('div', {
@@ -847,8 +941,7 @@ function renderKanban() {
         marginBottom: '8px', paddingBottom: '6px',
         borderBottom: '2px solid ' + sInfo.color },
     }, [
-      el('span', { style: { fontSize: '13px', fontWeight: '700', color: sInfo.color } },
-        sInfo.label),
+      el('span', { style: { fontSize: '13px', fontWeight: '700', color: sInfo.color } }, sInfo.label),
       el('span', {
         style: { fontSize: '11px', fontWeight: '600', color: '#fff',
           background: sInfo.color, padding: '2px 8px', borderRadius: '10px' },
@@ -860,37 +953,27 @@ function renderKanban() {
         style: { fontSize: '11px', color: '#999', textAlign: 'center', padding: '20px 0' },
       }, 'لا يوجد'));
     } else {
-      items.slice(0, 30).forEach((o) => {
-        column.appendChild(buildMiniCard(o, { color: sInfo.color }));
-      });
+      items.slice(0, 30).forEach((o) => column.appendChild(buildMiniCard(o, { color: sInfo.color })));
     }
-
     board.appendChild(column);
   });
 
   wrap.appendChild(board);
 }
 
-/* ==========================================================================
-   9. عرض التجميع
-   ========================================================================== */
-
 function renderGrouping() {
   const wrap = state.container?.querySelector('#orders-list');
   if (!wrap) return;
   clear(wrap);
 
-  const active = state.orders.filter((o) =>
-    o.status !== 'delivered' && o.status !== 'cancelled'
-  );
+  const active = state.orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
   const groups = groupOrders(active);
 
   if (groups.length === 0) {
     wrap.appendChild(el('div', { className: 'empty-state' }, [
       el('div', { className: 'empty-state__icon' }, '🎯'),
       el('h2', { className: 'empty-state__title' }, 'لا توجد مجموعات'),
-      el('p', { className: 'empty-state__text' },
-        'لم يتم العثور على طلبات متشابهة (نفس العميل + نفس النوع).'),
+      el('p', { className: 'empty-state__text' }, 'لم يتم العثور على طلبات متشابهة.'),
     ]));
     return;
   }
@@ -900,8 +983,7 @@ function renderGrouping() {
     const customerName = c ? c.name : 'عميل محذوف';
 
     const card = el('div', {
-      className: 'card',
-      style: { marginBottom: '12px', borderRight: '4px solid #1F6D57' },
+      className: 'card', style: { marginBottom: '12px', borderRight: '4px solid #1F6D57' },
     });
 
     card.appendChild(el('div', {
@@ -910,18 +992,12 @@ function renderGrouping() {
         borderBottom: '1px solid #E5DDD0' },
     }, [
       el('div', { style: { flex: '1' } }, [
-        el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } },
-          '👤 ' + customerName),
+        el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, '👤 ' + customerName),
         el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } },
           '📦 ' + g.type + ' — ' + g.orders.length + ' طلب'),
       ]),
       el('div', { style: { textAlign: 'left' } }, [
-        el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#2E7D32' } },
-          formatEGP(g.totalAmount)),
-        el('span', {
-          style: { fontSize: '10px', fontWeight: '600', color: '#1F6D57',
-            background: '#E8F5E9', padding: '2px 8px', borderRadius: '10px' },
-        }, '🎯 قابلة للتجميع'),
+        el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#2E7D32' } }, formatEGP(g.totalAmount)),
       ]),
     ]));
 
@@ -951,7 +1027,7 @@ function renderGrouping() {
 }
 
 /* ==========================================================================
-   10. الرسم الرئيسي
+   11. الرسم الرئيسي
    ========================================================================== */
 
 function renderStats() {
@@ -985,6 +1061,25 @@ function renderStats() {
   ]));
 }
 
+/**
+ * إعادة رسم الشريط + التنبيهات.
+ */
+function renderTopBanners() {
+  const dailyWrap = state.container?.querySelector('#orders-daily-limit');
+  if (dailyWrap) {
+    clear(dailyWrap);
+    const bar = buildDailyLimitBar();
+    if (bar) dailyWrap.appendChild(bar);
+  }
+
+  const alertsWrap = state.container?.querySelector('#orders-alerts');
+  if (alertsWrap) {
+    clear(alertsWrap);
+    const alerts = buildUrgentAlerts();
+    if (alerts) alertsWrap.appendChild(alerts);
+  }
+}
+
 function buildViewToggle() {
   const wrap = el('div', {
     style: {
@@ -1005,10 +1100,7 @@ function buildViewToggle() {
       type: 'button',
       className: 'btn btn--sm ' + (isActive ? 'btn--primary' : 'btn--ghost'),
       style: { flex: '1' },
-      onClick: () => {
-        state.activeView = v.id;
-        renderView();
-      },
+      onClick: () => { state.activeView = v.id; renderView(); },
     }, v.icon + ' ' + v.label));
   });
 
@@ -1019,7 +1111,6 @@ function renderFilters() {
   const wrap = state.container?.querySelector('#orders-filters');
   if (!wrap) return;
   clear(wrap);
-
   if (state.activeView !== 'list') return;
 
   const counts = { all: state.orders.length };
@@ -1080,7 +1171,7 @@ function renderView() {
 }
 
 /* ==========================================================================
-   11. المؤقت الحيّ
+   12. المؤقت الحيّ
    ========================================================================== */
 
 function startLiveTimer() {
@@ -1092,28 +1183,25 @@ function startLiveTimer() {
       if (!getActiveSession(sessions)) return;
       const badge = state.container.querySelector('[data-timer-id="' + o.id + '"]');
       if (!badge) return;
-      const totalMs = getTotalWorkTime(sessions);
-      badge.textContent = '⏱️ يعمل · ' + formatDuration(totalMs);
+      badge.textContent = '⏱️ يعمل · ' + formatDuration(getTotalWorkTime(sessions));
     });
   }, 1000);
 }
 
 function stopLiveTimer() {
-  if (state._timerInterval) {
-    clearInterval(state._timerInterval);
-    state._timerInterval = null;
-  }
+  if (state._timerInterval) { clearInterval(state._timerInterval); state._timerInterval = null; }
 }
 
 async function refreshAll() {
   await loadData();
+  renderTopBanners();
   renderStats();
   renderView();
   startLiveTimer();
 }
 
 /* ==========================================================================
-   12. API
+   13. API
    ========================================================================== */
 
 export const ordersPage = {
@@ -1123,22 +1211,33 @@ export const ordersPage = {
     state.activeFilter = 'all';
     state.activeView = 'list';
 
+    /* شريط الحد اليومي */
+    container.appendChild(el('div', { id: 'orders-daily-limit' }));
+
+    /* التنبيهات العاجلة */
+    container.appendChild(el('div', { id: 'orders-alerts' }));
+
+    /* البطاقات الإحصائية */
     container.appendChild(el('div', {
       id: 'orders-stats',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
 
+    /* زر الإضافة */
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block',
       style: { marginBottom: '12px' },
       onClick: () => openOrderForm(),
     }, '➕ إضافة طلب'));
 
+    /* تبديل العرض + الفلاتر */
     container.appendChild(el('div', { id: 'orders-view-toggle' }));
     container.appendChild(el('div', {
       id: 'orders-filters',
       style: { display: 'flex', flexWrap: 'wrap', marginBottom: '12px' },
     }));
+
+    /* القائمة */
     container.appendChild(el('div', { id: 'orders-list' }));
 
     await refreshAll();
