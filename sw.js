@@ -5,42 +5,156 @@
      - HTML (navigations): Network-first → fallback لـ index.html
      - Static (CSS/JS/SVG/JSON): Cache-first → ثم network → تخزين
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.0 (270 اختبار + Error Handler + FAB + Autosave + Dark Mode + Offline Indicator)
+   الإصدار: v3.3.2 — دعم كامل للعمل offline
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.1';
+const CACHE_VERSION = 'v3.3.2';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
-/* --- الأصول المُخزَّنة مسبقاً عند التثبيت --- */
+/* ==========================================================================
+   PRECACHE_URLS — كل الملفات المطلوبة للعمل offline
+   ========================================================================== */
+
 const PRECACHE_URLS = [
+  /* --- Core shell --- */
   './',
   './index.html',
   './manifest.json',
+
+  /* --- Styles --- */
   './styles/main.css',
   './styles/base.css',
   './styles/components.css',
   './styles/layout.css',
   './styles/settings.css',
   './styles/themes.css',
+
+  /* --- Icons --- */
   './assets/icons/icon.svg',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png',
+
+  /* --- Main entry --- */
   './src/main.js',
   './src/pwa.js',
+
+  /* --- Core modules --- */
+  './src/core/config.js',
+  './src/core/dom.js',
+  './src/core/events.js',
+  './src/core/sanitize.js',
+  './src/core/utils.js',
   './src/core/error-handler.js',
+
+  /* --- Data layer --- */
+  './src/data/schema.js',
+  './src/data/idb.js',
+  './src/data/repository.js',
+  './src/data/search.js',
+
+  /* --- Data repos --- */
+  './src/data/repos/activity.js',
+  './src/data/repos/appointments.js',
+  './src/data/repos/commitment-payments.js',
+  './src/data/repos/commitments.js',
+  './src/data/repos/customers.js',
+  './src/data/repos/expenses.js',
+  './src/data/repos/house-expenses.js',
+  './src/data/repos/inventory.js',
+  './src/data/repos/loan-payments.js',
+  './src/data/repos/orders.js',
+  './src/data/repos/payments.js',
+  './src/data/repos/personal-loans.js',
+  './src/data/repos/portfolio.js',
+  './src/data/repos/referrals.js',
+  './src/data/repos/savings-goals.js',
+  './src/data/repos/settings.js',
+  './src/data/repos/trash.js',
+  './src/data/repos/worker-payments.js',
+  './src/data/repos/workers.js',
+
+  /* --- Security --- */
+  './src/security/auth.js',
+  './src/security/pin-crypto.js',
+
+  /* --- UI components --- */
+  './src/ui/client-mode.js',
+  './src/ui/collapsible.js',
+  './src/ui/controls.js',
   './src/ui/fab.js',
-  './src/services/draft-manager.js',
-  './src/ui/theme.js',
+  './src/ui/form-builder.js',
+  './src/ui/layout.js',
+  './src/ui/modal.js',
+  './src/ui/notifications-center.js',
   './src/ui/offline-indicator.js',
+  './src/ui/order-image-picker.js',
+  './src/ui/progressive-list.js',
+  './src/ui/quick-preview.js',
+  './src/ui/sidebar.js',
+  './src/ui/signature-pad.js',
+  './src/ui/sub-page.js',
+  './src/ui/theme.js',
+  './src/ui/toast.js',
+  './src/ui/topbar.js',
+  './src/ui/universal-search.js',
+
+  /* --- Services --- */
+  './src/services/auto-backup.js',
+  './src/services/commitments-calculator.js',
+  './src/services/draft-manager.js',
+  './src/services/financial-calculator.js',
+  './src/services/kpis-calculator.js',
+  './src/services/loans-calculator.js',
+  './src/services/notifications.js',
+  './src/services/order-scheduler.js',
+  './src/services/order-timing.js',
+
+  /* --- Pages --- */
+  './src/pages/dashboard.js',
+  './src/pages/customers.js',
+  './src/pages/orders.js',
+  './src/pages/payments.js',
+  './src/pages/inventory.js',
+  './src/pages/workers.js',
+  './src/pages/expenses.js',
+  './src/pages/reports.js',
+  './src/pages/calendar.js',
+  './src/pages/pricing-calculator.js',
+  './src/pages/financial-center.js',
+  './src/pages/kpis.js',
+  './src/pages/portfolio.js',
+  './src/pages/commitments.js',
+  './src/pages/house-expenses.js',
+  './src/pages/loans.js',
+  './src/pages/referrals.js',
+  './src/pages/occasions.js',
+  './src/pages/activity-log.js',
+  './src/pages/trash.js',
+  './src/pages/cloud-sync.js',
+  './src/pages/tests.js',
+
+  /* --- Settings sub-pages --- */
+  './src/pages/settings/index.js',
+  './src/pages/settings/sections-workshop.js',
+  './src/pages/settings/sections-data.js',
+  './src/pages/settings/sections-system.js',
+  './src/pages/settings/sections-security.js',
 ];
 
 /* ==========================================================================
-   1. INSTALL — تخزين الأصول الأساسية
+   1. INSTALL — تخزين كل الأصول
    ========================================================================== */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS).catch((err) => {
-        console.warn('[SW] Precache partial failure:', err);
-      });
+      /* تخزين كل ملف بمفرده — لتجنّب فشل ذري */
+      return Promise.all(
+        PRECACHE_URLS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn('[SW] Failed to cache:', url, err.message);
+          })
+        )
+      );
     }).then(() => self.skipWaiting())
   );
 });
@@ -102,6 +216,7 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => {
+          /* Offline ولا يوجد كاش */
           return new Response(
             JSON.stringify({ error: 'offline', url: url.pathname }),
             { status: 503, headers: { 'Content-Type': 'application/json' } }
