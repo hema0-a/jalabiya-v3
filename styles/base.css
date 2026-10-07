@@ -154,6 +154,117 @@ p {
 }
 
 /* ==========================================================================
+   2.b DARK MODE — الوضع الليلي (CSS Variable Override)
+   ==========================================================================
+   يُطبَّق عبر body.dark-mode.
+   يُعاد تعريف متغيرات الألوان فقط — باقي المتغيرات تُورَث.
+   ========================================================================== */
+
+body.dark-mode {
+  /* --- الألوان الأساسية (داكنة) --- */
+  --color-primary:        #4CAF88;
+  --color-primary-light:  #5CBF99;
+  --color-primary-dark:   #7CC4A3;
+  --color-accent:         #D4A55C;
+  --color-accent-light:   #E8C48C;
+  --color-bg:             #121212;
+  --color-surface:        #1E1E1E;
+  --color-border:         #2E2E2E;
+  --color-text:           #E0E0E0;
+
+  /* --- ألوان الحالات (معدَّلة للتباين على خلفية داكنة) --- */
+  --color-success:        #4CAF50;
+  --color-warning:        #FFB74D;
+  --color-danger:         #EF5350;
+  --color-info:           #64B5F6;
+
+  /* --- الظلال (أقوى على الخلفية الداكنة) --- */
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-m: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-l: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  /* --- التطبيق الفعلي على body --- */
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+/* --- تحسينات إضافية للوضع الليلي --- */
+
+/* 1. الخطوط الفاصلة */
+body.dark-mode hr {
+  border-color: var(--color-border);
+}
+
+/* 2. الحقول المُعطَّلة */
+body.dark-mode .input:disabled,
+body.dark-mode .textarea:disabled,
+body.dark-mode .select:disabled {
+  background: #1A1A1A;
+  color: #666;
+}
+
+/* 3. الـ Badges — نسخة داكنة */
+body.dark-mode .badge--success { background: #1B3B1E; color: #81C784; }
+body.dark-mode .badge--warning { background: #3B2A17; color: #FFB74D; }
+body.dark-mode .badge--danger  { background: #3B1B1B; color: #EF5350; }
+body.dark-mode .badge--info    { background: #1B2A3B; color: #64B5F6; }
+body.dark-mode .badge--accent  { background: #3B2E17; color: #E8C48C; }
+
+/* 4. الـ Toast — خلفية داكنة أوضح */
+body.dark-mode .toast {
+  background: #2A2A2A;
+  color: #E0E0E0;
+}
+body.dark-mode .toast--success { background: #1B5E20; }
+body.dark-mode .toast--warning { background: #E65100; }
+body.dark-mode .toast--danger  { background: #B71C1C; }
+body.dark-mode .toast--info    { background: #0D47A1; }
+
+/* 5. الـ Skeleton — ألوان داكنة */
+body.dark-mode .skeleton {
+  background: linear-gradient(90deg,
+    #2E2E2E 25%,
+    #3A3A3A 50%,
+    #2E2E2E 75%);
+  background-size: 200% 100%;
+}
+
+/* 6. الـ Code/Pre */
+body.dark-mode pre {
+  background: #0A0A0A !important;
+  color: #E0E0E0 !important;
+}
+
+/* 7. الـ Modal Backdrop — أغمق */
+body.dark-mode .modal-backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* 8. الـ Collapsible — header hover */
+body.dark-mode .collapsible__header:hover {
+  background: rgba(76, 175, 136, 0.08);
+}
+
+/* 9. الـ Sidebar active item */
+body.dark-mode .sidebar__item--active {
+  background: var(--color-primary);
+  color: #0A0A0A;
+}
+
+/* 10. الـ Topbar — حدود أوضح */
+body.dark-mode .topbar {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* 11. Smooth transition عند التبديل (يُفعَّل عبر html[data-theme-transition]) */
+html[data-theme-transition="on"] body,
+html[data-theme-transition="on"] body * {
+  transition: background-color var(--duration-normal) var(--ease-out),
+              color var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out) !important;
+}
+
+/* ==========================================================================
    3. TYPOGRAPHY — الخطوط
    ========================================================================== */
 
