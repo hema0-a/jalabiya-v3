@@ -745,3 +745,144 @@ const cloudSyncSection = {
             confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
           });
           if (!ok) return;
+          pullBtn.disabled = true;
+          pullBtn.textContent = '⏳ جارٍ التنزيل...';
+          const res = await firestoreSync.pull(currentUser.uid);
+          if (!res.ok) {
+            toast.danger(res.error || 'فشل التنزيل');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          if (!res.data) {
+            toast.warning('لا توجد بيانات سحابية بعد');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          const applyRes = await firestoreSync.apply(res.data);
+          if (applyRes.ok) {
+            localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
+            toast.success('تم التنزيل — جارٍ إعادة التحميل...');
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            toast.danger(applyRes.error || 'فشل التطبيق');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+          }
+        },
+      }, '⬇️ تنزيل من السحابة');
+
+      const logoutBtn = el('button', {
+        className: 'btn btn--danger btn--block', type: 'button',
+        onClick: async () => {
+          await authSync.logout();
+          toast.info('تم تسجيل الخروج');
+          /* onAuthChange سيُحدّث currentUser تلقائياً */
+        },
+      }, '🚪 تسجيل الخروج');
+
+      body.appendChild(pushBtn);
+      body.appendChild(pullBtn);
+      body.appendChild(logoutBtn);
+    };
+
+    /* --- رسم أولي (بحالة "تحقق من الجلسة") --- */
+    currentUser = undefined;
+    draw();
+
+    /* --- استماع تلقائي لحالة المصادقة (v3.3.2) --- */
+    unsubAuth = authSync.onAuthChange((user) => {
+      if (destroyed) return;
+      currentUser = user || null;
+      draw();
+    });
+
+    /* --- الاستماع لتغير حالة الاتصال --- */
+    const onOnline = () => { if (!destroyed) draw(); };
+    const onOffline = () => { if (!destroyed) draw(); };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+
+    /* --- تسجيل دالة تنظيف على body (يُستدعى عند إعادة رسم القسم) --- */
+    const cleanup = () => {
+      if (destroyed) return;
+      destroyed = true;
+      try { if (unsubAuth) unsubAuth(); } catch (e) { /* ignore */ }
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+
+    /* --- مراقبة إزالة body من DOM لتنظيف المستمعين --- */
+    const observer = new MutationObserver(() => {
+      if (!document.contains(body)) {
+        observer.disconnect();
+        cleanup();
+      }
+    });
+    try {
+      observer.observe(body.parentNode || document.body, { childList: true, subtree: true });
+    } catch (e) {
+      /* fail silently */
+    }
+  },
+};
+
+/* ==========================================================================
+   6. ضغط الصور
+   ========================================================================== */
+
+const imageCompressionSection = {
+  id: 'image-compression',
+  icon: '🖼️',
+  title: 'ضغط الصور',
+  async render(body, currentSettings, saveFn) {
+    const ic = currentSettings.imageCompression || DEFAULT_SETTINGS.imageCompression;
+
+    function selectField(label, key, options, currentValue) {
+      const sel = el('select', { className: 'select' });
+      options.forEach(([v, l]) => {
+        const o = el('option', { value: String(v) }, l);
+        if (String(currentValue) === String(v)) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', () => {
+        const val = isNaN(Number(sel.value)) ? sel.value : Number(sel.value);
+        saveFn({ imageCompression: { [key]: val } });
+      });
+      return el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, label),
+        sel,
+      ]);
+    }
+
+    body.appendChild(selectField('الجودة', 'quality', [
+      ['0.60', '60%'], ['0.75', '75%'], ['0.85', '85%'], ['0.95', '95%'],
+    ], ic.quality));
+
+    body.appendChild(selectField('الحجم الأقصى', 'maxSizeKB', [
+      [200, '200 KB'], [500, '500 KB'], [800, '800 KB'], [1500, '1.5 MB'],
+    ], ic.maxSizeKB));
+
+    body.appendChild(selectField('الأبعاد القصوى', 'maxDimensionPx', [
+      [800, '800 px'], [1200, '1200 px'], [1600, '1600 px'], [2000, '2000 px'],
+    ], ic.maxDimensionPx));
+
+    body.appendChild(el('div', {
+      style: {
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+      },
+    }, '📊 التوفير المتوقع: ~' + Math.round((1 - (ic.quality || 0.85)) * 100) + '%'));
+  },
+};
+
+/* --- تصدير --- */
+export const SYSTEM_SECTIONS = [
+  notificationsSection,
+  occasionsSection,
+  autoMessagesSection,
+  backupSection,
+  cloudSyncSection,
+  imageCompressionSection,
+];
