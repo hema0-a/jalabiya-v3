@@ -1,0 +1,251 @@
+# Changelog — ورشة تفصيل الجلابيب V3
+
+جميع التغييرات المهمة في المشروع تُوثَّق هنا.
+التنسيق يتبع [Keep a Changelog](https://keepachangelog.com/) و[Semantic Versioning](https://semver.org/).
+
+---
+
+## [3.2.0] — 2026-10-07 — Priority Enhancements 🚀
+
+**الإصدار الرابع — 4 تحسينات أولوية قصوى + 270 اختبار ناجح.**
+
+### ملخص
+
+- **8 ملفات** معدَّلة/مُنشأة (4 جديدة + 4 تعديلات)
+- **270 اختباراً** — كلها ناجحة (كانت 189)
+- **25 صفحة** (24 + صفحة الاختبارات)
+- **20 مخزناً** IndexedDB
+- **Chrome + Safari** — يعمل على كليهما
+
+### 🔴 التحسين 1: تفعيل صفحة الاختبارات
+
+**المشكلة**: صفحة الاختبارات كانت معطَّلة بشكل صريح في `main.js`.
+
+**الحل**:
+- **`src/pages/tests.js`** (جديد) — صفحة عرض نتائج الاختبارات مع زر تشغيل + ملخص.
+- **`src/tests/index.js`** — إضافة استيراد `loans.test.js`.
+- **`src/main.js`** — 4 تعديلات:
+  - إضافة `case 'tests'` في `loadPageModule`.
+  - إضافة `'tests': 'testsPage'` في `MODULE_EXPORT_MAP`.
+  - إزالة كتلة التعطيل في `renderPage`.
+  - تحديث تعليق الرأس.
+- **`src/tests/modules/data.test.js`** — استخدام `STORE_NAMES.length` بدل الثابت `15`.
+- **`src/pages/orders.js`** — إضافة `data-filter` لأزرار الفلترة (لإصلاح اختبار 6/7).
+
+**النتيجة**: `#/tests` يعمل → **270/270 اختبار ✅**
+
+### 🔴 التحسين 2: Global Error Handler
+
+**`src/core/error-handler.js`** (جديد):
+- التقاط `window.error` (sync).
+- التقاط `window.unhandledrejection` (async).
+- تسجيل في: Console + `activity-log` + حلقة ذاكرة (20 خطأ).
+- API: `install()`, `report(err, context)`, `getRecent()`, `clear()`, `isInstalled()`.
+
+**`src/main.js`** — تفعيل عند بدء التشغيل.
+
+### 🔴 التحسين 3: FAB (إجراءات سريعة)
+
+**`src/ui/fab.js`** (جديد):
+- زر عائم أسفل يسار → bottom-sheet بـ 4 إجراءات:
+  - 📋 طلب جديد → `#/orders`
+  - 👤 عميل جديد → `#/customers`
+  - 💰 دفعة جديدة → `#/payments`
+  - 💸 مصروف جديد → `#/expenses`
+- لا يظهر في `#/tests`.
+- Toast إرشادي بعد كل تنقّل.
+
+**`src/main.js`** — تفعيل بعد Error Handler.
+
+### 🔴 التحسين 4: Draft Autosave
+
+**`src/services/draft-manager.js`** (جديد):
+- API: `save(key, data, {ttl})`, `get(key)`, `has(key)`, `clear(key)`, `clearAll()`, `list()`.
+- تخزين في `localStorage` (مفتاح `jalabiya_v3_draft_*`).
+- صلاحية افتراضية 24 ساعة — حذف تلقائي عند الانتهاء.
+
+**`src/pages/orders.js`** — تفعيل Autosave في `openOrderForm`:
+- استرجاع تلقائي للمسودة عند فتح نموذج جديد.
+- حفظ تلقائي أثناء الكتابة (debounce 500ms).
+- مسح المسودة عند الحفظ الناجح.
+
+### 🛠️ تحسينات جانبية
+
+- **`sw.js`**:
+  - `CACHE_VERSION`: `'v3.0.0-p28'` → `'v3.2.0'`.
+  - إضافة الملفات الجديدة إلى `PRECACHE_URLS`:
+    - `./src/core/error-handler.js`
+    - `./src/ui/fab.js`
+    - `./src/services/draft-manager.js`
+
+### 📁 الملفات المتأثرة
+
+| # | الملف | الإجراء |
+|---|---|---|
+| 1 | `src/pages/tests.js` | 🆕 جديد |
+| 2 | `src/tests/index.js` | ✏️ إضافة استيراد |
+| 3 | `src/main.js` | ✏️ 7 مواضع |
+| 4 | `src/tests/modules/data.test.js` | ✏️ 2 اختبار |
+| 5 | `src/pages/orders.js` | ✏️ `data-filter` + Autosave |
+| 6 | `src/core/error-handler.js` | 🆕 جديد |
+| 7 | `src/ui/fab.js` | 🆕 جديد |
+| 8 | `src/services/draft-manager.js` | 🆕 جديد |
+| 9 | `sw.js` | ✏️ Cache Version + Precache |
+
+### الاختبارات
+
+- **270 اختباراً** في 39 وحدة — كلها ناجحة ✅
+- **Chrome 120+** ✅
+- **Safari 17+** ✅
+
+### ملاحظات تقنية
+
+- **static imports فقط** في `tests/`, `core/`, `data/`, `ui/`, `pages/` (القاعدة 14).
+- **dynamic imports** مسموح فقط في `main.js` للصفحات.
+- **Service Worker** يعرض تنبيه تحديث عند تغيّر النسخة.
+
+---
+
+## [3.1.0] — 2026-10-07 — Pre-Enhancements
+
+### ملخص
+- **262 اختباراً** في 38 وحدة
+- **24 صفحة** كاملة
+- **20 مخزناً** في IndexedDB (v9)
+
+### ملاحظة
+- صفحة الاختبارات كانت معطَّلة مؤقتاً.
+- السبب: كتلة تعطيل صريحة في `main.js`.
+
+---
+
+## [1.0.0] — 2026-10-05 — Official Release 🎉
+
+**الإصدار الرسمي الأول من V3 — مكتمل وجاهز للاستخدام.**
+
+### ملخص
+
+- **44 ملف** موزعة على 5 طبقات
+- **189 اختباراً** — كلها ناجحة
+- **10 مخازن** في IndexedDB
+- **10 مستودعات** متخصصة
+- **7 مكونات UI**
+- **9 صفحات** كاملة
+- **13 قسماً** في الإعدادات
+- **4 ملفات** في طبقة Sync
+- **PWA** قابل للتثبيت + يعمل offline
+
+### أُضيف في المرحلة 10 (PWA)
+
+**PWA Setup:**
+- `manifest.json` — بيانات التطبيق + 4 أيقونات (192 PNG, 512 PNG x2 maskable/any, SVG)
+- `sw.js` — Service Worker (Network-first للـ HTML، Cache-first للـ static)
+- `assets/icons/icon.svg` — أيقونة خضراء ببكرة خيط
+- `assets/icons/icon-192.png` — أيقونة 192x192
+- `assets/icons/icon-512.png` — أيقونة 512x512
+- `src/main.js` — تسجيل Service Worker
+
+**الميزات:**
+- تثبيت كتطبيق PWA على الجوال
+- العمل offline بالكامل بعد أول تحميل
+- أيقونات native على شاشة الجوال
+- عرض standalone (بدون شريط المتصفح)
+- اختصارات سريعة (3 shortcuts)
+
+### تغيّر
+- `manifest.json` — إضافة `id: "/jalabiya-v3/"` لمنع التعارض مع V2
+- `manifest.json` — PNG icons بدلاً من SVG فقط (متوافق مع Chrome Android)
+
+### إصلاحات
+- تصحيح `id` في manifest — يمنع "already installed" عند التثبيت
+
+### الاختبارات
+- **189 اختباراً** في 27 وحدة — كلها ناجحة ✅
+
+---
+
+## [0.7.0] — 2026-10-05 — Phase 9 Complete
+
+### أُضيف
+- `src/sync/firebase-config.js` — تحميل Lazy لـ Firebase SDK
+- `src/sync/auth-sync.js` — مصادقة Email/Password
+- `src/sync/firestore-sync.js` — Push/Pull/Apply
+- `src/sync/offline-queue.js` — طابور العمليات
+- قسم "المزامنة السحابية" في الإعدادات
+
+### ملاحظة
+- Firebase config فارغ حالياً (`apiKey: ''`) — المزامنة تحتاج بيانات حقيقية
+
+### الاختبارات
+- **189 اختباراً** ✅
+
+---
+
+## [0.6.0] — 2026-10-05 — Phase 8 Complete
+
+### أُضيف
+- صفحة الإعدادات الاحترافية (13 قسماً)
+- `src/pages/settings/index.js` + 4 ملفات أقسام
+- `styles/settings.css`
+- `src/tests/modules/settings.test.js` — 8 اختبارات
+
+### الاختبارات
+- **189 اختباراً** ✅
+
+---
+
+## [0.5.0] — 2026-10-05 — Phase 7 Complete
+
+### أُضيف
+- 5 صفحات: payments, inventory, workers, expenses, reports
+- `src/tests/modules/pages2.test.js`
+
+### الاختبارات
+- **181 اختباراً** ✅
+
+---
+
+## [0.4.0] — 2026-10-05 — Phase 6 Complete
+
+### أُضيف
+- dashboard, customers, orders
+
+### الاختبارات
+- **168 اختباراً** ✅
+
+---
+
+## [0.3.0] — 2026-10-05 — Phase 5 Complete
+
+### أُضيف
+- طبقة الأمان + 7 مكونات UI + Registry Pattern
+
+### الاختبارات
+- **144 اختباراً** ✅
+
+---
+
+## [0.2.0] — 2026-10-04 — Phase 2 Complete
+
+### أُضيف
+- طبقة البيانات الكاملة
+
+### الاختبارات
+- **122 اختباراً** ✅
+
+---
+
+## [0.1.0] — 2026-10-04 — Phase 1 Complete
+
+### أُضيف
+- الأساس (config, events, sanitize, dom, utils)
+
+### الاختبارات
+- **39 اختباراً** ✅
+
+---
+
+## [0.0.1] — 2026-10-04 — Bootstrap
+
+### أُضيف
+- إنشاء المستودع + تفعيل Pages
