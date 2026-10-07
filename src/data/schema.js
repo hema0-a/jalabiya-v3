@@ -1,7 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
-   v8: إضافة مخزن workerPayments (دفعات العمال).
+   v9: إضافة مخزن backups (النسخ الاحتياطية التلقائية).
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
 
@@ -151,6 +151,13 @@ export const SCHEMA = {
     indexes: [
       idx('by_workerId', 'workerId'),
       idx('by_date', 'date'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v9 --- */
+  [STORES.BACKUPS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
       idx('by_createdAt', 'createdAt'),
     ],
   },
