@@ -1,5 +1,5 @@
 /* ==========================================================================
-   customers.js — صفحة العملاء (CRUD + مقاسات + بحث + VIP + معاينة + كشف)
+   customers.js — صفحة العملاء (CRUD + مقاسات + عرض تدريجي + كشف حساب)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -12,12 +12,14 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
 import { printCustomerStatement } from '../services/invoice-print.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 
 let state = {
   customers: [],
   searchQuery: '',
   container: null,
   measurementFields: [],
+  list: null,           // مرجع الـ progressive list
 };
 
 /* ==========================================================================
@@ -44,10 +46,6 @@ async function loadCustomers() {
   state.customers = list;
 }
 
-/**
- * تحميل حقول المقاسات المفعَّلة من الإعدادات.
- * @returns {Promise<void>}
- */
 async function loadMeasurementFields() {
   try {
     const s = await settings.get();
@@ -62,11 +60,6 @@ async function loadMeasurementFields() {
    3. النموذج
    ========================================================================== */
 
-/**
- * بناء قسم المقاسات (ديناميكي من الإعدادات).
- * @param {Object} existingMeasurements — القيم الحالية للعميل (إن كان تعديلاً)
- * @returns {{node:HTMLElement, getValues:Function}}
- */
 function buildMeasurementsSection(existingMeasurements) {
   const wrap = el('div', { className: 'field' });
 
@@ -82,7 +75,6 @@ function buildMeasurementsSection(existingMeasurements) {
     return { node: wrap, getValues: () => ({}) };
   }
 
-  /* شبكة حقلين في كل صف */
   const grid = el('div', {
     style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' },
   });
@@ -91,11 +83,7 @@ function buildMeasurementsSection(existingMeasurements) {
 
   fields.forEach((f) => {
     const inp = el('input', {
-      className: 'input',
-      type: 'number',
-      min: '0',
-      step: '0.5',
-      placeholder: '0',
+      className: 'input', type: 'number', min: '0', step: '0.5', placeholder: '0',
     });
     if (values[f.id] != null && values[f.id] !== '') {
       inp.value = String(values[f.id]);
@@ -241,11 +229,6 @@ async function printStatement(customer) {
    5. بطاقة عميل
    ========================================================================== */
 
-/**
- * هل لدى العميل مقاسات مسجَّلة؟
- * @param {Object} c
- * @returns {boolean}
- */
 function hasMeasurements(c) {
   if (!c.measurements) return false;
   return Object.keys(c.measurements).length > 0;
@@ -292,13 +275,9 @@ function buildCustomerCard(c) {
   if (withMeasurements) {
     card.appendChild(el('div', {
       style: {
-        fontSize: '11px',
-        color: '#1F6D57',
-        background: '#E8F5E9',
-        padding: '3px 8px',
-        borderRadius: '6px',
-        display: 'inline-block',
-        marginBottom: '8px',
+        fontSize: '11px', color: '#1F6D57', background: '#E8F5E9',
+        padding: '3px 8px', borderRadius: '6px',
+        display: 'inline-block', marginBottom: '8px',
       },
     }, '📏 مقاسات مسجَّلة'));
   }
@@ -315,23 +294,19 @@ function buildCustomerCard(c) {
   }, [
     el('button', {
       className: 'btn btn--sm btn--secondary',
-      'data-action': 'edit',
       onClick: () => openCustomerForm(c),
     }, '✏️ تعديل'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
-      'data-action': 'print',
       title: 'كشف حساب',
       onClick: () => printStatement(c),
     }, '📄 كشف'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
-      'data-action': 'vip',
       onClick: () => toggleVIP(c),
     }, c.vip ? '⭐ إزالة' : '⭐ VIP'),
     el('button', {
       className: 'btn btn--sm btn--danger',
-      'data-action': 'delete',
       onClick: () => deleteCustomer(c),
     }, '🗑️'),
   ]));
@@ -340,30 +315,23 @@ function buildCustomerCard(c) {
 }
 
 /* ==========================================================================
-   6. الرسم
+   6. حالة فارغة
    ========================================================================== */
 
-function renderList() {
-  const listContainer = state.container?.querySelector('#customers-list');
-  if (!listContainer) return;
-  clear(listContainer);
-
-  const filtered = filterCustomers(state.customers, state.searchQuery);
-
-  if (filtered.length === 0) {
-    const isSearching = state.searchQuery.trim() !== '';
-    listContainer.appendChild(el('div', { className: 'empty-state' }, [
-      el('div', { className: 'empty-state__icon' }, isSearching ? '🔍' : '👥'),
-      el('h2', { className: 'empty-state__title' },
-        isSearching ? 'لا نتائج' : 'لا يوجد عملاء'),
-      el('p', { className: 'empty-state__text' },
-        isSearching ? 'جرّب كلمة بحث أخرى' : 'اضغط "إضافة عميل" للبدء'),
-    ]));
-    return;
-  }
-
-  filtered.forEach((c) => listContainer.appendChild(buildCustomerCard(c)));
+function buildEmptyState() {
+  const isSearching = state.searchQuery.trim() !== '';
+  return el('div', { className: 'empty-state' }, [
+    el('div', { className: 'empty-state__icon' }, isSearching ? '🔍' : '👥'),
+    el('h2', { className: 'empty-state__title' },
+      isSearching ? 'لا نتائج' : 'لا يوجد عملاء'),
+    el('p', { className: 'empty-state__text' },
+      isSearching ? 'جرّب كلمة بحث أخرى' : 'اضغط "إضافة عميل" للبدء'),
+  ]);
 }
+
+/* ==========================================================================
+   7. الرسم
+   ========================================================================== */
 
 function renderStats() {
   const stats = state.container?.querySelector('#customers-stats');
@@ -386,14 +354,47 @@ function renderStats() {
   ]));
 }
 
+function renderList() {
+  const wrap = state.container?.querySelector('#customers-list');
+  if (!wrap) return;
+
+  const filtered = filterCustomers(state.customers, state.searchQuery);
+
+  /* الـ progressive list موجود → تحديث فقط */
+  if (state.list) {
+    state.list.setItems(filtered);
+    return;
+  }
+
+  /* إنشاء مرة واحدة */
+  const list = createProgressiveList({
+    items: filtered,
+    pageSize: 20,
+    render: (c) => buildCustomerCard(c),
+    emptyState: () => buildEmptyState(),
+  });
+
+  state.list = list;
+  wrap.appendChild(list.node);
+}
+
 async function refreshAll() {
   await loadCustomers();
   renderStats();
+
+  /* إعادة إنشاء القائمة عند التحديث الكامل */
+  if (state.list) {
+    state.list.destroy();
+    state.list = null;
+  }
+  const wrap = state.container?.querySelector('#customers-list');
+  if (wrap) clear(wrap);
+
   renderList();
 }
 
 /* ==========================================================================
-   7. API
+   8. API
    ========================================================================== */
 
 export const customersPage = {
@@ -401,8 +402,8 @@ export const customersPage = {
     clear(container);
     state.container = container;
     state.searchQuery = '';
+    state.list = null;
 
-    /* تحميل حقول المقاسات من الإعدادات */
     await loadMeasurementFields();
 
     container.appendChild(el('div', {
@@ -417,7 +418,10 @@ export const customersPage = {
     });
     searchInput.addEventListener('input', () => {
       state.searchQuery = searchInput.value;
-      renderList();
+      /* تحديث القائمة فقط — بدون rebuild كامل */
+      const filtered = filterCustomers(state.customers, state.searchQuery);
+      if (state.list) state.list.setItems(filtered);
+      else renderList();
     });
     container.appendChild(searchInput);
 
@@ -433,6 +437,12 @@ export const customersPage = {
   },
 
   destroy() {
-    state = { customers: [], searchQuery: '', container: null, measurementFields: [] };
+    if (state.list) {
+      try { state.list.destroy(); } catch (e) { /* ignore */ }
+    }
+    state = {
+      customers: [], searchQuery: '', container: null,
+      measurementFields: [], list: null,
+    };
   },
 };
