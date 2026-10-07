@@ -1,9 +1,13 @@
 /* ==========================================================================
-   dashboard.js — لوحة المعلومات (KPIs حقيقية)
+   dashboard.js — لوحة المعلومات (KPIs حقيقية + ترحيب باسم الورشة)
    ==========================================================================
    API:
      dashboardPage.render(container)  → Promise<void>
      dashboardPage.destroy()          → void
+
+   ⚠️ إصلاح (v3.3.1):
+   - يقرأ settings.workshop.name للترحيب + settings.workshop.logo للشعار.
+   - إذا كان الاسم فارغًا → يستخدم "صاحب الورشة" كافتراضي.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -11,6 +15,7 @@ import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { appointments } from '../data/repos/appointments.js';
+import { settings } from '../data/repos/settings.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
 
 let state = {
@@ -40,11 +45,12 @@ function startOfMonth() {
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, paymentsList, todayAppts] = await Promise.all([
+  const [customersList, ordersList, paymentsList, todayAppts, s] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
     appointments.getToday(),
+    settings.get().catch(() => ({})),
   ]);
 
   const activeOrders = ordersList.filter(
@@ -73,6 +79,10 @@ async function loadKPIs() {
     .sort((a, b) => a.dueDate - b.dueDate)
     .slice(0, 5);
 
+  /* قراءة معلومات الورشة من الإعدادات */
+  const workshopName = (s.workshop && s.workshop.name) ? String(s.workshop.name).trim() : '';
+  const workshopLogo = (s.workshop && s.workshop.logo) ? s.workshop.logo : '';
+
   return {
     totalCustomers: customersList.length,
     activeOrders: activeOrders.length,
@@ -81,6 +91,8 @@ async function loadKPIs() {
     recentCustomers,
     dueSoonOrders,
     todayApptsList: todayAppts,
+    workshopName,
+    workshopLogo,
   };
 }
 
@@ -88,19 +100,48 @@ async function loadKPIs() {
    2. بناء المكونات
    ========================================================================== */
 
-function buildHeader(name = 'صاحب الورشة') {
+function buildHeader(data) {
   const hour = new Date().getHours();
   let greeting = 'أهلاً';
   if (hour < 12) greeting = 'صباح الخير';
   else if (hour < 18) greeting = 'مساء الخير';
   else greeting = 'مساء الخير';
 
-  return el('div', { className: 'card', style: { marginBottom: '16px' } }, [
-    el('div', { style: { fontSize: '20px', fontWeight: '600', color: '#123C2F' } },
-      '🧵 ' + greeting + '، ' + name),
-    el('div', { style: { fontSize: '13px', color: '#2E8B6F', marginTop: '4px' } },
-      formatDate(new Date())),
-  ]);
+  /* اسم الورشة أو الافتراضي */
+  const name = data && data.workshopName ? data.workshopName : 'صاحب الورشة';
+
+  /* شعار اختياري */
+  const logoEl = (data && data.workshopLogo)
+    ? el('div', {
+        style: {
+          width: '44px', height: '44px', borderRadius: '50%',
+          background: 'url(' + data.workshopLogo + ') center/cover',
+          flexShrink: '0',
+          border: '2px solid #1F6D57',
+        },
+        'aria-label': 'شعار الورشة',
+      })
+    : null;
+
+  const nameEl = el('div', {
+    style: { fontSize: '20px', fontWeight: '600', color: '#123C2F' },
+  }, '🧵 ' + greeting + '، ' + name);
+
+  const subEl = el('div', {
+    style: { fontSize: '13px', color: '#2E8B6F', marginTop: '4px' },
+  }, formatDate(new Date()));
+
+  const textWrap = el('div', { style: { flex: '1', minWidth: '0' } }, [nameEl, subEl]);
+
+  return el('div', {
+    className: 'card',
+    style: {
+      marginBottom: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+    },
+  }, [logoEl, textWrap]);
 }
 
 function buildKPICards(data) {
@@ -250,7 +291,7 @@ export const dashboardPage = {
     state.data = data;
 
     /* بناء */
-    container.appendChild(buildHeader());
+    container.appendChild(buildHeader(data));
     container.appendChild(buildKPICards(data));
     container.appendChild(buildDueSoonSection(data.dueSoonOrders));
     container.appendChild(buildTodayAppointmentsSection(data.todayApptsList));
