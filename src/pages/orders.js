@@ -1,5 +1,5 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD + فلاتر + معاينة سريعة)
+   orders.js — صفحة الطلبات (CRUD + فلاتر + معاينة + طباعة)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -9,6 +9,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
+import { printOrderInvoice } from '../services/invoice-print.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
 /* --- الحالة --- */
@@ -171,7 +172,21 @@ async function advanceStatus(order) {
 }
 
 /* ==========================================================================
-   5. بطاقة الطلب
+   5. طباعة الفاتورة
+   ========================================================================== */
+
+async function printInvoice(order) {
+  const c = state.customerMap[order.customerId] || null;
+  try {
+    await printOrderInvoice(order, c);
+  } catch (err) {
+    console.error('[printInvoice]', err);
+    toast.danger('فشل فتح نافذة الطباعة');
+  }
+}
+
+/* ==========================================================================
+   6. بطاقة الطلب
    ========================================================================== */
 
 function buildOrderCard(o) {
@@ -192,7 +207,7 @@ function buildOrderCard(o) {
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
 
-  /* ✅ البطاقة كلها قابلة للنقر → معاينة */
+  /* البطاقة كلها قابلة للنقر → معاينة */
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '8px', cursor: 'pointer' },
@@ -225,6 +240,12 @@ function buildOrderCard(o) {
       'data-action': 'edit',
       onClick: () => openOrderForm(o),
     }, '✏️ تعديل'),
+    el('button', {
+      className: 'btn btn--sm btn--ghost',
+      'data-action': 'print',
+      title: 'طباعة الفاتورة',
+      onClick: () => printInvoice(o),
+    }, '🖨️'),
   ];
   if (o.status !== 'delivered' && o.status !== 'cancelled') {
     actionChildren.push(el('button', {
@@ -239,7 +260,7 @@ function buildOrderCard(o) {
     onClick: () => deleteOrder(o),
   }, '🗑️'));
 
-  /* ⚠️ منع انتشار الحدث من الأزرار */
+  /* منع انتشار الحدث من الأزرار */
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
     onClick: (e) => e.stopPropagation(),
@@ -249,7 +270,7 @@ function buildOrderCard(o) {
 }
 
 /* ==========================================================================
-   6. الرسم
+   7. الرسم
    ========================================================================== */
 
 function renderStats() {
@@ -342,7 +363,7 @@ async function refreshAll() {
 }
 
 /* ==========================================================================
-   7. API
+   8. API
    ========================================================================== */
 
 export const ordersPage = {
