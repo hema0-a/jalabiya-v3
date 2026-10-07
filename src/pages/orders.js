@@ -1,9 +1,9 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (CRUD كامل + فلاتر + معاينة + طباعة)
+   orders.js — صفحة الطلبات (CRUD كامل + فلاتر + معاينة + طباعة + رسائل)
    ==========================================================================
-   - نموذج متعدد العناصر (items[]) + خصم + رسوم إضافية + مقدم + تاريخ القماش.
-   - توافق خلفي مع الطلبات القديمة (amount فقط).
-   - amount يُحسب تلقائياً = subtotal − discount + extraFees.
+   - نموذج متعدد العناصر (items[]) + خصم + رسوم + مقدم + تاريخ القماش.
+   - زر 🖨️ طباعة + زر 📱 رسالة (WhatsApp Templates).
+   - توافق خلفي مع الطلبات القديمة.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -15,6 +15,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
+import { getOrderMessageOptions } from '../services/auto-messages.js';
 
 /* --- الحالة --- */
 let state = {
@@ -36,7 +37,6 @@ const STATUS_MAP = {
 
 const STATUS_ORDER = ['pending', 'in_progress', 'ready', 'delivered', 'cancelled'];
 
-/* --- أنواع الرسوم الإضافية (بنِسَب ثابتة) --- */
 const EXTRA_FEE_TYPES = [
   { id: 'urgency',   label: 'استعجال',    value: 20 },
   { id: 'modify',    label: 'تعديلات',    value: 10 },
@@ -46,15 +46,9 @@ const EXTRA_FEE_TYPES = [
 ];
 
 /* ==========================================================================
-   1. الفلترة (للاختبار)
+   1. الفلترة
    ========================================================================== */
 
-/**
- * فلترة الطلبات بحسب الحالة.
- * @param {Array} list
- * @param {string} filterId
- * @returns {Array}
- */
 export function filterOrders(list, filterId) {
   if (filterId === 'all') return list;
   return list.filter((o) => o.status === filterId);
@@ -64,32 +58,20 @@ export function filterOrders(list, filterId) {
    2. الحسابات
    ========================================================================== */
 
-/**
- * حساب المجاميع من عناصر الطلب.
- * @param {Array} items
- * @param {string} discountType — 'none'|'percent'|'fixed'
- * @param {number} discountValue
- * @param {Array} extraFees — [{ value, type:'percent'|'fixed' }]
- * @returns {{subtotal:number, discountAmount:number, extraFeesTotal:number, amount:number}}
- */
 function computeTotals(items, discountType, discountValue, extraFees) {
   const subtotal = (items || []).reduce(
-    (s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0),
-    0
+    (s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0
   );
-
   const dv = Number(discountValue) || 0;
   let discountAmount = 0;
   if (discountType === 'percent') discountAmount = subtotal * (dv / 100);
   else if (discountType === 'fixed') discountAmount = dv;
   discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
-
   const extraFeesTotal = (extraFees || []).reduce((s, f) => {
     const v = Number(f.value) || 0;
     if (f.type === 'percent') return s + subtotal * (v / 100);
     return s + v;
   }, 0);
-
   const amount = Math.max(0, subtotal - discountAmount + extraFeesTotal);
   return {
     subtotal: Math.round(subtotal * 100) / 100,
@@ -99,11 +81,6 @@ function computeTotals(items, discountType, discountValue, extraFees) {
   };
 }
 
-/**
- * تحويل الطلب القديم (amount فقط) إلى items[].
- * @param {Object} order
- * @returns {Array}
- */
 function itemsFromOrder(order) {
   if (Array.isArray(order.items) && order.items.length > 0) {
     return order.items.map((it) => ({
@@ -141,12 +118,6 @@ async function loadData() {
    4. النموذج
    ========================================================================== */
 
-/**
- * صف عنصر واحد (اسم + سعر + كمية + حذف).
- * @param {Object} item
- * @param {Function} onRemove
- * @returns {HTMLElement}
- */
 function buildItemRow(item, onRemove) {
   const nameIn = el('input', {
     className: 'input', type: 'text', placeholder: 'اسم البند',
@@ -185,12 +156,6 @@ function buildItemRow(item, onRemove) {
   return row;
 }
 
-/**
- * صف رسوم إضافية.
- * @param {Object} fee
- * @param {Function} onRemove
- * @returns {HTMLElement}
- */
 function buildFeeRow(fee, onRemove) {
   const typeSelect = el('select', { className: 'select', style: { flex: '2' } });
   EXTRA_FEE_TYPES.forEach((t) => {
@@ -236,7 +201,6 @@ function buildFeeRow(fee, onRemove) {
 function openOrderForm(existing = null) {
   const isEdit = existing !== null;
 
-  /* ---------- العميل ---------- */
   const customerSelect = el('select', { className: 'select' });
   customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
   state.customers.forEach((c) => {
@@ -244,14 +208,12 @@ function openOrderForm(existing = null) {
   });
   if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
 
-  /* ---------- الحالة ---------- */
   const statusSelect = el('select', { className: 'select' });
   STATUS_ORDER.forEach((s) => {
     statusSelect.appendChild(el('option', { value: s }, STATUS_MAP[s].label));
   });
   statusSelect.value = isEdit ? existing.status : 'pending';
 
-  /* ---------- التواريخ ---------- */
   const receivedDateInput = el('input', { className: 'input', type: 'date' });
   if (isEdit && existing.receivedDate) {
     receivedDateInput.value = new Date(existing.receivedDate).toISOString().slice(0, 10);
@@ -262,7 +224,6 @@ function openOrderForm(existing = null) {
     dueDateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
   }
 
-  /* ---------- البنود ---------- */
   const itemsContainer = el('div', {});
   const initialItems = isEdit ? itemsFromOrder(existing) : [{
     id: uid(), name: '', price: 0, quantity: 1,
@@ -287,7 +248,6 @@ function openOrderForm(existing = null) {
     onClick: () => { addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc(); },
   }, '➕ إضافة بند');
 
-  /* ---------- الخصم ---------- */
   const discountTypeSelect = el('select', { className: 'select' });
   [
     { v: 'none',    l: 'بدون خصم' },
@@ -311,7 +271,6 @@ function openOrderForm(existing = null) {
   });
   discountValueInput.addEventListener('input', recalc);
 
-  /* ---------- الرسوم الإضافية ---------- */
   const feesContainer = el('div', {});
   const initialFees = isEdit && Array.isArray(existing.extraFees) ? existing.extraFees : [];
 
@@ -333,18 +292,15 @@ function openOrderForm(existing = null) {
     },
   }, '➕ إضافة رسم');
 
-  /* ---------- المقدم ---------- */
   const depositInput = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
     value: isEdit ? (existing.deposit || '') : '',
   });
   depositInput.addEventListener('input', recalc);
 
-  /* ---------- الملاحظات ---------- */
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
 
-  /* ---------- ملخص الحساب (مباشر) ---------- */
   const totalsSummary = el('div', {
     style: {
       padding: '12px', background: '#F6F1E6',
@@ -377,7 +333,6 @@ function openOrderForm(existing = null) {
     ]));
   }
 
-  /* ---------- تركيب النموذج ---------- */
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العميل *'), customerSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الحالة'), statusSelect]),
@@ -385,35 +340,27 @@ function openOrderForm(existing = null) {
       el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'استلام القماش'), receivedDateInput]),
       el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'تاريخ التسليم'), dueDateInput]),
     ]),
-
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📦 بنود الطلب'),
       itemsContainer,
       addItemBtn,
     ]),
-
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '🎁 خصم'),
       discountTypeSelect,
       discountValueInput,
     ]),
-
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '➕ رسوم إضافية'),
       feesContainer,
       addFeeBtn,
     ]),
-
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '💰 المقدم'), depositInput]),
-
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '📝 ملاحظات'), notesInput]),
-
     totalsSummary,
   ]);
 
-  /* ربط الأحداث بالحقول الجديدة */
   itemsContainer.addEventListener('input', recalc);
-
   recalc();
 
   const handle = modal.open({
@@ -442,7 +389,6 @@ function openOrderForm(existing = null) {
           const dt = discountTypeSelect.value;
           const dv = Number(discountValueInput.value) || 0;
           const deposit = Number(depositInput.value) || 0;
-
           const totals = computeTotals(items, dt, dv, extraFees);
 
           const data = {
@@ -475,7 +421,7 @@ function openOrderForm(existing = null) {
 }
 
 /* ==========================================================================
-   5. حذف + تغيير الحالة + طباعة
+   5. حذف + تغيير الحالة + طباعة + رسالة
    ========================================================================== */
 
 async function deleteOrder(order) {
@@ -519,6 +465,76 @@ async function printInvoice(order) {
   }
 }
 
+/**
+ * فتح نافذة اختيار قالب الرسالة + إرسال WhatsApp.
+ * @param {Object} order
+ */
+async function openMessageMenu(order) {
+  const customer = state.customerMap[order.customerId];
+  if (!customer || !customer.phone) {
+    toast.warning('لا يوجد هاتف مسجَّل للعميل');
+    return;
+  }
+
+  const options = await getOrderMessageOptions(order, customer);
+  if (options.length === 0) {
+    toast.warning('لا توجد قوالب مفعَّلة');
+    return;
+  }
+
+  const body = el('div', {});
+
+  body.appendChild(el('div', {
+    style: {
+      padding: '10px 12px', background: '#F6F1E6', borderRadius: '8px',
+      fontSize: '12px', color: '#666', marginBottom: '12px', lineHeight: '1.5',
+    },
+  }, 'سيتم فتح WhatsApp مع رسالة جاهزة. يمكنك تعديلها قبل الإرسال.'));
+
+  options.forEach((opt) => {
+    const preview = el('div', {
+      style: {
+        fontSize: '12px', color: '#666', marginTop: '6px',
+        lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        maxHeight: '100px', overflowY: 'auto',
+      },
+    }, opt.text);
+
+    const btn = el('button', {
+      type: 'button',
+      style: {
+        display: 'block', width: '100%', textAlign: 'right',
+        padding: '12px', border: '1px solid #E5DDD0',
+        borderRadius: '10px', marginBottom: '8px',
+        background: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+      },
+      onClick: () => {
+        modal.close();
+        opt.send();
+      },
+    }, [
+      el('div', {
+        style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' },
+      }, opt.icon + ' ' + opt.name),
+      preview,
+    ]);
+
+    body.appendChild(btn);
+  });
+
+  modal.open({
+    title: '📱 إرسال رسالة',
+    body,
+    closable: true,
+    variant: 'sheet',
+    actions: [_closeAction()],
+  });
+}
+
+function _closeAction() {
+  return { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() };
+}
+
 /* ==========================================================================
    6. بطاقة الطلب
    ========================================================================== */
@@ -528,7 +544,6 @@ function buildOrderCard(o) {
   const name = c ? c.name : 'عميل محذوف';
   const phone = c ? c.phone : '';
   const statusInfo = STATUS_MAP[o.status] || { label: o.status, badge: 'badge--info' };
-
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
 
   const headerChildren = [
@@ -575,20 +590,27 @@ function buildOrderCard(o) {
       className: 'btn btn--sm btn--secondary',
       'data-action': 'edit',
       onClick: () => openOrderForm(o),
-    }, '✏️ تعديل'),
+    }, '✏️'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       'data-action': 'print',
       title: 'طباعة الفاتورة',
       onClick: () => printInvoice(o),
     }, '🖨️'),
-  ];
+    phone ? el('button', {
+      className: 'btn btn--sm btn--ghost',
+      'data-action': 'message',
+      title: 'إرسال رسالة',
+      onClick: () => openMessageMenu(o),
+    }, '📱') : null,
+  ].filter(Boolean);
+
   if (o.status !== 'delivered' && o.status !== 'cancelled') {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
       'data-action': 'advance',
       onClick: () => advanceStatus(o),
-    }, '▶️ التالي'));
+    }, '▶️'));
   }
   actionChildren.push(el('button', {
     className: 'btn btn--sm btn--danger',
