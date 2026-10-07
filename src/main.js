@@ -7,6 +7,7 @@
    - FAB (إجراءات سريعة) مُفعَّل على كل الصفحات عدا #/tests.
    - الوضع الليلي (Dark Mode) مع حفظ التفضيل.
    - مؤشر "غير متصل" (Offline Indicator) مع تنبيه عند فقدان الاتصال.
+   - مركز التنبيهات (Notifications Center) مع عدّاد في Topbar.
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
@@ -34,6 +35,7 @@ let installErrorHandler;
 let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
+let mountNotifications, openNotifications;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -49,6 +51,7 @@ try {
   ({ mount: mountFab } = await import('./ui/fab.js'));
   ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
   ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
+  ({ mount: mountNotifications, open: openNotifications } = await import('./ui/notifications-center.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -161,6 +164,24 @@ const MODULE_EXPORT_MAP = {
 
 let currentPage = null;
 
+/* --- حالة عدّاد التنبيهات (يُحدَّث من وحدة notifications-center) --- */
+let _notifCount = 0;
+
+/**
+ * تحديث عدّاد التنبيهات وإعادة رسم أزرار Topbar.
+ * @param {number} count
+ */
+function updateNotificationBadge(count) {
+  const n = Math.max(0, Number(count) || 0);
+  if (n === _notifCount) return;   /* لا إعادة رسم بلا تغيير */
+  _notifCount = n;
+  try {
+    layout.topbar.setActions(buildTopbarActions());
+  } catch (e) {
+    console.warn('[Notifications] badge update failed:', e);
+  }
+}
+
 /* --- زر وضع العميل --- */
 function buildClientModeAction() {
   const active = isClientMode();
@@ -191,9 +212,27 @@ function buildThemeAction() {
   };
 }
 
+/* --- زر التنبيهات --- */
+function buildNotificationsAction() {
+  const icon = _notifCount > 0 ? '🔔' : '🔕';
+  const label = _notifCount > 0
+    ? 'التنبيهات (' + _notifCount + ')'
+    : 'التنبيهات';
+  return {
+    id: 'notifications',
+    icon,
+    label,
+    onClick: () => {
+      try { openNotifications(); }
+      catch (e) { console.warn('[Notifications] open failed:', e); }
+    },
+  };
+}
+
 function buildTopbarActions() {
   return [
     { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
+    buildNotificationsAction(),
     buildClientModeAction(),
     buildThemeAction(),
   ];
@@ -235,7 +274,6 @@ try {
 try {
   if (typeof applyTheme === 'function') {
     applyTheme();
-    /* إعادة بناء أزرار Topbar بعد التطبيق (لضبط الأيقونة) */
     layout.topbar.setActions(buildTopbarActions());
   }
 } catch (err) {
@@ -258,6 +296,17 @@ try {
   }
 } catch (err) {
   console.warn('[OfflineIndicator] فشل التثبيت:', err);
+}
+
+/* 🔔 مركز التنبيهات — عدّاد + قائمة موحّدة */
+try {
+  if (typeof mountNotifications === 'function') {
+    mountNotifications({
+      onBadgeChange: (count) => updateNotificationBadge(count),
+    });
+  }
+} catch (err) {
+  console.warn('[NotificationsCenter] فشل التثبيت:', err);
 }
 
 try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
