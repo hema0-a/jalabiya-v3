@@ -8,7 +8,7 @@
    الإصدار: v3.3.0 (270 اختبار + Error Handler + FAB + Autosave + Dark Mode + Offline Indicator)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.0';
+const CACHE_VERSION = 'v3.3.1';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* --- الأصول المُخزَّنة مسبقاً عند التثبيت --- */
