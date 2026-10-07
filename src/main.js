@@ -60,6 +60,7 @@ async function loadPageModule(pageId) {
       case 'occasions':          return await import('./pages/occasions.js');
       case 'activity-log':       return await import('./pages/activity-log.js');
       case 'trash':              return await import('./pages/trash.js');
+      case 'cloud-sync':         return await import('./pages/cloud-sync.js');
       default:                   return null;
     }
   } catch (e) {
@@ -135,6 +136,7 @@ const MODULE_EXPORT_MAP = {
   'occasions':          'occasionsPage',
   'activity-log':       'activityLogPage',
   'trash':              'trashPage',
+  'cloud-sync':         'cloudSyncPage',
 };
 
 let currentPage = null;
@@ -177,9 +179,7 @@ function buildPlaceholderPage(title, icon) {
   ]);
 }
 
-const PLACEHOLDER_PAGES = {
-  'cloud-sync': ['المزامنة السحابية', '☁️'],
-};
+const PLACEHOLDER_PAGES = {};
 
 /**
  * استخراج المسار الأساسي من الـ hash الكامل.
