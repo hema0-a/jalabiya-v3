@@ -1,12 +1,11 @@
 /* ==========================================================================
-   quick-preview.js — معاينات سريعة موحّدة (6 كيانات)
+   quick-preview.js — معاينات سريعة موحّدة (8 كيانات)
    ==========================================================================
    - يفتح نافذة bottom-sheet على الجوال (variant: 'sheet').
    - يقبل id (نصي) أو كائناً جاهزاً — توافق خلفي كامل.
    - كل دالة async تُرجع Promise<void>.
    - WhatsApp: يطبّع الأرقام لصيغة دولية عبر normalizePhone.
-   - معاينة الطلب: تدعم البنود المتعددة + الخصم + الرسوم + المقدم.
-   - Static imports فقط. JSDoc عربي.
+   - static imports للـ helpers، dynamic imports للـ repos الثقيلة.
    ========================================================================== */
 
 import { el } from '../core/dom.js';
@@ -107,7 +106,6 @@ function _progress(percent) {
 
 /**
  * فتح واتساب في تبويب جديد.
- * يستخدم normalizePhone لتحويل الأرقام المحلية (01xxxx) إلى صيغة دولية (+20xxxx).
  * @param {string} phone
  * @param {string} message
  */
@@ -203,7 +201,7 @@ export async function previewCustomer(idOrObj, onEdit) {
 }
 
 /* ============================================================
-   3. previewOrder (مُحدَّث — يدعم البنود المتعددة)
+   3. previewOrder
    ============================================================ */
 
 /**
@@ -236,7 +234,6 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
   const statusLabels = { pending: '⏳ قيد الانتظار', in_progress: '🧵 قيد التنفيذ',
     ready: '✅ جاهز', delivered: '📦 تم التسليم', cancelled: '❌ ملغي' };
 
-  /* البنود */
   const items = _orderItems(order);
   const itemsSection = items.length > 0 ? [
     _section('📦 البنود (' + items.length + ')'),
@@ -246,7 +243,6 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     )),
   ] : [];
 
-  /* الخصم + الرسوم */
   const subtotal = Number(order.subtotal) || 0;
   const discountAmount = Number(order.discountAmount) || 0;
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
@@ -259,12 +255,10 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     extraFeesTotal > 0 ? _row('➕', 'رسوم إضافية', '+ ' + formatEGP(extraFeesTotal)) : null,
   ].filter(Boolean) : [];
 
-  /* الرسوم الإضافية بتفصيلها */
   const extraFeesList = (Array.isArray(order.extraFees) && order.extraFees.length > 0)
     ? [
         _section('➕ الرسوم الإضافية'),
         ...order.extraFees.map((f) => {
-          const typeLabel = (f.type === 'percent') ? '%' : 'ج.م';
           const val = (f.type === 'percent')
             ? (Number(f.value) || 0) + '%'
             : formatEGP(f.value);
@@ -272,7 +266,7 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
             urgency: '⚡ استعجال', modify: '✏️ تعديلات',
             delivery: '🚚 توصيل', packaging: '📦 تغليف', other: '📌 أخرى',
           };
-          return _listItem(feeTypeMap[f.feeType] || 'رسم', val + ' (' + typeLabel + ')');
+          return _listItem(feeTypeMap[f.feeType] || 'رسم', val);
         }),
       ]
     : [];
@@ -298,7 +292,7 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
 
     order.notes ? _section('📝 ملاحظات') : null,
     order.notes ? el('p', { style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' } }, order.notes) : null,
-  ]);
+  ].filter(Boolean));
 
   const actions = [
     { text: '🖨️ طباعة', variant: 'primary',
@@ -484,7 +478,7 @@ export async function previewPortfolio(idOrObj, onEdit) {
     p.price ? _row('💰', 'السعر', formatEGP(p.price)) : null,
     p.createdAt ? _row('📅', 'التاريخ', formatDate(p.createdAt)) : null,
     p.note ? _row('📝', 'ملاحظات', p.note) : null,
-  ]);
+  ].filter(Boolean));
 
   const actions = [
     { text: '💬 مشاركة واتساب', variant: 'primary',
@@ -501,4 +495,130 @@ export async function previewPortfolio(idOrObj, onEdit) {
   ].filter(Boolean);
 
   modal.open({ title: '🖼️ ' + (p.title || 'عمل'), body, actions, closable: true, variant: 'sheet' });
+}
+
+/* ============================================================
+   8. previewInventory
+   ============================================================ */
+
+/**
+ * معاينة سريعة لصنف مخزون.
+ * @param {string|Object} idOrObj — id الصنف أو كائن جاهز
+ * @param {Function} [onEdit]
+ * @returns {Promise<void>}
+ */
+export async function previewInventory(idOrObj, onEdit) {
+  const inventoryRepo = (await import('../data/repos/inventory.js')).inventory;
+  const item = (typeof idOrObj === 'string') ? await inventoryRepo.find(idOrObj) : idOrObj;
+  if (!item) return;
+
+  const cats = {
+    fabric: 'قماش', thread: 'خيوط', accessory: 'إكسسوارات',
+    tool: 'أدوات', other: 'أخرى',
+  };
+  const low = Number(item.quantity) < (Number(item.minQuantity) || 5);
+
+  const body = el('div', {}, [
+    _row('📦', 'الفئة', cats[item.category] || 'أخرى'),
+    _row('🔢', 'الكمية', item.quantity),
+    item.minQuantity ? _row('📊', 'الحد الأدنى', item.minQuantity) : null,
+    item.price ? _row('💰', 'سعر الوحدة', formatEGP(item.price)) : null,
+    item.unit ? _row('📏', 'الوحدة', item.unit) : null,
+    item.notes ? _row('📝', 'ملاحظات', item.notes) : null,
+    _section('📊 الحالة'),
+    el('div', {
+      style: {
+        textAlign: 'center', padding: '12px',
+        background: low ? '#FFEBEE' : '#E8F5E9', borderRadius: '8px',
+      },
+    }, [
+      el('div', {
+        style: {
+          fontSize: '18px', fontWeight: '700',
+          color: low ? '#C62828' : '#2E7D32',
+        },
+      }, low ? '⚠️ كمية منخفضة' : '✅ كمية جيدة'),
+    ]),
+  ].filter(Boolean));
+
+  const actions = [
+    { text: 'التفاصيل الكاملة', variant: 'secondary',
+      onClick: () => { modal.close(); location.hash = '#/inventory'; } },
+    onEdit ? { text: '✏️ تعديل', variant: 'secondary',
+      onClick: () => { modal.close(); onEdit(); } } : null,
+    _closeAction(),
+  ].filter(Boolean);
+
+  modal.open({
+    title: '🧵 ' + (item.name || 'صنف'),
+    body, actions, closable: true, variant: 'sheet',
+  });
+}
+
+/* ============================================================
+   9. previewWorker
+   ============================================================ */
+
+/**
+ * معاينة سريعة لعامل (تخصص، راتب، حالة، دفعات).
+ * @param {string|Object} idOrObj — id العامل أو كائن جاهز
+ * @param {Function} [onEdit]
+ * @returns {Promise<void>}
+ */
+export async function previewWorker(idOrObj, onEdit) {
+  const workersRepo = (await import('../data/repos/workers.js')).workers;
+  const wpRepo = (await import('../data/repos/worker-payments.js')).workerPayments;
+
+  const w = (typeof idOrObj === 'string') ? await workersRepo.find(idOrObj) : idOrObj;
+  if (!w) return;
+
+  const isActive = w.active !== false;
+
+  const salaryTypes = {
+    fixed:     { label: 'ثابت شهري', icon: '📅' },
+    per_piece: { label: 'بالقطعة',   icon: '👕' },
+    daily:     { label: 'يومي',      icon: '📆' },
+    hourly:    { label: 'ساعي',      icon: '⏱️' },
+  };
+  const st = salaryTypes[w.salaryType] || salaryTypes.fixed;
+
+  let paymentsCount = 0;
+  let totalPaid = 0;
+  try {
+    const payments = await wpRepo.listByWorker(w.id);
+    paymentsCount = payments.length;
+    totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  } catch { /* ignore */ }
+
+  const body = el('div', {}, [
+    w.specialty ? _row('👷', 'التخصص', w.specialty) : null,
+    w.phone ? _row('📞', 'الهاتف', w.phone) : null,
+    _row('💼', 'نوع الأجر', st.icon + ' ' + st.label),
+    w.salary ? _row('💰', 'قيمة الأجر', formatEGP(w.salary)) : null,
+    _row('🔖', 'الحالة', isActive ? '✅ نشط' : '🚫 معطَّل'),
+    w.notes ? _row('📝', 'ملاحظات', w.notes) : null,
+
+    paymentsCount > 0 ? _section('💵 الدفعات') : null,
+    paymentsCount > 0 ? el('div', {
+      style: { display: 'flex', gap: '6px' },
+    }, [
+      _stat('عدد الدفعات', paymentsCount),
+      _stat('إجمالي مدفوع', formatEGP(totalPaid), '#2E7D32'),
+    ]) : null,
+  ].filter(Boolean));
+
+  const actions = [
+    w.phone ? { text: '📱 واتساب', variant: 'primary',
+      onClick: () => _whatsapp(w.phone, 'مرحباً ' + w.name + '،') } : null,
+    { text: 'التفاصيل الكاملة', variant: 'secondary',
+      onClick: () => { modal.close(); location.hash = '#/workers'; } },
+    onEdit ? { text: '✏️ تعديل', variant: 'secondary',
+      onClick: () => { modal.close(); onEdit(); } } : null,
+    _closeAction(),
+  ].filter(Boolean);
+
+  modal.open({
+    title: '👷 ' + (w.name || 'عامل'),
+    body, actions, closable: true, variant: 'sheet',
+  });
 }
