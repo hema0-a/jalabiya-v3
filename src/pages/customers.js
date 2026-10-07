@@ -1,5 +1,5 @@
 /* ==========================================================================
-   customers.js — صفحة العملاء (CRUD + بحث + VIP + معاينة + كشف حساب)
+   customers.js — صفحة العملاء (CRUD + مقاسات + بحث + VIP + معاينة + كشف)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -7,6 +7,7 @@ import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { trash } from '../data/repos/trash.js';
+import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
@@ -16,6 +17,7 @@ let state = {
   customers: [],
   searchQuery: '',
   container: null,
+  measurementFields: [],
 };
 
 /* ==========================================================================
@@ -42,9 +44,88 @@ async function loadCustomers() {
   state.customers = list;
 }
 
+/**
+ * تحميل حقول المقاسات المفعَّلة من الإعدادات.
+ * @returns {Promise<void>}
+ */
+async function loadMeasurementFields() {
+  try {
+    const s = await settings.get();
+    const fields = Array.isArray(s.measurementFields) ? s.measurementFields : [];
+    state.measurementFields = fields.filter((f) => f.enabled !== false);
+  } catch {
+    state.measurementFields = [];
+  }
+}
+
 /* ==========================================================================
    3. النموذج
    ========================================================================== */
+
+/**
+ * بناء قسم المقاسات (ديناميكي من الإعدادات).
+ * @param {Object} existingMeasurements — القيم الحالية للعميل (إن كان تعديلاً)
+ * @returns {{node:HTMLElement, getValues:Function}}
+ */
+function buildMeasurementsSection(existingMeasurements) {
+  const wrap = el('div', { className: 'field' });
+
+  wrap.appendChild(el('label', { className: 'field__label' }, '📏 المقاسات (اختياري)'));
+
+  const fields = state.measurementFields;
+  const values = existingMeasurements || {};
+
+  if (fields.length === 0) {
+    wrap.appendChild(el('div', {
+      style: { fontSize: '11px', color: '#999', padding: '6px 0' },
+    }, 'لا توجد حقول مقاسات مفعَّلة. أضفها من الإعدادات → حقول المقاسات.'));
+    return { node: wrap, getValues: () => ({}) };
+  }
+
+  /* شبكة حقلين في كل صف */
+  const grid = el('div', {
+    style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' },
+  });
+
+  const inputs = {};
+
+  fields.forEach((f) => {
+    const inp = el('input', {
+      className: 'input',
+      type: 'number',
+      min: '0',
+      step: '0.5',
+      placeholder: '0',
+    });
+    if (values[f.id] != null && values[f.id] !== '') {
+      inp.value = String(values[f.id]);
+    }
+    inputs[f.id] = inp;
+
+    grid.appendChild(el('div', {}, [
+      el('label', {
+        style: { fontSize: '11px', color: '#666', marginBottom: '3px', display: 'block' },
+      }, f.name + (f.unit ? ' (' + f.unit + ')' : '')),
+      inp,
+    ]));
+  });
+
+  wrap.appendChild(grid);
+
+  return {
+    node: wrap,
+    getValues: () => {
+      const out = {};
+      Object.keys(inputs).forEach((id) => {
+        const v = inputs[id].value.trim();
+        if (v === '') return;
+        const n = Number(v);
+        if (isFinite(n) && n > 0) out[id] = n;
+      });
+      return out;
+    },
+  };
+}
 
 function openCustomerForm(existing = null) {
   const isEdit = existing !== null;
@@ -71,11 +152,16 @@ function openCustomerForm(existing = null) {
     el('span', { className: 'toggle__label' }, 'عميل مميز (VIP)'),
   ]);
 
+  const measurements = buildMeasurementsSection(
+    isEdit ? existing.measurements : null
+  );
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'رقم الهاتف'), phoneInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
     el('div', { className: 'field' }, [vipToggle]),
+    measurements.node,
   ]);
 
   const handle = modal.open({
@@ -95,6 +181,7 @@ function openCustomerForm(existing = null) {
             phone: phoneInput.value.trim(),
             notes: notesInput.value.trim(),
             vip: vipCheckbox.checked,
+            measurements: measurements.getValues(),
           };
           try {
             if (isEdit) { await customers.update(existing.id, data); toast.success('تم تحديث العميل'); }
@@ -136,10 +223,6 @@ async function toggleVIP(customer) {
   } catch (err) { toast.danger('فشل التغيير: ' + err.message); }
 }
 
-/**
- * طباعة كشف حساب العميل (طلبات + دفعات + إجماليات).
- * @param {Object} customer
- */
 async function printStatement(customer) {
   try {
     toast.info('جارٍ تجهيز الكشف...');
@@ -158,8 +241,19 @@ async function printStatement(customer) {
    5. بطاقة عميل
    ========================================================================== */
 
+/**
+ * هل لدى العميل مقاسات مسجَّلة؟
+ * @param {Object} c
+ * @returns {boolean}
+ */
+function hasMeasurements(c) {
+  if (!c.measurements) return false;
+  return Object.keys(c.measurements).length > 0;
+}
+
 function buildCustomerCard(c) {
   const initial = String(c.name || '?').trim().charAt(0) || '?';
+  const withMeasurements = hasMeasurements(c);
 
   const headerChildren = [
     el('div', {
@@ -184,17 +278,30 @@ function buildCustomerCard(c) {
   const header = el('div', {
     style: {
       display: 'flex', alignItems: 'center', gap: '8px',
-      marginBottom: c.notes ? '8px' : '12px',
+      marginBottom: (c.notes || withMeasurements) ? '8px' : '12px',
     },
   }, headerChildren);
 
-  /* البطاقة كلها قابلة للنقر → معاينة */
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '8px', cursor: 'pointer' },
     'data-id': c.id,
     onClick: () => previewCustomer(c, () => openCustomerForm(c)),
   }, [header]);
+
+  if (withMeasurements) {
+    card.appendChild(el('div', {
+      style: {
+        fontSize: '11px',
+        color: '#1F6D57',
+        background: '#E8F5E9',
+        padding: '3px 8px',
+        borderRadius: '6px',
+        display: 'inline-block',
+        marginBottom: '8px',
+      },
+    }, '📏 مقاسات مسجَّلة'));
+  }
 
   if (c.notes) {
     card.appendChild(el('div', {
@@ -216,7 +323,7 @@ function buildCustomerCard(c) {
       'data-action': 'print',
       title: 'كشف حساب',
       onClick: () => printStatement(c),
-    }, '📄 كشف حساب'),
+    }, '📄 كشف'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       'data-action': 'vip',
@@ -226,7 +333,7 @@ function buildCustomerCard(c) {
       className: 'btn btn--sm btn--danger',
       'data-action': 'delete',
       onClick: () => deleteCustomer(c),
-    }, '🗑️ حذف'),
+    }, '🗑️'),
   ]));
 
   return card;
@@ -295,6 +402,9 @@ export const customersPage = {
     state.container = container;
     state.searchQuery = '';
 
+    /* تحميل حقول المقاسات من الإعدادات */
+    await loadMeasurementFields();
+
     container.appendChild(el('div', {
       id: 'customers-stats',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
@@ -323,6 +433,6 @@ export const customersPage = {
   },
 
   destroy() {
-    state = { customers: [], searchQuery: '', container: null };
+    state = { customers: [], searchQuery: '', container: null, measurementFields: [] };
   },
 };
