@@ -1,10 +1,11 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (كل الميزات + 3 طرق عرض)
+   orders.js — صفحة الطلبات (كل الميزات + اقتراح موعد)
    ==========================================================================
    - 3 طرق عرض: قائمة / كانبان / تجميع.
    - نموذج متعدد العناصر + خصم + رسوم + مقدم.
    - معاينة + طباعة + رسائل + مؤقت + تسليم + توقيع.
    - شارات الموعد + استلام القماش.
+   - زر "✨ اقتراح موعد" يتخطى الإجازة + الحد اليومي.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -19,6 +20,7 @@ import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad } from '../ui/signature-pad.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
+import { suggestDueDate } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession,
@@ -30,8 +32,8 @@ let state = {
   customers: [],
   customerMap: {},
   activeFilter: 'all',
-  activeView: 'list',           // 'list' | 'kanban' | 'grouping'
-  groupingConfig: { enabled: false, tolerance: 2, sameTypeOnly: true },
+  activeView: 'list',
+  scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
   container: null,
   _timerInterval: null,
 };
@@ -56,56 +58,12 @@ const EXTRA_FEE_TYPES = [
 ];
 
 /* ==========================================================================
-   1. الفلترة + التجميع
+   1. الفلترة
    ========================================================================== */
 
 export function filterOrders(list, filterId) {
   if (filterId === 'all') return list;
   return list.filter((o) => o.status === filterId);
-}
-
-/**
- * استخراج "نوع" الطلب (اسم البند الأول).
- * @param {Object} order
- * @returns {string}
- */
-function orderType(order) {
-  if (Array.isArray(order.items) && order.items.length > 0) {
-    return String(order.items[0].name || '').trim() || 'بدون نوع';
-  }
-  return String(order.garmentType || order.notes || 'بدون نوع').trim();
-}
-
-/**
- * تجميع الطلبات المتشابهة (نفس العميل + نفس النوع).
- * @param {Array} list — الطلبات النشطة فقط
- * @returns {Array<{key:string, customerId:string, type:string, orders:Array, totalAmount:number}>}
- */
-export function groupOrders(list) {
-  const groups = new Map();
-
-  list.forEach((o) => {
-    const cid = o.customerId || 'unknown';
-    const type = orderType(o).toLowerCase();
-    const key = cid + '::' + type;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        customerId: cid,
-        type: orderType(o),
-        orders: [],
-        totalAmount: 0,
-      });
-    }
-    const g = groups.get(key);
-    g.orders.push(o);
-    g.totalAmount += Number(o.amount) || 0;
-  });
-
-  return Array.from(groups.values())
-    .filter((g) => g.orders.length > 1)
-    .sort((a, b) => b.orders.length - a.orders.length);
 }
 
 /* ==========================================================================
@@ -152,6 +110,48 @@ function itemsFromOrder(order) {
   }];
 }
 
+/**
+ * استخراج "نوع" الطلب (اسم البند الأول).
+ * @param {Object} order
+ * @returns {string}
+ */
+function orderType(order) {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return String(order.items[0].name || '').trim() || 'بدون نوع';
+  }
+  return String(order.garmentType || order.notes || 'بدون نوع').trim();
+}
+
+/**
+ * تجميع الطلبات المتشابهة (نفس العميل + نفس النوع).
+ * @param {Array} list
+ * @returns {Array}
+ */
+export function groupOrders(list) {
+  const groups = new Map();
+
+  list.forEach((o) => {
+    const cid = o.customerId || 'unknown';
+    const type = orderType(o).toLowerCase();
+    const key = cid + '::' + type;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key, customerId: cid,
+        type: orderType(o),
+        orders: [], totalAmount: 0,
+      });
+    }
+    const g = groups.get(key);
+    g.orders.push(o);
+    g.totalAmount += Number(o.amount) || 0;
+  });
+
+  return Array.from(groups.values())
+    .filter((g) => g.orders.length > 1)
+    .sort((a, b) => b.orders.length - a.orders.length);
+}
+
 /* ==========================================================================
    3. تحميل البيانات
    ========================================================================== */
@@ -160,7 +160,7 @@ async function loadData() {
   const [ordersList, customersList, s] = await Promise.all([
     orders.list(),
     customers.list(),
-    settings.get().catch(() => ({ grouping: {} })),
+    settings.get().catch(() => ({})),
   ]);
   ordersList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   state.orders = ordersList;
@@ -168,34 +168,30 @@ async function loadData() {
   state.customerMap = {};
   customersList.forEach((c) => { state.customerMap[c.id] = c; });
 
-  if (s && s.grouping) {
-    state.groupingConfig = {
-      enabled: !!s.grouping.enabled,
-      tolerance: Number(s.grouping.tolerance) || 2,
-      sameTypeOnly: s.grouping.sameTypeOnly !== false,
+  if (s && s.dailyLimit) {
+    state.scheduleConfig = {
+      dayOffWeekday: Number(s.dailyLimit.dayOffWeekday ?? 0),
+      dailyOrderLimit: Number(s.dailyLimit.dailyOrderLimit) || 0,
     };
   }
 }
 
 /* ==========================================================================
-   4. النموذج (كما هو)
+   4. النموذج
    ========================================================================== */
 
 function buildItemRow(item, onRemove) {
   const nameIn = el('input', {
     className: 'input', type: 'text', placeholder: 'اسم البند',
-    value: item.name || '', 'data-field': 'name',
-    style: { flex: '2', minWidth: '0' },
+    value: item.name || '', style: { flex: '2', minWidth: '0' },
   });
   const priceIn = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: 'السعر',
-    value: item.price || '', 'data-field': 'price',
-    style: { flex: '1', minWidth: '0' },
+    value: item.price || '', style: { flex: '1', minWidth: '0' },
   });
   const qtyIn = el('input', {
     className: 'input', type: 'number', min: '1', step: '1', placeholder: 'الكمية',
-    value: item.quantity || 1, 'data-field': 'quantity',
-    style: { width: '70px' },
+    value: item.quantity || 1, style: { width: '70px' },
   });
 
   const row = el('div', {
@@ -236,8 +232,7 @@ function buildFeeRow(fee, onRemove) {
 
   const valueIn = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
-    value: fee.value || '', 'data-field': 'value',
-    style: { width: '90px' },
+    value: fee.value || '', style: { width: '90px' },
   });
 
   const row = el('div', {
@@ -282,10 +277,34 @@ function openOrderForm(existing = null) {
     receivedDateInput.value = new Date(existing.receivedDate).toISOString().slice(0, 10);
   }
 
-  const dueDateInput = el('input', { className: 'input', type: 'date' });
+  const dueDateInput = el('input', { className: 'input', type: 'date', style: { flex: '1' } });
   if (isEdit && existing.dueDate) {
     dueDateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
   }
+
+  /* زر اقتراح الموعد */
+  const suggestBtn = el('button', {
+    className: 'btn btn--sm btn--secondary', type: 'button',
+    title: 'اقتراح موعد تلقائي',
+    style: { flexShrink: '0' },
+    onClick: async () => {
+      try {
+        const suggestion = suggestDueDate(state.orders, {
+          dayOffWeekday: state.scheduleConfig.dayOffWeekday,
+          dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
+          minDays: 3,
+          maxLookaheadDays: 30,
+          excludeOrderId: existing ? existing.id : null,
+        });
+        const d = new Date(suggestion.timestamp);
+        dueDateInput.value = d.toISOString().slice(0, 10);
+        toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
+      } catch (e) {
+        console.error('[suggestDueDate]', e);
+        toast.danger('فشل الاقتراح');
+      }
+    },
+  }, '✨');
 
   const itemsContainer = el('div', {});
   const initialItems = isEdit ? itemsFromOrder(existing) : [{
@@ -401,7 +420,10 @@ function openOrderForm(existing = null) {
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الحالة'), statusSelect]),
     el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
       el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'استلام القماش'), receivedDateInput]),
-      el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'تاريخ التسليم'), dueDateInput]),
+      el('div', { className: 'field' }, [
+        el('label', { className: 'field__label' }, 'تاريخ التسليم'),
+        el('div', { style: { display: 'flex', gap: '6px' } }, [dueDateInput, suggestBtn]),
+      ]),
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📦 بنود الطلب'),
@@ -442,7 +464,6 @@ function openOrderForm(existing = null) {
           const items = Array.from(itemsContainer.children)
             .map((r) => r._getValues())
             .filter((it) => it.name && it.name !== 'بند');
-
           if (items.length === 0) { toast.warning('أضف بنداً واحداً على الأقل'); return; }
 
           const extraFees = Array.from(feesContainer.children)
@@ -484,7 +505,7 @@ function openOrderForm(existing = null) {
 }
 
 /* ==========================================================================
-   5. عمليات (كما هي)
+   5. عمليات
    ========================================================================== */
 
 async function deleteOrder(order) {
@@ -536,7 +557,6 @@ async function deliverWithSignature(order) {
     title: '✍️ توقيع استلام الطلب',
     hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
   });
-
   if (!signature) { toast.info('تم إلغاء التسليم'); return; }
 
   try {
@@ -573,7 +593,6 @@ async function openMessageMenu(order) {
     toast.warning('لا يوجد هاتف مسجَّل للعميل');
     return;
   }
-
   const options = await getOrderMessageOptions(order, customer);
   if (options.length === 0) {
     toast.warning('لا توجد قوالب مفعَّلة');
@@ -589,14 +608,6 @@ async function openMessageMenu(order) {
   }, 'سيتم فتح WhatsApp مع رسالة جاهزة. يمكنك تعديلها قبل الإرسال.'));
 
   options.forEach((opt) => {
-    const preview = el('div', {
-      style: {
-        fontSize: '12px', color: '#666', marginTop: '6px',
-        lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        maxHeight: '100px', overflowY: 'auto',
-      },
-    }, opt.text);
-
     body.appendChild(el('button', {
       type: 'button',
       style: {
@@ -609,7 +620,10 @@ async function openMessageMenu(order) {
     }, [
       el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F' } },
         opt.icon + ' ' + opt.name),
-      preview,
+      el('div', {
+        style: { fontSize: '12px', color: '#666', marginTop: '6px',
+          lineHeight: '1.5', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' },
+      }, opt.text),
     ]));
   });
 
@@ -632,7 +646,7 @@ async function toggleTimer(order) {
 }
 
 /* ==========================================================================
-   6. بطاقة الطلب (كما هي)
+   6. بطاقة الطلب (قائمة)
    ========================================================================== */
 
 function buildOrderCard(o) {
@@ -722,9 +736,9 @@ function buildOrderCard(o) {
     el('button', { className: 'btn btn--sm btn--secondary',
       onClick: () => openOrderForm(o) }, '✏️'),
     el('button', { className: 'btn btn--sm btn--ghost',
-      title: 'طباعة الفاتورة', onClick: () => printInvoice(o) }, '🖨️'),
+      title: 'طباعة', onClick: () => printInvoice(o) }, '🖨️'),
     phone ? el('button', { className: 'btn btn--sm btn--ghost',
-      title: 'إرسال رسالة', onClick: () => openMessageMenu(o) }, '📱') : null,
+      title: 'رسالة', onClick: () => openMessageMenu(o) }, '📱') : null,
   ].filter(Boolean);
 
   if (!isDelivered) {
@@ -738,7 +752,6 @@ function buildOrderCard(o) {
   if (canDeliver) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
-      title: 'تسليم + توقيع',
       onClick: () => deliverWithSignature(o),
     }, '✅ تسليم'));
   }
@@ -764,15 +777,9 @@ function buildOrderCard(o) {
 }
 
 /* ==========================================================================
-   7. بطاقة مصغّرة (للكانبان والتجميع)
+   7. بطاقة مصغّرة (كانبان/تجميع)
    ========================================================================== */
 
-/**
- * بطاقة مصغّرة بسيطة (للكانبان والتجميع).
- * @param {Object} o
- * @param {Object} [opts]
- * @returns {HTMLElement}
- */
 function buildMiniCard(o, opts = {}) {
   const c = state.customerMap[o.customerId];
   const name = c ? c.name : 'عميل محذوف';
@@ -818,14 +825,11 @@ function renderKanban() {
   if (!wrap) return;
   clear(wrap);
 
-  /* على الجوال: عمود واحد قابل للتمرير الأفقي */
   const board = el('div', {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))',
-      gap: '8px',
-      overflowX: 'auto',
-      paddingBottom: '12px',
+      gap: '8px', overflowX: 'auto', paddingBottom: '12px',
     },
   });
 
@@ -834,18 +838,14 @@ function renderKanban() {
     const items = state.orders.filter((o) => o.status === status);
 
     const column = el('div', {
-      style: {
-        background: '#F6F1E6', borderRadius: '12px',
-        padding: '10px', minHeight: '200px',
-      },
+      style: { background: '#F6F1E6', borderRadius: '12px',
+        padding: '10px', minHeight: '200px' },
     });
 
     column.appendChild(el('div', {
-      style: {
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '8px', paddingBottom: '6px',
-        borderBottom: '2px solid ' + sInfo.color,
-      },
+        borderBottom: '2px solid ' + sInfo.color },
     }, [
       el('span', { style: { fontSize: '13px', fontWeight: '700', color: sInfo.color } },
         sInfo.label),
@@ -863,11 +863,6 @@ function renderKanban() {
       items.slice(0, 30).forEach((o) => {
         column.appendChild(buildMiniCard(o, { color: sInfo.color }));
       });
-      if (items.length > 30) {
-        column.appendChild(el('div', {
-          style: { fontSize: '11px', color: '#999', textAlign: 'center', padding: '4px' },
-        }, '+ ' + (items.length - 30) + ' طلب آخر'));
-      }
     }
 
     board.appendChild(column);
@@ -909,15 +904,12 @@ function renderGrouping() {
       style: { marginBottom: '12px', borderRight: '4px solid #1F6D57' },
     });
 
-    /* رأس المجموعة */
     card.appendChild(el('div', {
-      style: {
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         gap: '8px', marginBottom: '10px', paddingBottom: '8px',
-        borderBottom: '1px solid #E5DDD0',
-      },
+        borderBottom: '1px solid #E5DDD0' },
     }, [
-      el('div', { style: { flex: '1', minWidth: '0' } }, [
+      el('div', { style: { flex: '1' } }, [
         el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } },
           '👤 ' + customerName),
         el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } },
@@ -933,15 +925,11 @@ function renderGrouping() {
       ]),
     ]));
 
-    /* الطلبات داخل المجموعة */
     g.orders.forEach((o) => {
       const sInfo = STATUS_MAP[o.status] || STATUS_MAP.pending;
       card.appendChild(el('div', {
-        style: {
-          padding: '8px 10px', background: '#F9F6EF',
-          borderRadius: '8px', marginBottom: '6px',
-          cursor: 'pointer',
-        },
+        style: { padding: '8px 10px', background: '#F9F6EF',
+          borderRadius: '8px', marginBottom: '6px', cursor: 'pointer' },
         onClick: () => previewOrder(o, c, () => openOrderForm(o)),
       }, [
         el('div', { style: { display: 'flex', justifyContent: 'space-between',
@@ -963,7 +951,7 @@ function renderGrouping() {
 }
 
 /* ==========================================================================
-   10. الرسم الرئيسي + طرق العرض
+   10. الرسم الرئيسي
    ========================================================================== */
 
 function renderStats() {
@@ -997,10 +985,6 @@ function renderStats() {
   ]));
 }
 
-/**
- * شريط تبديل طريقة العرض.
- * @returns {HTMLElement}
- */
 function buildViewToggle() {
   const wrap = el('div', {
     style: {
@@ -1036,7 +1020,6 @@ function renderFilters() {
   if (!wrap) return;
   clear(wrap);
 
-  /* في كانبان/تجميع، لا نُظهر الفلاتر (تقسيم الحالات ضمني) */
   if (state.activeView !== 'list') return;
 
   const counts = { all: state.orders.length };
@@ -1082,11 +1065,7 @@ function renderList() {
   filtered.forEach((o) => listContainer.appendChild(buildOrderCard(o)));
 }
 
-/**
- * إعادة رسم طريقة العرض الحالية.
- */
 function renderView() {
-  /* تحديث أزرار التبديل */
   const toggleWrap = state.container.querySelector('#orders-view-toggle');
   if (toggleWrap) {
     clear(toggleWrap);
@@ -1170,7 +1149,7 @@ export const ordersPage = {
     state = {
       orders: [], customers: [], customerMap: {},
       activeFilter: 'all', activeView: 'list',
-      groupingConfig: { enabled: false, tolerance: 2, sameTypeOnly: true },
+      scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
       container: null, _timerInterval: null,
     };
   },
