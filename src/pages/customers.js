@@ -1,13 +1,16 @@
 /* ==========================================================================
-   customers.js — صفحة العملاء (CRUD + بحث + VIP + معاينة سريعة)
+   customers.js — صفحة العملاء (CRUD + بحث + VIP + معاينة + كشف حساب)
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
+import { orders } from '../data/repos/orders.js';
+import { payments } from '../data/repos/payments.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
+import { printCustomerStatement } from '../services/invoice-print.js';
 
 let state = {
   customers: [],
@@ -106,7 +109,7 @@ function openCustomerForm(existing = null) {
 }
 
 /* ==========================================================================
-   4. حذف + VIP
+   4. حذف + VIP + طباعة
    ========================================================================== */
 
 async function deleteCustomer(customer) {
@@ -131,6 +134,24 @@ async function toggleVIP(customer) {
     else toast.info('تم إزالة تصنيف VIP');
     await refreshAll();
   } catch (err) { toast.danger('فشل التغيير: ' + err.message); }
+}
+
+/**
+ * طباعة كشف حساب العميل (طلبات + دفعات + إجماليات).
+ * @param {Object} customer
+ */
+async function printStatement(customer) {
+  try {
+    toast.info('جارٍ تجهيز الكشف...');
+    const [ordersList, paymentsList] = await Promise.all([
+      orders.findByCustomer(customer.id),
+      payments.findByCustomer(customer.id),
+    ]);
+    await printCustomerStatement(customer, ordersList, paymentsList);
+  } catch (err) {
+    console.error('[printStatement]', err);
+    toast.danger('فشل فتح نافذة الطباعة');
+  }
 }
 
 /* ==========================================================================
@@ -167,7 +188,7 @@ function buildCustomerCard(c) {
     },
   }, headerChildren);
 
-  /* ✅ البطاقة كلها قابلة للنقر → معاينة */
+  /* البطاقة كلها قابلة للنقر → معاينة */
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '8px', cursor: 'pointer' },
@@ -183,7 +204,6 @@ function buildCustomerCard(c) {
 
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
-    /* ⚠️ نمنع انتشار الحدث من الأزرار حتى لا تُفتح المعاينة */
     onClick: (e) => e.stopPropagation(),
   }, [
     el('button', {
@@ -191,6 +211,12 @@ function buildCustomerCard(c) {
       'data-action': 'edit',
       onClick: () => openCustomerForm(c),
     }, '✏️ تعديل'),
+    el('button', {
+      className: 'btn btn--sm btn--ghost',
+      'data-action': 'print',
+      title: 'كشف حساب',
+      onClick: () => printStatement(c),
+    }, '📄 كشف حساب'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       'data-action': 'vip',
