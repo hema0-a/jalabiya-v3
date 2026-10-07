@@ -1143,6 +1143,7 @@ function renderFilters() {
     wrap.appendChild(el('button', {
       type: 'button',
       className: 'btn btn--sm ' + (isActive ? 'btn--primary' : 'btn--ghost'),
+      'data-filter': it.id,
       style: { marginInlineEnd: '4px', marginBottom: '4px' },
       onClick: () => {
         state.activeFilter = it.id;
