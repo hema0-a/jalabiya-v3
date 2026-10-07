@@ -1,9 +1,9 @@
 /* ==========================================================================
-   orders.js — صفحة الطلبات (كل الميزات + شريط الحد + تنبيهات عاجلة)
+   orders.js — صفحة الطلبات (كل الميزات + صورة مرجعية)
    ==========================================================================
    - 3 طرق عرض: قائمة / كانبان / تجميع.
-   - نموذج كامل + اقتراح موعد + معاينة + طباعة + رسائل + مؤقت + توقيع.
-   - شريط الحد اليومي + بطاقة تنبيهات عاجلة.
+   - نموذج كامل + اقتراح موعد + صورة مرجعية + معاينة + طباعة + رسائل.
+   - مؤقت العمل + توقيع التسليم + شريط الحد + تنبيهات عاجلة.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -16,6 +16,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad } from '../ui/signature-pad.js';
+import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { suggestDueDate } from '../services/order-scheduler.js';
@@ -283,6 +284,14 @@ function openOrderForm(existing = null) {
     },
   }, '✨');
 
+  /* --- الصورة المرجعية --- */
+  const imagePicker = createOrderImagePicker({
+    value: isEdit ? (existing.referenceImage || '') : '',
+    label: '🖼️ صورة مرجعية',
+    hint: 'صورة الموديل المطلوب (اختياري)',
+  });
+
+  /* --- البنود --- */
   const itemsContainer = el('div', {});
   const initialItems = isEdit ? itemsFromOrder(existing) : [{ id: uid(), name: '', price: 0, quantity: 1 }];
 
@@ -302,6 +311,7 @@ function openOrderForm(existing = null) {
     onClick: () => { addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc(); },
   }, '➕ إضافة بند');
 
+  /* --- الخصم --- */
   const discountTypeSelect = el('select', { className: 'select' });
   [
     { v: 'none',    l: 'بدون خصم' },
@@ -325,6 +335,7 @@ function openOrderForm(existing = null) {
   });
   discountValueInput.addEventListener('input', recalc);
 
+  /* --- الرسوم الإضافية --- */
   const feesContainer = el('div', {});
   const initialFees = isEdit && Array.isArray(existing.extraFees) ? existing.extraFees : [];
 
@@ -340,15 +351,18 @@ function openOrderForm(existing = null) {
     onClick: () => { addFeeRow({ id: uid(), feeType: 'urgency', type: 'percent', value: 20 }); recalc(); },
   }, '➕ إضافة رسم');
 
+  /* --- المقدم --- */
   const depositInput = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
     value: isEdit ? (existing.deposit || '') : '',
   });
   depositInput.addEventListener('input', recalc);
 
+  /* --- الملاحظات --- */
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
 
+  /* --- ملخص الحساب --- */
   const totalsSummary = el('div', {
     style: { padding: '12px', background: '#F6F1E6', borderRadius: '8px', fontSize: '13px', lineHeight: '1.8' },
   });
@@ -378,6 +392,7 @@ function openOrderForm(existing = null) {
     ]));
   }
 
+  /* --- body --- */
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العميل *'), customerSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الحالة'), statusSelect]),
@@ -402,6 +417,7 @@ function openOrderForm(existing = null) {
     ]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '💰 المقدم'), depositInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '📝 ملاحظات'), notesInput]),
+    imagePicker.node,
     totalsSummary,
   ]);
 
@@ -439,6 +455,7 @@ function openOrderForm(existing = null) {
             extraFees, extraFeesTotal: totals.extraFeesTotal,
             subtotal: totals.subtotal, deposit, amount: totals.amount,
             notes: notesInput.value.trim(),
+            referenceImage: imagePicker.getValue() || '',
           };
 
           try {
@@ -524,6 +541,26 @@ function showSignature(dataUrl) {
   });
 }
 
+/**
+ * عرض الصورة المرجعية بملء الشاشة (lightbox).
+ * @param {string} dataUrl
+ * @param {string} [title='الصورة المرجعية']
+ */
+function showReferenceImage(dataUrl, title = 'الصورة المرجعية') {
+  if (!dataUrl) return;
+  const body = el('div', {}, [
+    el('img', {
+      src: dataUrl, alt: title,
+      style: { width: '100%', maxHeight: '75vh', objectFit: 'contain',
+        borderRadius: '12px', background: '#fff' },
+    }),
+  ]);
+  modal.open({
+    title: '🖼️ ' + title, body, closable: true,
+    actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() }],
+  });
+}
+
 async function openMessageMenu(order) {
   const customer = state.customerMap[order.customerId];
   if (!customer || !customer.phone) { toast.warning('لا يوجد هاتف مسجَّل للعميل'); return; }
@@ -571,21 +608,15 @@ async function toggleTimer(order) {
    6. شريط الحد اليومي
    ========================================================================== */
 
-/**
- * شريط الحد اليومي (مبالغ الطلبات المُستلمة اليوم).
- * @returns {HTMLElement}
- */
 function buildDailyLimitBar() {
   const limit = state.scheduleConfig.dailyOrderLimit || 0;
   if (limit <= 0) return null;
 
-  /* بداية اليوم */
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startMs = startOfToday.getTime();
   const endMs = startMs + DAY_MS;
 
-  /* مجموع الطلبات المُستلمة اليوم */
   const todayTotal = state.orders
     .filter((o) => o.createdAt && o.createdAt >= startMs && o.createdAt < endMs)
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
@@ -593,21 +624,14 @@ function buildDailyLimitBar() {
   const percent = Math.min(100, Math.round((todayTotal / limit) * 100));
   const exceeded = todayTotal > limit;
   const near = !exceeded && percent >= 80;
-
   const barColor = exceeded ? '#C62828' : (near ? '#F57C00' : '#2E7D32');
   const bgColor = exceeded ? '#FFEBEE' : (near ? '#FFF3E0' : '#E8F5E9');
 
   const card = el('div', {
     className: 'card',
-    style: {
-      marginBottom: '16px',
-      padding: '12px',
-      background: bgColor,
-      border: '1px solid ' + barColor + '33',
-    },
+    style: { marginBottom: '16px', padding: '12px', background: bgColor, border: '1px solid ' + barColor + '33' },
   });
 
-  /* الرأس */
   card.appendChild(el('div', {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
   }, [
@@ -617,16 +641,12 @@ function buildDailyLimitBar() {
       formatEGP(todayTotal) + ' / ' + formatEGP(limit)),
   ]));
 
-  /* الشريط */
   card.appendChild(el('div', {
     style: { background: 'rgba(0,0,0,0.08)', height: '10px', borderRadius: '5px', overflow: 'hidden' },
   }, [
-    el('div', {
-      style: { width: percent + '%', height: '100%', background: barColor, transition: 'width 0.4s' },
-    }),
+    el('div', { style: { width: percent + '%', height: '100%', background: barColor, transition: 'width 0.4s' } }),
   ]));
 
-  /* النسبة */
   card.appendChild(el('div', {
     style: { fontSize: '11px', color: '#666', marginTop: '4px', textAlign: 'left' },
   }, percent + '%'));
@@ -638,46 +658,28 @@ function buildDailyLimitBar() {
    7. بطاقة التنبيهات العاجلة
    ========================================================================== */
 
-/**
- * بطاقة التنبيهات العاجلة (متأخرة + قماش ناقص + جاهز للتسليم).
- * @returns {HTMLElement|null}
- */
 function buildUrgentAlerts() {
   const now = Date.now();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayMs = todayStart.getTime();
 
-  /* المتأخرة */
   const overdue = state.orders.filter((o) =>
-    o.dueDate &&
-    o.dueDate < now &&
-    o.status !== 'delivered' &&
-    o.status !== 'cancelled'
+    o.dueDate && o.dueDate < now &&
+    o.status !== 'delivered' && o.status !== 'cancelled'
   );
 
-  /* تحتاج استلام قماش قريباً (خلال 3 أيام، بدون receivedDate) */
   const needPickup = state.orders.filter((o) =>
-    !o.receivedDate &&
-    o.dueDate &&
-    o.dueDate >= todayMs &&
-    o.dueDate <= todayMs + 3 * DAY_MS &&
-    o.status !== 'delivered' &&
-    o.status !== 'cancelled'
+    !o.receivedDate && o.dueDate &&
+    o.dueDate >= todayMs && o.dueDate <= todayMs + 3 * DAY_MS &&
+    o.status !== 'delivered' && o.status !== 'cancelled'
   );
 
-  /* جاهزة للتسليم */
   const ready = state.orders.filter((o) => o.status === 'ready');
 
-  if (overdue.length === 0 && needPickup.length === 0 && ready.length === 0) {
-    return null;
-  }
+  if (overdue.length === 0 && needPickup.length === 0 && ready.length === 0) return null;
 
-  const card = el('div', {
-    className: 'card',
-    style: { marginBottom: '16px', padding: '12px' },
-  });
-
+  const card = el('div', { className: 'card', style: { marginBottom: '16px', padding: '12px' } });
   card.appendChild(el('div', {
     style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', marginBottom: '10px' },
   }, '🔔 تنبيهات عاجلة'));
@@ -686,9 +688,7 @@ function buildUrgentAlerts() {
 
   if (overdue.length > 0) {
     items.push({
-      icon: '🚨',
-      color: '#C62828',
-      bg: '#FFEBEE',
+      icon: '🚨', color: '#C62828', bg: '#FFEBEE',
       label: overdue.length + ' طلب متأخر',
       sub: overdue.slice(0, 2).map((o) => {
         const c = state.customerMap[o.customerId];
@@ -699,9 +699,7 @@ function buildUrgentAlerts() {
 
   if (needPickup.length > 0) {
     items.push({
-      icon: '🧵',
-      color: '#F57C00',
-      bg: '#FFF3E0',
+      icon: '🧵', color: '#F57C00', bg: '#FFF3E0',
       label: needPickup.length + ' طلب يحتاج استلام قماش',
       sub: 'التسليم خلال 3 أيام',
     });
@@ -709,9 +707,7 @@ function buildUrgentAlerts() {
 
   if (ready.length > 0) {
     items.push({
-      icon: '✅',
-      color: '#2E7D32',
-      bg: '#E8F5E9',
+      icon: '✅', color: '#2E7D32', bg: '#E8F5E9',
       label: ready.length + ' طلب جاهز للتسليم',
       sub: 'في انتظار العميل',
     });
@@ -719,21 +715,14 @@ function buildUrgentAlerts() {
 
   items.forEach((it) => {
     card.appendChild(el('div', {
-      style: {
-        padding: '8px 10px', background: it.bg,
-        borderRadius: '8px', marginBottom: '6px',
-        borderRight: '3px solid ' + it.color,
-      },
+      style: { padding: '8px 10px', background: it.bg, borderRadius: '8px',
+        marginBottom: '6px', borderRight: '3px solid ' + it.color },
     }, [
-      el('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' },
-      }, [
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' } }, [
         el('span', { style: { fontSize: '16px' } }, it.icon),
         el('span', { style: { fontSize: '13px', fontWeight: '600', color: it.color } }, it.label),
       ]),
-      it.sub ? el('div', {
-        style: { fontSize: '11px', color: '#666', marginTop: '2px', lineHeight: '1.4' },
-      }, it.sub) : null,
+      it.sub ? el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } }, it.sub) : null,
     ]));
   });
 
@@ -750,6 +739,7 @@ function buildOrderCard(o) {
   const phone = c ? c.phone : '';
   const statusInfo = STATUS_MAP[o.status] || { label: o.status, badge: 'badge--info' };
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
+  const hasImage = !!o.referenceImage;
 
   const isDelivered = o.status === 'delivered' || o.status === 'cancelled';
   const canDeliver = o.status === 'ready' || o.status === 'in_progress';
@@ -759,13 +749,28 @@ function buildOrderCard(o) {
   const isRunning = getActiveSession(sessions);
   const totalMs = getTotalWorkTime(sessions);
 
+  /* --- الصورة المصغّرة (إن وُجدت) --- */
+  const thumb = hasImage ? el('img', {
+    src: o.referenceImage, alt: 'مرجع',
+    style: {
+      width: '56px', height: '56px', borderRadius: '8px',
+      objectFit: 'cover', flexShrink: '0', cursor: 'pointer',
+      border: '1px solid #E5DDD0',
+    },
+    onClick: (e) => {
+      e.stopPropagation();
+      showReferenceImage(o.referenceImage, 'صورة مرجعية — ' + name);
+    },
+  }) : null;
+
   const headerChildren = [
+    thumb,
     el('div', { style: { flex: '1', minWidth: '0' } }, [
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
       phone ? el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, phone) : null,
     ]),
     el('span', { className: 'badge ' + statusInfo.badge }, statusInfo.label),
-  ];
+  ].filter(Boolean);
 
   const badgesRow = el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
@@ -886,11 +891,24 @@ function buildMiniCard(o, opts = {}) {
     style: {
       marginBottom: '6px', cursor: 'pointer', padding: '8px 10px',
       borderRight: '3px solid ' + (opts.color || '#1F6D57'),
+      display: 'flex', gap: '8px', alignItems: 'center',
     },
     onClick: () => previewOrder(o, c, () => openOrderForm(o)),
   });
 
-  card.appendChild(el('div', {
+  /* صورة مصغّرة */
+  if (o.referenceImage) {
+    card.appendChild(el('img', {
+      src: o.referenceImage, alt: 'مرجع',
+      style: {
+        width: '36px', height: '36px', borderRadius: '6px',
+        objectFit: 'cover', flexShrink: '0',
+      },
+    }));
+  }
+
+  const content = el('div', { style: { flex: '1', minWidth: '0' } });
+  content.appendChild(el('div', {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       gap: '6px', marginBottom: '4px' },
   }, [
@@ -900,7 +918,7 @@ function buildMiniCard(o, opts = {}) {
     isRunning ? el('span', { style: { fontSize: '11px', color: '#2E7D32' } }, '⏱️') : null,
   ]));
 
-  card.appendChild(el('div', {
+  content.appendChild(el('div', {
     style: { fontSize: '11px', color: '#666', display: 'flex', gap: '8px', flexWrap: 'wrap' },
   }, [
     o.amount ? el('span', {}, formatEGP(o.amount)) : null,
@@ -908,6 +926,7 @@ function buildMiniCard(o, opts = {}) {
     itemsCount > 0 ? el('span', {}, '📦 ' + itemsCount) : null,
   ].filter(Boolean)));
 
+  card.appendChild(content);
   return card;
 }
 
@@ -1061,9 +1080,6 @@ function renderStats() {
   ]));
 }
 
-/**
- * إعادة رسم الشريط + التنبيهات.
- */
 function renderTopBanners() {
   const dailyWrap = state.container?.querySelector('#orders-daily-limit');
   if (dailyWrap) {
@@ -1211,33 +1227,26 @@ export const ordersPage = {
     state.activeFilter = 'all';
     state.activeView = 'list';
 
-    /* شريط الحد اليومي */
     container.appendChild(el('div', { id: 'orders-daily-limit' }));
-
-    /* التنبيهات العاجلة */
     container.appendChild(el('div', { id: 'orders-alerts' }));
 
-    /* البطاقات الإحصائية */
     container.appendChild(el('div', {
       id: 'orders-stats',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
 
-    /* زر الإضافة */
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block',
       style: { marginBottom: '12px' },
       onClick: () => openOrderForm(),
     }, '➕ إضافة طلب'));
 
-    /* تبديل العرض + الفلاتر */
     container.appendChild(el('div', { id: 'orders-view-toggle' }));
     container.appendChild(el('div', {
       id: 'orders-filters',
       style: { display: 'flex', flexWrap: 'wrap', marginBottom: '12px' },
     }));
 
-    /* القائمة */
     container.appendChild(el('div', { id: 'orders-list' }));
 
     await refreshAll();
