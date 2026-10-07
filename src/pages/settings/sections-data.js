@@ -1,5 +1,10 @@
 /* ==========================================================================
    sections-data.js — أقسام البيانات (6)
+   ==========================================================================
+   ⚠️ إصلاح حرج (v3.3.1):
+   - لا spread للمفاتيح القديمة (`...inv`, `...dl`, `...gr`, `...pc`).
+   - الحفظ بحقل واحد فقط — `settings.update` يدمج مع DB الحيّ.
+   - `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
 import { el, clear } from '../../core/dom.js';
@@ -9,8 +14,68 @@ import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
 /* ==========================================================================
+   أداة: حقل رقمي بحفظ آمن (debounce + blur)
+   ========================================================================== */
+
+/**
+ * يُنشئ حقل إدخال رقمي يُحفظ تلقائيًا.
+ * @param {Object} opts
+ * @param {string} opts.label
+ * @param {string} opts.hint
+ * @param {number|string} opts.value — القيمة الأولية
+ * @param {string} opts.path — المفتاح داخل patch (مثال: 'inventory')
+ * @param {string} opts.field — الحقل داخل الكائن (مثال: 'minThreshold')
+ * @param {Function} opts.saveFn
+ * @param {Object} [opts.attrs] — سمات إضافية (min, max, step)
+ * @returns {HTMLElement}
+ */
+function numberField(opts) {
+  const {
+    label, hint, value, path, field, saveFn,
+    attrs = {},
+  } = opts;
+
+  const inp = el('input', {
+    className: 'input', type: 'number',
+    value: String(value ?? ''),
+    min: attrs.min != null ? String(attrs.min) : null,
+    max: attrs.max != null ? String(attrs.max) : null,
+    step: attrs.step != null ? String(attrs.step) : null,
+  });
+
+  let lastSaved = String(value ?? '');
+  let timer = null;
+
+  const doSave = () => {
+    const newValue = Number(inp.value);
+    const strVal = String(newValue);
+    if (strVal === lastSaved) return;
+    lastSaved = strVal;
+    /* ⚠️ حقل واحد فقط */
+    saveFn({ [path]: { [field]: newValue } });
+  };
+
+  inp.addEventListener('blur', () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    doSave();
+  });
+
+  inp.addEventListener('input', () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(doSave, 800);
+  });
+
+  return el('div', { className: 'settings-field' }, [
+    el('label', { className: 'settings-field__label' }, label),
+    inp,
+    hint ? el('div', { className: 'settings-field__hint' }, hint) : null,
+  ]);
+}
+
+/* ==========================================================================
    1. حقول المقاسات
    ========================================================================== */
+
 const measurementFieldsSection = {
   id: 'measurements',
   icon: '📏',
@@ -32,8 +97,8 @@ const measurementFieldsSection = {
         list.appendChild(el('div', {
           style: {
             display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '8px 10px', background: '#F6F1E6',
-            borderRadius: '8px', opacity: enabled ? '1' : '0.5',
+            padding: '8px 10px', background: '#F6F1E6', borderRadius: '8px',
+            opacity: enabled ? '1' : '0.5',
           },
         }, [
           el('span', { style: { flex: '1', fontSize: '14px', fontWeight: '500' } }, f.name),
@@ -68,7 +133,6 @@ const measurementFieldsSection = {
       style: { marginTop: '8px' },
       onClick: () => openFieldForm(fields, -1, saveFn, rebuild),
     }, '➕ إضافة حقل جديد'));
-
     rebuild();
   },
 };
@@ -76,26 +140,37 @@ const measurementFieldsSection = {
 function openFieldForm(fields, editIdx, saveFn, rebuild) {
   const isEdit = editIdx >= 0;
   const existing = isEdit ? fields[editIdx] : {};
-  const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'اسم الحقل', value: existing.name || '' });
-  const unitInput = el('input', { className: 'input', type: 'text', placeholder: 'cm', value: existing.unit || 'cm' });
+
+  const nameInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'اسم الحقل',
+    value: existing.name || '',
+  });
+  const unitInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'cm',
+    value: existing.unit || 'cm',
+  });
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم الحقل *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الوحدة'), unitInput]),
   ]);
+
   const handle = modal.open({
     title: isEdit ? 'تعديل حقل' : 'إضافة حقل',
     body,
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
-        text: isEdit ? 'حفظ' : 'إضافة',
-        variant: 'primary', action: 'save',
+        text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
         onClick: () => {
           const name = nameInput.value.trim();
           if (!name) return toast.warning('الاسم مطلوب');
-          const data = { id: 'field_' + Date.now(), name, unit: unitInput.value.trim() || 'cm', enabled: true };
-          if (isEdit) fields[editIdx] = { ...fields[editIdx], name: data.name, unit: data.unit };
-          else fields.push(data);
+          const unit = unitInput.value.trim() || 'cm';
+          if (isEdit) {
+            fields[editIdx] = { ...fields[editIdx], name, unit };
+          } else {
+            fields.push({ id: 'field_' + Date.now(), name, unit, enabled: true });
+          }
           saveFn({ measurementFields: fields });
           handle.close();
           rebuild();
@@ -108,6 +183,7 @@ function openFieldForm(fields, editIdx, saveFn, rebuild) {
 /* ==========================================================================
    2. أنواع الجلابيات
    ========================================================================== */
+
 const jalabiyaTypesSection = {
   id: 'jalabiya-types',
   icon: '👔',
@@ -157,7 +233,6 @@ const jalabiyaTypesSection = {
       style: { marginTop: '8px' },
       onClick: () => openTypeForm(types, -1, saveFn, rebuild),
     }, '➕ إضافة نوع جديد'));
-
     rebuild();
   },
 };
@@ -165,29 +240,44 @@ const jalabiyaTypesSection = {
 function openTypeForm(types, editIdx, saveFn, rebuild) {
   const isEdit = editIdx >= 0;
   const existing = isEdit ? types[editIdx] : {};
-  const nameInput = el('input', { className: 'input', type: 'text', placeholder: 'مثال: جلابية صيفي', value: existing.name || '' });
-  const priceInput = el('input', { className: 'input', type: 'number', placeholder: '0', min: '0', value: existing.price || '' });
+
+  const nameInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'مثال: جلابية صيفي',
+    value: existing.name || '',
+  });
+  const priceInput = el('input', {
+    className: 'input', type: 'number', placeholder: '0', min: '0',
+    value: existing.price || '',
+  });
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   notesInput.value = existing.notes || '';
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'السعر (ج.م)'), priceInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
+
   const handle = modal.open({
     title: isEdit ? 'تعديل نوع' : 'إضافة نوع',
     body,
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
-        text: isEdit ? 'حفظ' : 'إضافة',
-        variant: 'primary', action: 'save',
+        text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
         onClick: () => {
           const name = nameInput.value.trim();
           if (!name) return toast.warning('الاسم مطلوب');
-          const data = { name, price: Number(priceInput.value) || 0, notes: notesInput.value.trim() };
-          if (isEdit) types[editIdx] = { ...types[editIdx], ...data };
-          else types.push({ id: 'type_' + Date.now(), ...data });
+          const data = {
+            name,
+            price: Number(priceInput.value) || 0,
+            notes: notesInput.value.trim(),
+          };
+          if (isEdit) {
+            types[editIdx] = { ...types[editIdx], ...data };
+          } else {
+            types.push({ id: 'type_' + Date.now(), ...data });
+          }
           saveFn({ jalabiyaTypes: types });
           handle.close();
           rebuild();
@@ -200,37 +290,40 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
 /* ==========================================================================
    3. المخزون والحدود
    ========================================================================== */
+
 const inventoryLimitsSection = {
   id: 'inventory-limits',
   icon: '📦',
   title: 'المخزون والحدود',
   async render(body, currentSettings, saveFn) {
     const inv = currentSettings.inventory || DEFAULT_SETTINGS.inventory;
-    const thresholdInput = el('input', {
-      className: 'input', type: 'number', min: '1',
-      value: String(inv.minThreshold || 5),
-    });
-    thresholdInput.addEventListener('blur', () => {
-      saveFn({ inventory: { ...inv, minThreshold: Number(thresholdInput.value) || 5 } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'الحد الأدنى للتنبيه'),
-      thresholdInput,
-      el('div', { className: 'settings-field__hint' }, 'عند نزول الكمية تحت هذا الرقم — يظهر تنبيه'),
-    ]));
+
+    body.appendChild(numberField({
+      label: 'الحد الأدنى للتنبيه',
+      hint: 'عند نزول الكمية تحت هذا الرقم — يظهر تنبيه',
+      value: inv.minThreshold || 5,
+      path: 'inventory',
+      field: 'minThreshold',
+      saveFn,
+      attrs: { min: 1 },
+    }));
+
+    /* Toggle 1 — حقل واحد فقط */
     const t1 = createToggle({
       label: 'تنبيه عند نقص القماش',
       checked: inv.alertOnFabricLow !== false,
-      onChange: (v) => saveFn({ inventory: { ...inv, alertOnFabricLow: v } }),
+      onChange: (v) => saveFn({ inventory: { alertOnFabricLow: v } }),
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'تنبيه عند نقص القماش'),
       t1,
     ]));
+
+    /* Toggle 2 — حقل واحد فقط */
     const t2 = createToggle({
       label: 'تنبيه عند نقص المخزون',
       checked: inv.alertOnProductLow !== false,
-      onChange: (v) => saveFn({ inventory: { ...inv, alertOnProductLow: v } }),
+      onChange: (v) => saveFn({ inventory: { alertOnProductLow: v } }),
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'تنبيه عند نقص المخزون'),
@@ -242,36 +335,34 @@ const inventoryLimitsSection = {
 /* ==========================================================================
    4. الحد اليومي + يوم الإجازة
    ========================================================================== */
+
 const dailyLimitSection = {
   id: 'daily-limit',
   icon: '📊',
   title: 'الحد اليومي + يوم الإجازة',
   async render(body, currentSettings, saveFn) {
     const dl = currentSettings.dailyLimit || DEFAULT_SETTINGS.dailyLimit;
-    const limitInput = el('input', {
-      className: 'input', type: 'number', min: '0',
-      value: String(dl.dailyOrderLimit || 700),
-    });
-    limitInput.addEventListener('blur', () => {
-      saveFn({ dailyLimit: { ...dl, dailyOrderLimit: Number(limitInput.value) || 0 } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'الحد الأقصى للطلبات اليومية (ج.م)'),
-      limitInput,
-      el('div', { className: 'settings-field__hint' }, 'تنبيه عند تجاوز هذا الرقم — لا يمنع الإضافة'),
-    ]));
-    const pickupInput = el('input', {
-      className: 'input', type: 'number', min: '0', max: '30',
-      value: String(dl.fabricPickupAlertDays || 2),
-    });
-    pickupInput.addEventListener('blur', () => {
-      saveFn({ dailyLimit: { ...dl, fabricPickupAlertDays: Number(pickupInput.value) || 2 } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'تنبيه استلام القماش قبل (أيام)'),
-      pickupInput,
-    ]));
 
+    body.appendChild(numberField({
+      label: 'الحد الأقصى للطلبات اليومية (ج.م)',
+      hint: 'تنبيه عند تجاوز هذا الرقم — لا يمنع الإضافة',
+      value: dl.dailyOrderLimit || 700,
+      path: 'dailyLimit',
+      field: 'dailyOrderLimit',
+      saveFn,
+      attrs: { min: 0 },
+    }));
+
+    body.appendChild(numberField({
+      label: 'تنبيه استلام القماش قبل (أيام)',
+      value: dl.fabricPickupAlertDays || 2,
+      path: 'dailyLimit',
+      field: 'fabricPickupAlertDays',
+      saveFn,
+      attrs: { min: 0, max: 30 },
+    }));
+
+    /* يوم الإجازة */
     body.appendChild(el('div', {
       style: {
         marginTop: '12px', paddingTop: '12px',
@@ -279,10 +370,7 @@ const dailyLimitSection = {
       },
     }, [
       el('h3', {
-        style: {
-          fontSize: '14px', fontWeight: '600', color: '#123C2F',
-          margin: '0 0 8px 0',
-        },
+        style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', margin: '0 0 8px 0' },
       }, '🏖️ يوم الإجازة الأسبوعي'),
     ]));
 
@@ -293,8 +381,10 @@ const dailyLimitSection = {
       dayOffSelect.appendChild(o);
     });
     dayOffSelect.addEventListener('change', () => {
-      saveFn({ dailyLimit: { ...dl, dayOffWeekday: Number(dayOffSelect.value) } });
+      /* ⚠️ حقل واحد فقط */
+      saveFn({ dailyLimit: { dayOffWeekday: Number(dayOffSelect.value) } });
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'اليوم الأسبوعي للإجازة'),
       dayOffSelect,
@@ -304,7 +394,8 @@ const dailyLimitSection = {
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+        marginTop: '8px',
       },
     }, '💡 الحد اليومي يظهر في صفحة الطلبات (تنبيه). يوم الإجازة يُطبَّق على التقويم + اقتراح مواعيد التسليم.'));
   },
@@ -313,46 +404,49 @@ const dailyLimitSection = {
 /* ==========================================================================
    5. تجميع الطلبات المتشابهة
    ========================================================================== */
+
 const groupingSection = {
   id: 'grouping',
   icon: '🎯',
   title: 'تجميع الطلبات المتشابهة',
   async render(body, currentSettings, saveFn) {
     const gr = currentSettings.grouping || DEFAULT_SETTINGS.grouping;
+
     const mainToggle = createToggle({
       label: 'تفعيل التجميع',
       checked: gr.enabled === true,
-      onChange: (v) => saveFn({ grouping: { ...gr, enabled: v } }),
+      onChange: (v) => saveFn({ grouping: { enabled: v } }),
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'تفعيل التجميع'),
       mainToggle,
     ]));
-    const toleranceInput = el('input', {
-      className: 'input', type: 'number', min: '0', max: '20',
-      value: String(gr.tolerance || 2),
-    });
-    toleranceInput.addEventListener('blur', () => {
-      saveFn({ grouping: { ...gr, tolerance: Number(toleranceInput.value) || 2 } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'نسبة التقارب في القياسات (سم)'),
-      toleranceInput,
-      el('div', { className: 'settings-field__hint' }, 'مثال: 2 سم تعني أن القياسات المتقاربة بحدود 2 سم تُجمَّع'),
-    ]));
+
+    body.appendChild(numberField({
+      label: 'نسبة التقارب في القياسات (سم)',
+      hint: 'مثال: 2 سم تعني أن القياسات المتقاربة بحدود 2 سم تُجمَّع',
+      value: gr.tolerance || 2,
+      path: 'grouping',
+      field: 'tolerance',
+      saveFn,
+      attrs: { min: 0, max: 20 },
+    }));
+
     const typeToggle = createToggle({
       label: 'نفس النوع فقط',
       checked: gr.sameTypeOnly !== false,
-      onChange: (v) => saveFn({ grouping: { ...gr, sameTypeOnly: v } }),
+      onChange: (v) => saveFn({ grouping: { sameTypeOnly: v } }),
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'التجميع لنفس النوع فقط'),
       typeToggle,
     ]));
+
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+        marginTop: '8px',
       },
     }, '💡 يظهر زر "🎯 تجميع" في صفحة الطلبات — يعرض الطلبات القابلة للتجميع في دفعات موحدة.'));
   },
@@ -361,6 +455,7 @@ const groupingSection = {
 /* ==========================================================================
    6. حاسبة التسعير (تخصيص)
    ========================================================================== */
+
 const pricingCalculatorSection = {
   id: 'pricing-calculator',
   icon: '🧮',
@@ -368,12 +463,11 @@ const pricingCalculatorSection = {
   async render(body, currentSettings, saveFn) {
     const pc = currentSettings.pricingCalculator || DEFAULT_SETTINGS.pricingCalculator;
 
-    /* --- Toggles لتشغيل/تعطيل الحقول --- */
     function toggleRow(label, key, hint = '') {
       const t = createToggle({
         label,
         checked: pc[key] !== false,
-        onChange: (v) => saveFn({ pricingCalculator: { ...pc, [key]: v } }),
+        onChange: (v) => saveFn({ pricingCalculator: { [key]: v } }),
       });
       return el('div', { className: 'settings-row' }, [
         el('div', { style: { flex: '1' } }, [
@@ -393,7 +487,7 @@ const pricingCalculatorSection = {
     body.appendChild(toggleRow('📦 تفعيل المصاريف الإضافية', 'enableExtras', 'خيوط، أزرار، إكسسوارات'));
     body.appendChild(toggleRow('💸 تفعيل المصاريف غير المباشرة', 'enableOverhead', 'إيجار، كهرباء، إلخ'));
 
-    /* --- هامش الربح الافتراضي --- */
+    /* هامش الربح */
     body.appendChild(el('div', {
       style: {
         marginTop: '12px', paddingTop: '12px',
@@ -405,19 +499,16 @@ const pricingCalculatorSection = {
       }, '📈 هامش الربح'),
     ]));
 
-    const marginInput = el('input', {
-      className: 'input', type: 'number', min: '0', max: '500',
-      value: String(pc.defaultMargin || 30),
-    });
-    marginInput.addEventListener('blur', () => {
-      saveFn({ pricingCalculator: { ...pc, defaultMargin: Number(marginInput.value) || 30 } });
-    });
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'هامش الربح الافتراضي (%)'),
-      marginInput,
-    ]));
+    body.appendChild(numberField({
+      label: 'هامش الربح الافتراضي (%)',
+      value: pc.defaultMargin || 30,
+      path: 'pricingCalculator',
+      field: 'defaultMargin',
+      saveFn,
+      attrs: { min: 0, max: 500 },
+    }));
 
-    /* --- أزرار النسب الجاهزة --- */
+    /* أزرار النسب الجاهزة */
     const presets = Array.isArray(pc.marginPresets) ? [...pc.marginPresets] : [20, 30, 50, 100];
     const presetsList = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
 
@@ -441,7 +532,7 @@ const pricingCalculatorSection = {
             className: 'btn btn--sm btn--danger', type: 'button',
             onClick: () => {
               presets.splice(idx, 1);
-              saveFn({ pricingCalculator: { ...pc, marginPresets: presets } });
+              saveFn({ pricingCalculator: { marginPresets: [...presets] } });
               rebuildPresets();
             },
           }, '🗑️'),
@@ -463,15 +554,14 @@ const pricingCalculatorSection = {
           if (presets.includes(num)) return toast.warning('النسبة موجودة');
           presets.push(num);
           presets.sort((a, b) => a - b);
-          saveFn({ pricingCalculator: { ...pc, marginPresets: presets } });
+          saveFn({ pricingCalculator: { marginPresets: [...presets] } });
           rebuildPresets();
         },
       }, '➕ إضافة نسبة'),
     ]));
-
     rebuildPresets();
 
-    /* --- Toggles أخيرة --- */
+    /* toggles أخيرة */
     body.appendChild(el('div', {
       style: {
         marginTop: '12px', paddingTop: '12px',
