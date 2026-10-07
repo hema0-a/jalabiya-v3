@@ -1,22 +1,28 @@
 /* ==========================================================================
-   dashboard.js — لوحة المعلومات (KPIs حقيقية + ترحيب باسم الورشة)
+   dashboard.js — لوحة المعلومات (KPIs + رسوم بيانية + ترحيب باسم الورشة)
    ==========================================================================
    API:
      dashboardPage.render(container)  → Promise<void>
      dashboardPage.destroy()          → void
 
-   ⚠️ إصلاح (v3.3.1):
+   ⚠️ v3.3.2:
    - يقرأ settings.workshop.name للترحيب + settings.workshop.logo للشعار.
-   - إذا كان الاسم فارغًا → يستخدم "صاحب الورشة" كافتراضي.
+   - يعرض 3 رسوم بيانية: مبيعات 7 أيام، توزيع الطلبات، ملخص مالي.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
+import { expenses } from '../data/repos/expenses.js';
 import { appointments } from '../data/repos/appointments.js';
 import { settings } from '../data/repos/settings.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
+import {
+  createSalesBarChart,
+  createOrdersDonutChart,
+  createFinanceChart,
+} from '../ui/dashboard-charts.js';
 
 let state = {
   container: null,
@@ -24,7 +30,7 @@ let state = {
 };
 
 /* ==========================================================================
-   1. تحميل وحساب KPIs
+   1. أدوات حسابية للرسوم
    ========================================================================== */
 
 /**
@@ -39,16 +45,96 @@ function startOfMonth() {
 }
 
 /**
+ * حساب مبيعات آخر 7 أيام (يوم بيوم).
+ * @param {Array} paymentsList
+ * @returns {Array<{label:string, value:number}>}
+ */
+function computeSalesLast7Days(paymentsList) {
+  const days = [];
+  const DAY_MS = 86400000;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+
+  /* أسماء أيام الأسبوع بالعربية (مختصرة) */
+  const DAY_NAMES = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = todayMs - i * DAY_MS;
+    const dayEnd = dayStart + DAY_MS;
+
+    const total = paymentsList
+      .filter((p) => {
+        const t = p.createdAt || 0;
+        return t >= dayStart && t < dayEnd;
+      })
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const d = new Date(dayStart);
+    days.push({
+      label: DAY_NAMES[d.getDay()],
+      value: total,
+    });
+  }
+
+  return days;
+}
+
+/**
+ * حساب توزيع الطلبات بالحالة.
+ * @param {Array} ordersList
+ * @returns {Object}
+ */
+function computeOrdersByStatus(ordersList) {
+  const out = { pending: 0, in_progress: 0, ready: 0, delivered: 0, cancelled: 0 };
+  ordersList.forEach((o) => {
+    if (out[o.status] != null) out[o.status]++;
+  });
+  return out;
+}
+
+/**
+ * حساب ملخص مالي لآخر 30 يوماً.
+ * @param {Array} paymentsList
+ * @param {Array} expensesList
+ * @returns {{revenue:number, expenses:number, profit:number}}
+ */
+function computeFinance(paymentsList, expensesList) {
+  const DAY_MS = 86400000;
+  const now = Date.now();
+  const start = now - 30 * DAY_MS;
+
+  const revenue = paymentsList
+    .filter((p) => (p.createdAt || 0) >= start)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+  const exp = expensesList
+    .filter((e) => (e.date || 0) >= start)
+    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  return {
+    revenue,
+    expenses: exp,
+    profit: revenue - exp,
+  };
+}
+
+/* ==========================================================================
+   2. تحميل وحساب KPIs
+   ========================================================================== */
+
+/**
  * تحميل كل البيانات وحساب KPIs.
  * @returns {Promise<Object>}
  */
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, paymentsList, todayAppts, s] = await Promise.all([
+  const [customersList, ordersList, paymentsList, expensesList, todayAppts, s] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
+    expenses.list().catch(() => []),
     appointments.getToday(),
     settings.get().catch(() => ({})),
   ]);
@@ -79,9 +165,14 @@ async function loadKPIs() {
     .sort((a, b) => a.dueDate - b.dueDate)
     .slice(0, 5);
 
-  /* قراءة معلومات الورشة من الإعدادات */
+  /* قراءة معلومات الورشة */
   const workshopName = (s.workshop && s.workshop.name) ? String(s.workshop.name).trim() : '';
   const workshopLogo = (s.workshop && s.workshop.logo) ? s.workshop.logo : '';
+
+  /* بيانات الرسوم */
+  const salesLast7Days = computeSalesLast7Days(paymentsList);
+  const ordersByStatus = computeOrdersByStatus(ordersList);
+  const finance = computeFinance(paymentsList, expensesList);
 
   return {
     totalCustomers: customersList.length,
@@ -93,11 +184,14 @@ async function loadKPIs() {
     todayApptsList: todayAppts,
     workshopName,
     workshopLogo,
+    salesLast7Days,
+    ordersByStatus,
+    finance,
   };
 }
 
 /* ==========================================================================
-   2. بناء المكونات
+   3. بناء المكونات
    ========================================================================== */
 
 function buildHeader(data) {
@@ -107,10 +201,8 @@ function buildHeader(data) {
   else if (hour < 18) greeting = 'مساء الخير';
   else greeting = 'مساء الخير';
 
-  /* اسم الورشة أو الافتراضي */
   const name = data && data.workshopName ? data.workshopName : 'صاحب الورشة';
 
-  /* شعار اختياري */
   const logoEl = (data && data.workshopLogo)
     ? el('div', {
         style: {
@@ -278,7 +370,7 @@ function buildRecentCustomersSection(list) {
 }
 
 /* ==========================================================================
-   3. API عام
+   4. API عام
    ========================================================================== */
 
 export const dashboardPage = {
@@ -293,8 +385,35 @@ export const dashboardPage = {
     /* بناء */
     container.appendChild(buildHeader(data));
     container.appendChild(buildKPICards(data));
-    container.appendChild(buildDueSoonSection(data.dueSoonOrders));
+
+    /* 📊 رسم المبيعات — آخر 7 أيام */
+    try {
+      container.appendChild(createSalesBarChart(data.salesLast7Days));
+    } catch (e) {
+      console.warn('[Dashboard] sales chart failed:', e);
+    }
+
+    /* 📅 مواعيد اليوم */
     container.appendChild(buildTodayAppointmentsSection(data.todayApptsList));
+
+    /* ⏰ طلبات مستحقة */
+    container.appendChild(buildDueSoonSection(data.dueSoonOrders));
+
+    /* 💰 الملخص المالي — آخر 30 يومًا */
+    try {
+      container.appendChild(createFinanceChart(data.finance));
+    } catch (e) {
+      console.warn('[Dashboard] finance chart failed:', e);
+    }
+
+    /* 🥧 توزيع الطلبات */
+    try {
+      container.appendChild(createOrdersDonutChart(data.ordersByStatus));
+    } catch (e) {
+      console.warn('[Dashboard] donut chart failed:', e);
+    }
+
+    /* 👥 أحدث العملاء */
     container.appendChild(buildRecentCustomersSection(data.recentCustomers));
   },
 
