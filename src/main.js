@@ -6,6 +6,7 @@
    - معالج الأخطاء العالمي مُفعَّل لالتقاط أخطاء التشغيل.
    - FAB (إجراءات سريعة) مُفعَّل على كل الصفحات عدا #/tests.
    - الوضع الليلي (Dark Mode) مع حفظ التفضيل.
+   - مؤشر "غير متصل" (Offline Indicator) مع تنبيه عند فقدان الاتصال.
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
@@ -32,6 +33,7 @@ let startNotificationCheck;
 let installErrorHandler;
 let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
+let mountOffline;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -46,6 +48,7 @@ try {
   ({ install: installErrorHandler } = await import('./core/error-handler.js'));
   ({ mount: mountFab } = await import('./ui/fab.js'));
   ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
+  ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -246,6 +249,15 @@ try {
   }
 } catch (err) {
   console.warn('[FAB] فشل التثبيت:', err);
+}
+
+/* 🔴 مؤشر "غير متصل" — يستمع لـ online/offline */
+try {
+  if (typeof mountOffline === 'function') {
+    mountOffline();
+  }
+} catch (err) {
+  console.warn('[OfflineIndicator] فشل التثبيت:', err);
 }
 
 try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
