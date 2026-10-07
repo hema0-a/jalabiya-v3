@@ -7,7 +7,7 @@
      - External (fonts, Firebase): لا يُخزَّن
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.0.0-p25';
+const CACHE_VERSION = 'v3.0.0-p26';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* --- الأصول المُخزَّنة مسبقاً عند التثبيت --- */
@@ -20,8 +20,10 @@ const PRECACHE_URLS = [
   './styles/components.css',
   './styles/layout.css',
   './styles/settings.css',
+  './styles/themes.css',
   './assets/icons/icon.svg',
   './src/main.js',
+  './src/pwa.js',
 ];
 
 /* ==========================================================================
