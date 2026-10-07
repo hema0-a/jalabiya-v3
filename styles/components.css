@@ -676,3 +676,52 @@
 .topbar__menu.is-hidden {
   display: none !important;
 }
+/* ============================================================
+   Client Mode — وضع العميل (إخفاء الأرقام والإحصائيات)
+   يُفعَّل عبر body.client-mode.
+   ============================================================ */
+
+/* 1. إخفاء كل بطاقات الإحصائيات */
+body.client-mode .stat {
+  display: none !important;
+}
+
+/* 2. إخفاء العناصر المُعلَّمة صراحةً */
+body.client-mode .client-hidden {
+  display: none !important;
+}
+
+/* 3. حجب القيم المالية المُعلَّمة بـ data-money */
+body.client-mode [data-money="1"] {
+  filter: blur(5px);
+  user-select: none;
+  pointer-events: none;
+  transition: filter var(--duration-fast) var(--ease-out);
+}
+
+/* 4. حجب الأرقام الكبيرة (بطاقات المبالغ الكبيرة) */
+body.client-mode .money-value,
+body.client-mode .stat__value {
+  filter: blur(5px);
+  user-select: none;
+}
+
+/* 5. إخفاء الأزرار الحساسة في Topbar (عند الحاجة) */
+body.client-mode .topbar__sensitive {
+  display: none !important;
+}
+
+/* 6. تكبير الإشعارات والشارات في وضع العميل */
+body.client-mode .badge {
+  font-weight: 700;
+}
+
+/* 7. تقليل تشتيت الواجهة في وضع العميل */
+body.client-mode .card {
+  box-shadow: none;
+  border: 1px solid var(--color-border);
+}
+
+body.client-mode .card:hover {
+  box-shadow: none;
+}
