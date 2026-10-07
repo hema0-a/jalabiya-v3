@@ -46,7 +46,7 @@ export const STORES = {
   SAVINGS_GOALS:       'savingsGoals',
   HOUSE_EXPENSES:      'houseExpenses',
   PERSONAL_LOANS:      'personalLoans',
-    LOAN_PAYMENTS:       'loanPayments',
+  LOAN_PAYMENTS:       'loanPayments',
   REFERRALS:           'referrals',
 };
 
@@ -231,8 +231,12 @@ export const THEMES = [
 
 /* --- 19. Firebase --- */
 export const FIREBASE_CONFIG = {
-  apiKey: '', authDomain: '', projectId: '',
-  storageBucket: '', messagingSenderId: '', appId: '',
+  apiKey: "AIzaSyCQ4Zy8je87efQKH5uA0ql3rZbtf6CkeSw",
+  authDomain: "jalabiya-workshop-v2.firebaseapp.com",
+  projectId: "jalabiya-workshop-v2",
+  storageBucket: "jalabiya-workshop-v2.firebasestorage.app",
+  messagingSenderId: "262053250849",
+  appId: "1:262053250849:web:969700924bed07f75a6060",
 };
 
 export const FIRESTORE_PATHS = {
