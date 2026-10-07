@@ -27,9 +27,6 @@ export const DB_CONFIG = {
   name: 'jalabiya_v3',
   version: 8,
 };
-  REFERRALS:           'referrals',
-  WORKER_PAYMENTS:     'workerPayments',   // ← جديد
-};
 
 /* --- 4. Stores --- */
 export const STORES = {
@@ -51,6 +48,7 @@ export const STORES = {
   PERSONAL_LOANS:      'personalLoans',
   LOAN_PAYMENTS:       'loanPayments',
   REFERRALS:           'referrals',
+  WORKER_PAYMENTS:     'workerPayments',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
