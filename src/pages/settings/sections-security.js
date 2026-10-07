@@ -2,6 +2,11 @@
    sections-security.js — أقسام الأمان (3)
    ==========================================================================
    الأمان، شاشة القفل، منطقة الخطر
+
+   ⚠️ إصلاح حرج (v3.3.1):
+   - لا spread للمفاتيح القديمة (`...sc`, `...ls`).
+   - الحفظ بحقل واحد فقط — `settings.update` يدمج مع DB الحيّ.
+   - `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
 import { el } from '../../core/dom.js';
@@ -14,6 +19,7 @@ import { auth } from '../../security/auth.js';
 /* ==========================================================================
    1. الأمان
    ========================================================================== */
+
 const securitySection = {
   id: 'security',
   icon: '🔒',
@@ -38,7 +44,10 @@ const securitySection = {
     const autoLockToggle = createToggle({
       label: 'القفل التلقائي',
       checked: sc.autoLock !== false,
-      onChange: (v) => saveFn({ security: { ...sc, autoLock: v } }),
+      onChange: (v) => {
+        /* ⚠️ حقل واحد */
+        saveFn({ security: { autoLock: v } });
+      },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'القفل التلقائي'),
@@ -53,8 +62,10 @@ const securitySection = {
       lockSelect.appendChild(o);
     });
     lockSelect.addEventListener('change', () => {
-      saveFn({ security: { ...sc, lockAfterMinutes: Number(lockSelect.value) } });
+      /* ⚠️ حقل واحد */
+      saveFn({ security: { lockAfterMinutes: Number(lockSelect.value) } });
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'القفل بعد'),
       lockSelect,
@@ -68,8 +79,10 @@ const securitySection = {
       sessionSelect.appendChild(o);
     });
     sessionSelect.addEventListener('change', () => {
-      saveFn({ security: { ...sc, sessionDurationHours: Number(sessionSelect.value) } });
+      /* ⚠️ حقل واحد */
+      saveFn({ security: { sessionDurationHours: Number(sessionSelect.value) } });
     });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'مدة الجلسة'),
       sessionSelect,
@@ -79,7 +92,10 @@ const securitySection = {
     const logToggle = createToggle({
       label: 'تسجيل محاولات الدخول',
       checked: sc.logLoginAttempts !== false,
-      onChange: (v) => saveFn({ security: { ...sc, logLoginAttempts: v } }),
+      onChange: (v) => {
+        /* ⚠️ حقل واحد */
+        saveFn({ security: { logLoginAttempts: v } });
+      },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'تسجيل محاولات الدخول'),
@@ -127,7 +143,9 @@ function openSetPinModal() {
             await auth.setPinAndSave(pin);
             toast.success('تم تعيين PIN');
             handle.close();
-          } catch (err) { toast.danger('فشل: ' + err.message); }
+          } catch (err) {
+            toast.danger('فشل: ' + err.message);
+          }
         },
       },
     ],
@@ -175,7 +193,9 @@ function openChangePinModal() {
             if (!ok) return toast.danger('PIN الحالي غير صحيح');
             toast.success('تم التغيير');
             handle.close();
-          } catch (err) { toast.danger('فشل: ' + err.message); }
+          } catch (err) {
+            toast.danger('فشل: ' + err.message);
+          }
         },
       },
     ],
@@ -185,6 +205,7 @@ function openChangePinModal() {
 /* ==========================================================================
    2. تخصيص شاشة القفل
    ========================================================================== */
+
 const lockScreenSection = {
   id: 'lock-screen',
   icon: '🔐',
@@ -192,15 +213,33 @@ const lockScreenSection = {
   async render(body, currentSettings, saveFn) {
     const ls = currentSettings.lockScreen || DEFAULT_SETTINGS.lockScreen;
 
-    /* --- رسالة الترحيب --- */
+    /* --- رسالة الترحيب (debounce + blur) --- */
     const msgInput = el('input', {
       className: 'input', type: 'text',
       placeholder: 'أدخل الرقم السري للدخول',
       value: ls.message || 'أدخل الرقم السري للدخول',
     });
+
+    let lastSavedMsg = String(ls.message || 'أدخل الرقم السري للدخول');
+    let msgTimer = null;
+
+    const doSaveMsg = () => {
+      const newValue = msgInput.value.trim() || 'أدخل الرقم السري للدخول';
+      if (newValue === lastSavedMsg) return;
+      lastSavedMsg = newValue;
+      /* ⚠️ حقل واحد */
+      saveFn({ lockScreen: { message: newValue } });
+    };
+
     msgInput.addEventListener('blur', () => {
-      saveFn({ lockScreen: { ...ls, message: msgInput.value.trim() || 'أدخل الرقم السري للدخول' } });
+      if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
+      doSaveMsg();
     });
+    msgInput.addEventListener('input', () => {
+      if (msgTimer) clearTimeout(msgTimer);
+      msgTimer = setTimeout(doSaveMsg, 800);
+    });
+
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'رسالة الترحيب'),
       msgInput,
@@ -210,7 +249,10 @@ const lockScreenSection = {
     const logoToggle = createToggle({
       label: 'إظهار شعار الورشة',
       checked: ls.showLogo !== false,
-      onChange: (v) => saveFn({ lockScreen: { ...ls, showLogo: v } }),
+      onChange: (v) => {
+        /* ⚠️ حقل واحد */
+        saveFn({ lockScreen: { showLogo: v } });
+      },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
       el('div', { className: 'settings-row__label' }, 'إظهار شعار الورشة'),
@@ -221,12 +263,16 @@ const lockScreenSection = {
     const bgPreview = el('div', {
       style: {
         width: '100%', height: '80px', borderRadius: '8px',
-        background: ls.background ? 'url(' + ls.background + ') center/cover' : 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
+        background: ls.background
+          ? 'url(' + ls.background + ') center/cover'
+          : 'linear-gradient(135deg, #2E8B6F, #1F6D57)',
         marginBottom: '8px',
       },
     });
 
-    const bgInput = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+    const bgInput = el('input', {
+      type: 'file', accept: 'image/*', style: { display: 'none' },
+    });
     bgInput.addEventListener('change', () => {
       const file = bgInput.files[0];
       if (!file) return;
@@ -234,7 +280,8 @@ const lockScreenSection = {
       reader.onload = () => {
         const dataUrl = reader.result;
         bgPreview.style.background = 'url(' + dataUrl + ') center/cover';
-        saveFn({ lockScreen: { ...ls, background: dataUrl } });
+        /* ⚠️ حقل واحد */
+        saveFn({ lockScreen: { background: dataUrl } });
       };
       reader.readAsDataURL(file);
     });
@@ -251,7 +298,8 @@ const lockScreenSection = {
           className: 'btn btn--ghost btn--sm', type: 'button',
           onClick: () => {
             bgPreview.style.background = 'linear-gradient(135deg, #2E8B6F, #1F6D57)';
-            saveFn({ lockScreen: { ...ls, background: null } });
+            /* ⚠️ حقل واحد */
+            saveFn({ lockScreen: { background: null } });
           },
         }, '↩️ افتراضي'),
         bgInput,
@@ -261,7 +309,8 @@ const lockScreenSection = {
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+        marginTop: '8px',
       },
     }, '💡 شاشة القفل تظهر عند فتح التطبيق (بعد تعيين PIN) أو بعد القفل التلقائي.'));
   },
@@ -270,6 +319,7 @@ const lockScreenSection = {
 /* ==========================================================================
    3. منطقة الخطر
    ========================================================================== */
+
 const dangerZoneSection = {
   id: 'danger-zone',
   icon: '⚠️',
@@ -282,6 +332,7 @@ const dangerZoneSection = {
       },
     }, 'العمليات التالية لا يمكن التراجع عنها. استخدمها بحذر شديد.'));
 
+    /* حذف كل البيانات */
     body.appendChild(el('button', {
       className: 'btn btn--danger btn--block', type: 'button',
       style: { marginBottom: '8px' },
@@ -302,14 +353,20 @@ const dangerZoneSection = {
 
         try {
           const db = await import('../../data/idb.js');
-          const stores = ['customers', 'orders', 'payments', 'inventory', 'workers', 'expenses', 'appointments', 'trash', 'activity'];
+          const stores = [
+            'customers', 'orders', 'payments', 'inventory', 'workers',
+            'expenses', 'appointments', 'trash', 'activity',
+          ];
           for (const s of stores) await db.clear(s).catch(() => {});
           toast.success('تم حذف كل البيانات');
           setTimeout(() => location.reload(), 1500);
-        } catch (err) { toast.danger('فشل: ' + err.message); }
+        } catch (err) {
+          toast.danger('فشل: ' + err.message);
+        }
       },
     }, '🗑️ حذف جميع البيانات'));
 
+    /* إعادة تعيين الإعدادات */
     body.appendChild(el('button', {
       className: 'btn btn--danger btn--block', type: 'button',
       onClick: async () => {
@@ -319,12 +376,15 @@ const dangerZoneSection = {
           confirmText: 'إعادة تعيين', cancelText: 'إلغاء', danger: true,
         });
         if (!ok) return;
+
         try {
           const db = await import('../../data/idb.js');
           await db.remove('settings', 'main');
           toast.success('تمت إعادة التعيين — أعد تحميل الصفحة');
           setTimeout(() => location.reload(), 1500);
-        } catch (err) { toast.danger('فشل: ' + err.message); }
+        } catch (err) {
+          toast.danger('فشل: ' + err.message);
+        }
       },
     }, '↩️ إعادة تعيين الإعدادات'));
   },
