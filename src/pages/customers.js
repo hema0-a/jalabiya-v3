@@ -1,5 +1,10 @@
 /* ==========================================================================
-   customers.js — صفحة العملاء (CRUD + مقاسات + عرض تدريجي + كشف حساب)
+   customers.js — صفحة العملاء (CRUD + مقاسات + فلترة + ترتيب)
+   ==========================================================================
+   - فلترة: الكل / VIP / عادي.
+   - ترتيب: الأحدث / الأعلى شراءً / أبجدي.
+   - عرض تدريجي (Progressive List).
+   - كشف حساب + Quick Preview + مقاسات.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -13,17 +18,35 @@ import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
 import { printCustomerStatement } from '../services/invoice-print.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
+import { formatEGP } from '../core/utils.js';
 
+/* --- الفلاتر والترتيب --- */
+const FILTERS = [
+  { id: 'all',    label: 'الكل',      icon: '👥' },
+  { id: 'vip',    label: 'VIP',       icon: '⭐' },
+  { id: 'normal', label: 'عادي',      icon: '👤' },
+];
+
+const SORTS = [
+  { id: 'recent', label: 'الأحدث',      icon: '🕐' },
+  { id: 'spent',  label: 'الأعلى شراءً', icon: '💰' },
+  { id: 'name',   label: 'أبجدي',       icon: '🔤' },
+];
+
+/* --- الحالة --- */
 let state = {
   customers: [],
+  customerTotals: {},        // { customerId: totalPaid }
+  activeFilter: 'all',
+  activeSort: 'recent',
   searchQuery: '',
   container: null,
   measurementFields: [],
-  list: null,           // مرجع الـ progressive list
+  list: null,
 };
 
 /* ==========================================================================
-   1. الفلترة
+   1. الفلترة (مُصدَّرة للاختبار)
    ========================================================================== */
 
 export function filterCustomers(list, query) {
@@ -41,8 +64,35 @@ export function filterCustomers(list, query) {
    ========================================================================== */
 
 async function loadCustomers() {
-  const list = await customers.list();
-  list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const [list, ordersList, paymentsList] = await Promise.all([
+    customers.list(),
+    orders.list(),
+    payments.list(),
+  ]);
+
+  /* حساب إجمالي المدفوع لكل عميل */
+  const totals = {};
+  paymentsList.forEach((p) => {
+    const cid = p.customerId;
+    if (!cid) return;
+    totals[cid] = (totals[cid] || 0) + (Number(p.amount) || 0);
+  });
+  state.customerTotals = totals;
+
+  /* إحصائيات الطلبات لكل عميل (عدد) */
+  const ordersCount = {};
+  ordersList.forEach((o) => {
+    const cid = o.customerId;
+    if (!cid) return;
+    ordersCount[cid] = (ordersCount[cid] || 0) + 1;
+  });
+
+  /* إضافة البيانات المساعدة */
+  list.forEach((c) => {
+    c._totalPaid = totals[c.id] || 0;
+    c._ordersCount = ordersCount[c.id] || 0;
+  });
+
   state.customers = list;
 }
 
@@ -57,12 +107,48 @@ async function loadMeasurementFields() {
 }
 
 /* ==========================================================================
-   3. النموذج
+   3. الفلترة والترتيب
+   ========================================================================== */
+
+/**
+ * تطبيق الفلتر والترتيب على القائمة.
+ * @param {Array} list
+ * @returns {Array}
+ */
+function applyFiltersAndSort(list) {
+  let result = list;
+
+  /* الفلترة */
+  if (state.activeFilter === 'vip') {
+    result = result.filter((c) => c.vip === true);
+  } else if (state.activeFilter === 'normal') {
+    result = result.filter((c) => !c.vip);
+  }
+
+  /* البحث */
+  result = filterCustomers(result, state.searchQuery);
+
+  /* الترتيب */
+  if (state.activeSort === 'spent') {
+    result = [...result].sort((a, b) => (b._totalPaid || 0) - (a._totalPaid || 0));
+  } else if (state.activeSort === 'name') {
+    result = [...result].sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'ar')
+    );
+  } else {
+    /* الأحدث */
+    result = [...result].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
+  return result;
+}
+
+/* ==========================================================================
+   4. نموذج العميل
    ========================================================================== */
 
 function buildMeasurementsSection(existingMeasurements) {
   const wrap = el('div', { className: 'field' });
-
   wrap.appendChild(el('label', { className: 'field__label' }, '📏 المقاسات (اختياري)'));
 
   const fields = state.measurementFields;
@@ -128,6 +214,11 @@ function openCustomerForm(existing = null) {
     value: isEdit ? (existing.phone || '') : '',
   });
 
+  const addressInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'العنوان (اختياري)',
+    value: isEdit ? (existing.address || '') : '',
+  });
+
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات إضافية...' });
   notesInput.value = isEdit ? (existing.notes || '') : '';
 
@@ -147,6 +238,7 @@ function openCustomerForm(existing = null) {
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'رقم الهاتف'), phoneInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العنوان'), addressInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
     el('div', { className: 'field' }, [vipToggle]),
     measurements.node,
@@ -167,6 +259,7 @@ function openCustomerForm(existing = null) {
           const data = {
             name,
             phone: phoneInput.value.trim(),
+            address: addressInput.value.trim(),
             notes: notesInput.value.trim(),
             vip: vipCheckbox.checked,
             measurements: measurements.getValues(),
@@ -184,7 +277,7 @@ function openCustomerForm(existing = null) {
 }
 
 /* ==========================================================================
-   4. حذف + VIP + طباعة
+   5. حذف + VIP + طباعة
    ========================================================================== */
 
 async function deleteCustomer(customer) {
@@ -226,7 +319,7 @@ async function printStatement(customer) {
 }
 
 /* ==========================================================================
-   5. بطاقة عميل
+   6. بطاقة عميل
    ========================================================================== */
 
 function hasMeasurements(c) {
@@ -237,6 +330,8 @@ function hasMeasurements(c) {
 function buildCustomerCard(c) {
   const initial = String(c.name || '?').trim().charAt(0) || '?';
   const withMeasurements = hasMeasurements(c);
+  const totalPaid = Number(c._totalPaid) || 0;
+  const ordersCount = Number(c._ordersCount) || 0;
 
   const headerChildren = [
     el('div', {
@@ -261,7 +356,7 @@ function buildCustomerCard(c) {
   const header = el('div', {
     style: {
       display: 'flex', alignItems: 'center', gap: '8px',
-      marginBottom: (c.notes || withMeasurements) ? '8px' : '12px',
+      marginBottom: (c.notes || withMeasurements || totalPaid > 0) ? '8px' : '12px',
     },
   }, headerChildren);
 
@@ -272,15 +367,39 @@ function buildCustomerCard(c) {
     onClick: () => previewCustomer(c, () => openCustomerForm(c)),
   }, [header]);
 
+  /* شارات المقاسات + الإجمالي */
+  const badges = el('div', {
+    style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
+  });
+
   if (withMeasurements) {
-    card.appendChild(el('div', {
+    badges.appendChild(el('span', {
       style: {
         fontSize: '11px', color: '#1F6D57', background: '#E8F5E9',
-        padding: '3px 8px', borderRadius: '6px',
-        display: 'inline-block', marginBottom: '8px',
+        padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
       },
-    }, '📏 مقاسات مسجَّلة'));
+    }, '📏 مقاسات'));
   }
+
+  if (ordersCount > 0) {
+    badges.appendChild(el('span', {
+      style: {
+        fontSize: '11px', color: '#1565C0', background: '#E3F2FD',
+        padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
+      },
+    }, '📦 ' + ordersCount + ' طلب'));
+  }
+
+  if (totalPaid > 0) {
+    badges.appendChild(el('span', {
+      style: {
+        fontSize: '11px', color: '#2E7D32', background: '#E8F5E9',
+        padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
+      },
+    }, '💰 ' + formatEGP(totalPaid)));
+  }
+
+  if (badges.children.length > 0) card.appendChild(badges);
 
   if (c.notes) {
     card.appendChild(el('div', {
@@ -295,12 +414,12 @@ function buildCustomerCard(c) {
     el('button', {
       className: 'btn btn--sm btn--secondary',
       onClick: () => openCustomerForm(c),
-    }, '✏️ تعديل'),
+    }, '✏️'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       title: 'كشف حساب',
       onClick: () => printStatement(c),
-    }, '📄 كشف'),
+    }, '📄'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       onClick: () => toggleVIP(c),
@@ -312,21 +431,6 @@ function buildCustomerCard(c) {
   ]));
 
   return card;
-}
-
-/* ==========================================================================
-   6. حالة فارغة
-   ========================================================================== */
-
-function buildEmptyState() {
-  const isSearching = state.searchQuery.trim() !== '';
-  return el('div', { className: 'empty-state' }, [
-    el('div', { className: 'empty-state__icon' }, isSearching ? '🔍' : '👥'),
-    el('h2', { className: 'empty-state__title' },
-      isSearching ? 'لا نتائج' : 'لا يوجد عملاء'),
-    el('p', { className: 'empty-state__text' },
-      isSearching ? 'جرّب كلمة بحث أخرى' : 'اضغط "إضافة عميل" للبدء'),
-  ]);
 }
 
 /* ==========================================================================
@@ -354,19 +458,85 @@ function renderStats() {
   ]));
 }
 
+function buildFilterBar() {
+  const wrap = el('div', {
+    style: { display: 'flex', gap: '4px', marginBottom: '8px', overflowX: 'auto' },
+  });
+
+  FILTERS.forEach((f) => {
+    const isActive = state.activeFilter === f.id;
+    wrap.appendChild(el('button', {
+      type: 'button',
+      className: 'btn btn--sm ' + (isActive ? 'btn--primary' : 'btn--ghost'),
+      onClick: () => {
+        state.activeFilter = f.id;
+        renderFilterBar();
+        renderList();
+      },
+    }, f.icon + ' ' + f.label));
+  });
+
+  return wrap;
+}
+
+function buildSortBar() {
+  const wrap = el('div', {
+    style: { display: 'flex', gap: '4px', marginBottom: '12px', overflowX: 'auto' },
+  });
+
+  SORTS.forEach((s) => {
+    const isActive = state.activeSort === s.id;
+    wrap.appendChild(el('button', {
+      type: 'button',
+      className: 'btn btn--sm ' + (isActive ? 'btn--secondary' : 'btn--ghost'),
+      onClick: () => {
+        state.activeSort = s.id;
+        renderSortBar();
+        renderList();
+      },
+    }, s.icon + ' ' + s.label));
+  });
+
+  return wrap;
+}
+
+function renderFilterBar() {
+  const wrap = state.container?.querySelector('#customers-filters');
+  if (!wrap) return;
+  clear(wrap);
+  wrap.appendChild(buildFilterBar());
+}
+
+function renderSortBar() {
+  const wrap = state.container?.querySelector('#customers-sort');
+  if (!wrap) return;
+  clear(wrap);
+  wrap.appendChild(buildSortBar());
+}
+
+function buildEmptyState() {
+  const isSearching = state.searchQuery.trim() !== '';
+  const isFiltered = state.activeFilter !== 'all';
+  return el('div', { className: 'empty-state' }, [
+    el('div', { className: 'empty-state__icon' }, isSearching ? '🔍' : '👥'),
+    el('h2', { className: 'empty-state__title' },
+      isSearching ? 'لا نتائج' : (isFiltered ? 'لا يوجد عملاء في هذه الفئة' : 'لا يوجد عملاء')),
+    el('p', { className: 'empty-state__text' },
+      isSearching ? 'جرّب كلمة أخرى' : 'اضغط "إضافة عميل" للبدء'),
+  ]);
+}
+
 function renderList() {
   const wrap = state.container?.querySelector('#customers-list');
   if (!wrap) return;
 
-  const filtered = filterCustomers(state.customers, state.searchQuery);
+  const filtered = applyFiltersAndSort(state.customers);
 
-  /* الـ progressive list موجود → تحديث فقط */
   if (state.list) {
     state.list.setItems(filtered);
     return;
   }
 
-  /* إنشاء مرة واحدة */
   const list = createProgressiveList({
     items: filtered,
     pageSize: 20,
@@ -382,7 +552,6 @@ async function refreshAll() {
   await loadCustomers();
   renderStats();
 
-  /* إعادة إنشاء القائمة عند التحديث الكامل */
   if (state.list) {
     state.list.destroy();
     state.list = null;
@@ -403,6 +572,8 @@ export const customersPage = {
     state.container = container;
     state.searchQuery = '';
     state.list = null;
+    state.activeFilter = 'all';
+    state.activeSort = 'recent';
 
     await loadMeasurementFields();
 
@@ -411,6 +582,7 @@ export const customersPage = {
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
 
+    /* بحث */
     const searchInput = el('input', {
       className: 'input', type: 'search',
       placeholder: '🔍 ابحث بالاسم أو الهاتف...',
@@ -418,22 +590,31 @@ export const customersPage = {
     });
     searchInput.addEventListener('input', () => {
       state.searchQuery = searchInput.value;
-      /* تحديث القائمة فقط — بدون rebuild كامل */
-      const filtered = filterCustomers(state.customers, state.searchQuery);
+      const filtered = applyFiltersAndSort(state.customers);
       if (state.list) state.list.setItems(filtered);
       else renderList();
     });
     container.appendChild(searchInput);
 
+    /* الفلاتر */
+    container.appendChild(el('div', { id: 'customers-filters' }));
+
+    /* الترتيب */
+    container.appendChild(el('div', { id: 'customers-sort' }));
+
+    /* زر الإضافة */
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block',
       style: { marginBottom: '16px' },
       onClick: () => openCustomerForm(),
     }, '➕ إضافة عميل'));
 
+    /* القائمة */
     container.appendChild(el('div', { id: 'customers-list' }));
 
     await refreshAll();
+    renderFilterBar();
+    renderSortBar();
   },
 
   destroy() {
@@ -441,7 +622,9 @@ export const customersPage = {
       try { state.list.destroy(); } catch (e) { /* ignore */ }
     }
     state = {
-      customers: [], searchQuery: '', container: null,
+      customers: [], customerTotals: {},
+      activeFilter: 'all', activeSort: 'recent',
+      searchQuery: '', container: null,
       measurementFields: [], list: null,
     };
   },
