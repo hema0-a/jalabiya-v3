@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 8,
+  version: 9,
 };
 
 /* --- 4. Stores --- */
@@ -49,6 +49,7 @@ export const STORES = {
   LOAN_PAYMENTS:       'loanPayments',
   REFERRALS:           'referrals',
   WORKER_PAYMENTS:     'workerPayments',
+  BACKUPS:             'backups',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
@@ -264,6 +265,7 @@ export const STORAGE_KEYS = {
   V3_PRICING_HISTORY: 'jalabiya_v3_pricing_history',
   V3_CALENDAR_FILTER: 'jalabiya_v3_calendar_filter',
   V3_DATA_HASH: 'jalabiya_v3_data_hash',
+  V3_LAST_AUTO_BACKUP: 'jalabiya_v3_last_auto_backup',
 };
 
 /* --- 21. الحدود القصوى --- */
