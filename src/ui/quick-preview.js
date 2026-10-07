@@ -5,6 +5,7 @@
    - يقبل id (نصي) أو كائناً جاهزاً — توافق خلفي كامل.
    - كل دالة async تُرجع Promise<void>.
    - WhatsApp: يطبّع الأرقام لصيغة دولية عبر normalizePhone.
+   - معاينة الطلب: تدعم البنود المتعددة + الخصم + الرسوم + المقدم.
    - Static imports فقط. JSDoc عربي.
    ========================================================================== */
 
@@ -18,6 +19,7 @@ import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
 import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
+import { printOrderInvoice } from '../services/invoice-print.js';
 
 /* ============================================================
    1. Helpers
@@ -125,6 +127,26 @@ function _closeAction() {
   return { text: 'إغلاق', variant: 'ghost', onClick: () => modal.close() };
 }
 
+/**
+ * تحويل الطلب إلى قائمة بنود (يدعم items أو amount القديم).
+ * @param {Object} order
+ * @returns {Array<{name:string, price:number, quantity:number}>}
+ */
+function _orderItems(order) {
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return order.items.map((it) => ({
+      name: it.name || 'بند',
+      price: Number(it.price) || 0,
+      quantity: Number(it.quantity) || 1,
+    }));
+  }
+  return [{
+    name: order.notes || order.garmentType || 'طلب جلابية',
+    price: Number(order.amount) || 0,
+    quantity: Number(order.quantity) || 1,
+  }];
+}
+
 /* ============================================================
    2. previewCustomer
    ============================================================ */
@@ -181,11 +203,11 @@ export async function previewCustomer(idOrObj, onEdit) {
 }
 
 /* ============================================================
-   3. previewOrder
+   3. previewOrder (مُحدَّث — يدعم البنود المتعددة)
    ============================================================ */
 
 /**
- * معاينة سريعة لطلب.
+ * معاينة سريعة لطلب (بنود + خصم + رسوم + مقدم + طباعة).
  * @param {string|Object} idOrObj
  * @param {Object|Function} [customerOrOnEdit]
  * @param {Function} [onEdit]
@@ -206,33 +228,87 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
 
   const payments = await paymentsRepo.findByOrder(order.id);
   const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const deposit = Number(order.deposit) || 0;
+  const paidTotal = totalPaid > 0 ? totalPaid : deposit;
   const total = Number(order.amount) || 0;
-  const remaining = Math.max(0, total - totalPaid);
+  const remaining = Math.max(0, total - paidTotal);
 
   const statusLabels = { pending: '⏳ قيد الانتظار', in_progress: '🧵 قيد التنفيذ',
     ready: '✅ جاهز', delivered: '📦 تم التسليم', cancelled: '❌ ملغي' };
+
+  /* البنود */
+  const items = _orderItems(order);
+  const itemsSection = items.length > 0 ? [
+    _section('📦 البنود (' + items.length + ')'),
+    ...items.map((it) => _listItem(
+      it.name,
+      it.quantity + ' × ' + formatEGP(it.price) + ' = ' + formatEGP(it.price * it.quantity)
+    )),
+  ] : [];
+
+  /* الخصم + الرسوم */
+  const subtotal = Number(order.subtotal) || 0;
+  const discountAmount = Number(order.discountAmount) || 0;
+  const extraFeesTotal = Number(order.extraFeesTotal) || 0;
+  const hasBreakdown = subtotal > 0 && (discountAmount > 0 || extraFeesTotal > 0);
+
+  const breakdown = hasBreakdown ? [
+    _section('💰 تفاصيل الحساب'),
+    _row('📊', 'المجموع الفرعي', formatEGP(subtotal)),
+    discountAmount > 0 ? _row('🎁', 'الخصم', '− ' + formatEGP(discountAmount)) : null,
+    extraFeesTotal > 0 ? _row('➕', 'رسوم إضافية', '+ ' + formatEGP(extraFeesTotal)) : null,
+  ].filter(Boolean) : [];
+
+  /* الرسوم الإضافية بتفصيلها */
+  const extraFeesList = (Array.isArray(order.extraFees) && order.extraFees.length > 0)
+    ? [
+        _section('➕ الرسوم الإضافية'),
+        ...order.extraFees.map((f) => {
+          const typeLabel = (f.type === 'percent') ? '%' : 'ج.م';
+          const val = (f.type === 'percent')
+            ? (Number(f.value) || 0) + '%'
+            : formatEGP(f.value);
+          const feeTypeMap = {
+            urgency: '⚡ استعجال', modify: '✏️ تعديلات',
+            delivery: '🚚 توصيل', packaging: '📦 تغليف', other: '📌 أخرى',
+          };
+          return _listItem(feeTypeMap[f.feeType] || 'رسم', val + ' (' + typeLabel + ')');
+        }),
+      ]
+    : [];
 
   const body = el('div', {}, [
     _row('👤', 'العميل', customer ? customer.name : 'عميل محذوف'),
     customer && customer.phone ? _row('📞', 'الهاتف', customer.phone) : null,
     _row('🔖', 'الحالة', statusLabels[order.status] || order.status),
+    order.receivedDate ? _row('🧵', 'استلام القماش', formatDate(order.receivedDate)) : null,
     order.dueDate ? _row('📅', 'تاريخ التسليم', formatDate(order.dueDate)) : null,
     order.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(order.createdAt)) : null,
+
+    ...itemsSection,
+    ...breakdown,
+    ...extraFeesList,
+
     _section('💰 المبالغ'),
     el('div', { style: { display: 'flex', gap: '6px' } }, [
       _stat('الإجمالي', formatEGP(total)),
-      _stat('المدفوع', formatEGP(totalPaid), '#2E7D32'),
+      _stat('المدفوع', formatEGP(paidTotal), '#2E7D32'),
       _stat('المتبقي', formatEGP(remaining), remaining > 0 ? '#F57C00' : '#666'),
     ]),
+
     order.notes ? _section('📝 ملاحظات') : null,
     order.notes ? el('p', { style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' } }, order.notes) : null,
   ]);
 
   const actions = [
-    customer && customer.phone ? { text: '📱 واتساب', variant: 'primary',
+    { text: '🖨️ طباعة', variant: 'primary',
+      onClick: () => {
+        modal.close();
+        try { printOrderInvoice(order, customer); }
+        catch (e) { console.error('[previewOrder print]', e); }
+      } },
+    customer && customer.phone ? { text: '📱 واتساب', variant: 'secondary',
       onClick: () => _whatsapp(customer.phone, 'بخصوص طلبك #' + String(order.id).slice(-6)) } : null,
-    { text: 'التفاصيل الكاملة', variant: 'secondary',
-      onClick: () => { modal.close(); location.hash = '#/orders'; } },
     editCb ? { text: '✏️ تعديل', variant: 'secondary',
       onClick: () => { modal.close(); editCb(); } } : null,
     _closeAction(),
