@@ -1,5 +1,5 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router
+   main.js — نقطة الدخول + App Shell + Router + Ctrl+K
    ==========================================================================
    Service Worker معطَّل مؤقتاً أثناء التطوير (V3.1 يُعيد تفعيله).
    ⚠️ صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
@@ -21,16 +21,13 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-/* Service Worker معطَّل مؤقتاً أثناء التطوير
-   سيُفعَّل في V3.1 بعد اكتمال كل الصفحات.
-   السبب: منع Cache Issues المتكررة. */
-
-let el, toast, createLayout, events;
+let el, toast, createLayout, events, openUniversalSearch;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
   ({ events } = await import('./core/events.js'));
+  ({ openUniversalSearch } = await import('./ui/universal-search.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -153,7 +150,8 @@ const layout = createLayout({
   topbar: {
     title: 'لوحة التحكم',
     actions: [
-      { id: 'theme', icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
+      { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
+      { id: 'theme',  icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
     ],
     showMenu: true,
   },
@@ -169,6 +167,18 @@ app.appendChild(layout.node);
 /* ربط زر الرجوع في Topbar (يُستخدَم من sub-page) */
 events.on('topbar:setBack', (handler) => {
   layout.topbar.setBackAction(typeof handler === 'function' ? handler : null);
+});
+
+/* ⚡ Ctrl+K / Cmd+K → بحث شامل */
+document.addEventListener('keydown', (e) => {
+  const isMac = navigator.platform.toLowerCase().includes('mac');
+  const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+  if (modifier && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    try { openUniversalSearch(); }
+    catch (err) { console.error('[Main] search open failed:', err); }
+  }
 });
 
 function buildPlaceholderPage(title, icon) {
