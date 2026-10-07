@@ -25,7 +25,7 @@ function showError(title, err) {
 let el, toast, createLayout, events, openUniversalSearch;
 let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 let toggleClientMode, isClientMode, applyClientMode;
-let startAutoCheck as startNotificationCheck;
+let startNotificationCheck;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -233,6 +233,7 @@ function getSubRoute(fullRoute) {
 }
 
 async function renderPage(fullRoute) {
+  /* ⚠️ صفحة الاختبارات معطَّلة مؤقتاً */
   if (fullRoute === 'tests' || fullRoute === '#/tests') {
     location.hash = '#/dashboard';
     return;
@@ -283,7 +284,7 @@ window.addEventListener('hashchange', () => {
 /* ⚡ تشغيل أولي */
 renderPage(getHashPage());
 
-/* 🗄️ النسخ الاحتياطي التلقائي */
+/* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
 setTimeout(() => {
   (async () => {
     try {
@@ -310,7 +311,7 @@ try {
   console.warn('[PWA] فشل تسجيل SW:', err);
 }
 
-/* ✨ الجولة التعريفية */
+/* ✨ الجولة التعريفية — تظهر عند أول فتح */
 try {
   maybeStartOnboarding({
     onFinish: ({ skipped }) => {
@@ -321,7 +322,7 @@ try {
   console.warn('[Onboarding] فشل التشغيل:', err);
 }
 
-/* 🔔 الإشعارات — فحص دوري كل 30 دقيقة (فقط إن كان الإذن ممنوحاً) */
+/* 🔔 الإشعارات — فحص دوري كل 30 دقيقة */
 try {
   startNotificationCheck();
 } catch (err) {
