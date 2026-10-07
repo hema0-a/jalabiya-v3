@@ -1,5 +1,5 @@
 /* ==========================================================================
-   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA + Onboarding
+   main.js — نقطة الدخول + App Shell + Router + Ctrl+K + Auto-Backup + PWA + Onboarding + Client Mode
    ==========================================================================
    - صفحة الاختبارات معطَّلة مؤقتاً (تُعاد في نهاية المشروع).
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1 في URL).
@@ -23,6 +23,7 @@ function showError(title, err) {
 
 let el, toast, createLayout, events, openUniversalSearch;
 let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
+let toggleClientMode, isClientMode, applyClientMode;
 try {
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
@@ -32,6 +33,7 @@ try {
   ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
   ({ registerServiceWorker } = await import('./pwa.js'));
   ({ maybeStartOnboarding } = await import('./ui/onboarding.js'));
+  ({ toggleClientMode, isClientMode, applyClientMode } = await import('./ui/client-mode.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -142,6 +144,29 @@ const MODULE_EXPORT_MAP = {
 
 let currentPage = null;
 
+/* ---- زر وضع العميل (يُعاد بناؤه عند كل تبديل) ---- */
+function buildClientModeAction() {
+  const active = isClientMode();
+  return {
+    id: 'client-mode',
+    icon: active ? '👁️' : '👁️‍🗨️',
+    label: active ? 'إلغاء وضع العميل' : 'تفعيل وضع العميل',
+    onClick: () => {
+      const next = toggleClientMode();
+      layout.topbar.setActions(buildTopbarActions());
+      toast.info(next ? '👁️ وضع العميل مُفعَّل' : '👁️ وضع العميل مُعطَّل');
+    },
+  };
+}
+
+function buildTopbarActions() {
+  return [
+    { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
+    buildClientModeAction(),
+    { id: 'theme', icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
+  ];
+}
+
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
@@ -153,10 +178,7 @@ const layout = createLayout({
   },
   topbar: {
     title: 'لوحة التحكم',
-    actions: [
-      { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
-      { id: 'theme',  icon: '🌙', label: 'تبديل الثيم', onClick: () => toast.info('الوضع الليلي — قريباً') },
-    ],
+    actions: buildTopbarActions(),
     showMenu: true,
   },
   onPageSelect: (id) => {
@@ -167,6 +189,9 @@ const layout = createLayout({
 });
 
 app.appendChild(layout.node);
+
+/* تطبيق وضع العميل بعد بناء الـ layout (لأنه يحتاج DOM جاهز) */
+try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
 
 /* ربط زر الرجوع في Topbar (يُستخدَم من sub-page) */
 events.on('topbar:setBack', (handler) => {
@@ -289,11 +314,7 @@ try {
 try {
   maybeStartOnboarding({
     onFinish: ({ skipped }) => {
-      if (!skipped) {
-        console.log('[Onboarding] ✅ تم إكمال الجولة');
-      } else {
-        console.log('[Onboarding] ⏭️ تم تخطّي الجولة');
-      }
+      console.log('[Onboarding]', skipped ? '⏭️ تم التخطّي' : '✅ تم الإكمال');
     },
   });
 } catch (err) {
