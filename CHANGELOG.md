@@ -5,6 +5,95 @@
 
 ---
 
+## [3.3.1] — 2026-10-07 — Critical Settings Fix 🐛
+
+**إصلاح حرج — حفظ الإعدادات + ترحيب باسم الورشة.**
+
+### ملخص
+
+- **5 ملفات** معدَّلة (~50 موضع إصلاح)
+- **270 اختباراً** — كلها ناجحة ✅
+- **حفظ الإعدادات**: يعمل 100% في كل الأقسام
+- **الترحيب**: يقرأ اسم الورشة + الشعار
+- **التوافق**: Chrome + Safari
+
+### 🐛 المشكلة الأصلية
+
+**الأعراض**:
+- إدخال بيانات في الإعدادات (اسم الورشة، التنبيهات، إلخ) → لا تُحفظ.
+- الخروج من القسم → الرجوع → القيم القديمة.
+- اسم الورشة لا يظهر في رسالة الترحيب.
+
+**الأسباب الجذرية**:
+
+1. **Stale Closures** (الأخطر):
+   - في `sections-workshop.js`, `sections-data.js`, `sections-system.js`, `sections-security.js`.
+   - كل حقل يستخدم `saveFn({ workshop: { ...ws, [key]: v } })` — `ws` (القيمة القديمة) يُلتقط مرة واحدة.
+   - **النتيجة**: التعديل الثاني يمحو الأول (لأن `ws` يحتوي القيم القديمة).
+
+2. **`blur` غير موثوق على الجوال**:
+   - Mobile Safari/Chrome لا يُطلق `blur` دائمًا.
+   - **النتيجة**: التعديلات لا تُحفظ عند التنقل السريع.
+
+3. **`dashboard.js` لا يقرأ `settings.workshop.name`**:
+   - يستخدم الافتراضي `'صاحب الورشة'` دائمًا.
+
+### ✅ الحل
+
+#### 1. `sections-workshop.js` (11 موضع)
+
+- **إزالة spread**: `saveFn({ workshop: { [key]: v } })` بدل `{ ...ws, [key]: v }`.
+- **إضافة debounce**: `input` مع مؤقت 800ms + `blur` احتياطي.
+- **شعار الورشة**: حقل واحد فقط.
+
+#### 2. `sections-data.js` (15 موضع + helper)
+
+- **helper جديد**: `numberField()` — حقل رقمي بحفظ آمن.
+- **إزالة spread** من: `inventoryLimits`, `dailyLimit`, `grouping`, `pricingCalculator`.
+- **`measurementFields` + `jalabiyaTypes`**: مصفوفات — saveFn كاملة (مقبول).
+
+#### 3. `sections-system.js` (13 موضع)
+
+- **إزالة spread** من: `notifications`, `autoMessages`, `backup`, `imageCompression`.
+- **occasions**: مصفوفة — saveFn كاملة.
+
+#### 4. `sections-security.js` (8 مواضع)
+
+- **إزالة spread** من: `security`, `lockScreen`.
+- **رسالة شاشة القفل**: debounce + blur.
+
+#### 5. `dashboard.js` (إصلاح + إضافة)
+
+- **قراءة الإعدادات**: `settings.get()` داخل `loadKPIs()`.
+- **الترحيب**: يقرأ `settings.workshop.name`.
+- **الشعار**: يعرض `settings.workshop.logo` (إن وُجد).
+- **تخطيط جديد**: بطاقة أفقية (شعار + نص).
+
+### 📁 الملفات المتأثرة
+
+| # | الملف | الإجراء |
+|---|---|---|
+| 1 | `src/pages/settings/sections-workshop.js` | ✏️ 11 موضع |
+| 2 | `src/pages/settings/sections-data.js` | ✏️ 15 موضع + helper |
+| 3 | `src/pages/settings/sections-system.js` | ✏️ 13 موضع |
+| 4 | `src/pages/settings/sections-security.js` | ✏️ 8 مواضع |
+| 5 | `src/pages/dashboard.js` | ✏️ ترحيب + شعار |
+| 6 | `sw.js` | ✏️ Cache v3.3.1 |
+
+### الاختبارات
+
+- **270 اختباراً** في 39 وحدة — كلها ناجحة ✅
+- **Chrome 120+** ✅
+- **Safari 17+** ✅
+
+### ملاحظات تقنية
+
+- **`settings.update()`** يدمج مع DB الحيّ تلقائيًا — لذلك إرسال **حقل واحد** كافٍ.
+- **لا spread للمفاتيح القديمة** — يُلغي التعديلات السابقة.
+- **المصفوفات**: يُرسَل الكل (لا مشكلة — لا spread لكائن).
+
+---
+
 ## [3.3.0] — 2026-10-07 — UX & Reliability Enhancements 🌙
 
 **الإصدار الخامس — Dark Mode كامل + Autosave في 5 نماذج + Offline Indicator.**
