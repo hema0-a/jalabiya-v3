@@ -31,6 +31,9 @@ function mergeWithDefaults(stored) {
   return out;
 }
 
+/* طابور تنفيذ: يمنع تداخل update() (قراءة ثم حفظ) فلا يمحو تعديلٌ تعديلاً آخر */
+let _updateQueue = Promise.resolve();
+
 export const settings = {
   /**
    * جلب الإعدادات الحالية (مع الافتراضيات للحقول الناقصة).
@@ -64,7 +67,13 @@ export const settings = {
    * @param {Object} patch
    * @returns {Promise<Object>}
    */
-  async update(patch) {
+  update(patch) {
+    const run = _updateQueue.catch(() => {}).then(() => settings._applyUpdate(patch));
+    _updateQueue = run.catch(() => {});
+    return run;
+  },
+
+  async _applyUpdate(patch) {
     const current = await settings.get();
     const merged = { ...current };
 

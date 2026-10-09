@@ -12,6 +12,7 @@ import { commitments } from '../data/repos/commitments.js';
 import { commitmentPayments } from '../data/repos/commitment-payments.js';
 import { savingsGoals } from '../data/repos/savings-goals.js';
 import { COMMITMENT_FREQUENCIES, COMMITMENT_CATEGORIES } from '../core/config.js';
+import { getWriteVersion } from '../data/idb.js';
 
 /* ==========================================================================
    1. Cache
@@ -101,7 +102,7 @@ export function getCommitmentPaidThisMonth(commitmentId, paymentsList) {
  * @returns {Promise<Object>}
  */
 export async function getCommitmentsStats() {
-  const key = 'stats_' + _dataHash;
+  const key = 'stats_' + _dataHash + '_' + getWriteVersion();
   if (_cache.has(key)) return _cache.get(key);
 
   const [commitmentsList, paymentsList, goalsList] = await Promise.all([

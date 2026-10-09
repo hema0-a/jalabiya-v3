@@ -78,6 +78,9 @@ function itemTitle(item) {
    ========================================================================== */
 
 async function loadData() {
+  /* الحذف التلقائي الفعلي بعد AUTO_DELETE_DAYS (كان معروضاً في الواجهة دون تنفيذ) */
+  try { await trash.purgeExpired(AUTO_DELETE_DAYS); }
+  catch (e) { console.warn('[Trash] purge failed:', e); }
   const all = await trash.list();
   state.items = all.sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 }

@@ -10,6 +10,10 @@ import { SCHEMA, validateSchema } from './schema.js';
 
 let dbInstance = null;
 
+/* عدّاد تغيّر البيانات: يزيد مع أي كتابة/حذف/مسح — تعتمد عليه الحاسبات لإبطال الكاش تلقائياً */
+let writeVersion = 0;
+export function getWriteVersion() { return writeVersion; }
+
 function wrap(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -161,6 +165,11 @@ export function openDB() {
     request.onsuccess = () => {
       dbInstance = request.result;
       dbInstance.onclose = () => { dbInstance = null; };
+      /* إن حدّثت نافذة أخرى قاعدة البيانات نُغلق اتصالنا حتى لا نعطّل الترقية */
+      dbInstance.onversionchange = () => {
+        try { dbInstance.close(); } catch (e) { /* ignore */ }
+        dbInstance = null;
+      };
       resolve(dbInstance);
     };
 
@@ -177,7 +186,9 @@ async function getStore(storeName, mode = 'readonly') {
 
 export async function put(storeName, value) {
   const store = await getStore(storeName, 'readwrite');
-  return wrap(store.put(value));
+  const res = await wrap(store.put(value));
+  writeVersion++;
+  return res;
 }
 
 export async function get(storeName, id) {
@@ -192,12 +203,16 @@ export async function getAll(storeName) {
 
 export async function remove(storeName, id) {
   const store = await getStore(storeName, 'readwrite');
-  return wrap(store.delete(id));
+  const res = await wrap(store.delete(id));
+  writeVersion++;
+  return res;
 }
 
 export async function clear(storeName) {
   const store = await getStore(storeName, 'readwrite');
-  return wrap(store.clear());
+  const res = await wrap(store.clear());
+  writeVersion++;
+  return res;
 }
 
 export async function count(storeName) {

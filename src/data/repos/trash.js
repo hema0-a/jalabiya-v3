@@ -64,6 +64,26 @@ export const trash = {
   },
 
   /**
+   * حذف نهائي للعناصر التي مضى عليها أكثر من days يوماً في السلة،
+   * ثم تقليم السلة إلى الحد الأقصى المسموح.
+   * @param {number} [days=7]
+   * @returns {Promise<number>} عدد العناصر المحذوفة نهائياً
+   */
+  async purgeExpired(days = 7) {
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const all = await base.list();
+    let removed = 0;
+    for (const item of all) {
+      if ((item.deletedAt || 0) < cutoff) {
+        await base.remove(item.id);
+        removed++;
+      }
+    }
+    removed += await trash.prune();
+    return removed;
+  },
+
+  /**
    * تقليم السلة بحيث لا تتجاوز LIMITS.maxTrashItems.
    * يحذف الأقدم أولاً.
    * @returns {Promise<number>} عدد العناصر المحذوفة

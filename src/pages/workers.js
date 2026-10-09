@@ -372,8 +372,8 @@ async function deleteWorker(w) {
   if (!ok) return;
   try {
     const pays = await workerPayments.listByWorker(w.id);
+    await trash.addToTrash('workers', w);          /* أولاً: حتى لا تضيع الدفعات إن فشل الحفظ */
     for (const p of pays) await workerPayments.remove(p.id);
-    await trash.addToTrash('workers', w);
     await workers.remove(w.id);
     toast.success('تم الحذف');
     await refreshAll();

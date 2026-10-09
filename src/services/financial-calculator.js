@@ -12,6 +12,7 @@ import { orders } from '../data/repos/orders.js';
 import { inventory } from '../data/repos/inventory.js';
 import { MONTH_NAMES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
+import { getWriteVersion } from '../data/idb.js';
 
 /* ==========================================================================
    1. Cache
@@ -350,7 +351,7 @@ async function computeFinancials(period) {
  * @returns {Promise<Object>}
  */
 export async function getFinancialData(period = 'month') {
-  const key = period + '_' + _dataHash;
+  const key = period + '_' + _dataHash + '_' + getWriteVersion();
   if (_cache.has(key)) return _cache.get(key);
   const result = await computeFinancials(period);
   _cache.set(key, result);

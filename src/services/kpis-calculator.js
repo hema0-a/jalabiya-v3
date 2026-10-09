@@ -11,6 +11,7 @@ import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { MONTH_NAMES, DAY_NAMES_FULL } from '../core/config.js';
+import { getWriteVersion } from '../data/idb.js';
 
 /* ==========================================================================
    1. Cache
@@ -289,7 +290,7 @@ async function computeKpis(period) {
  * @returns {Promise<Object>}
  */
 export async function getKpisData(period = 'month') {
-  const key = period + '_' + _dataHash;
+  const key = period + '_' + _dataHash + '_' + getWriteVersion();
   if (_cache.has(key)) return _cache.get(key);
   const result = await computeKpis(period);
   _cache.set(key, result);

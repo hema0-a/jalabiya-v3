@@ -17,6 +17,19 @@ import * as idb from './idb.js';
  * @param {boolean} [options.timestamps=true] — إضافة createdAt/updatedAt
  * @returns {Object} كائن بـ CRUD كامل
  */
+/* قفل بسيط لكل سجل: يمنع ضياع التعديل عند تداخل تحديثين متتاليين على نفس السجل
+   (قراءة ثم كتابة في معاملتين منفصلتين). */
+const _updateChains = new Map();
+
+function runExclusive(key, task) {
+  const prev = _updateChains.get(key) || Promise.resolve();
+  const run = prev.catch(() => {}).then(task);
+  const tail = run.catch(() => {});
+  _updateChains.set(key, tail);
+  tail.then(() => { if (_updateChains.get(key) === tail) _updateChains.delete(key); });
+  return run;
+}
+
 export function createRepository(storeName, options = {}) {
   const {
     generateId = () => uid(),
@@ -67,12 +80,14 @@ export function createRepository(storeName, options = {}) {
      * @returns {Promise<Object|null>} السجل المُحدَّث أو null إن لم يوجد
      */
     async update(id, patch) {
-      const existing = await idb.get(storeName, id);
-      if (!existing) return null;
-      const updated = { ...existing, ...patch, id };
-      if (timestamps) updated.updatedAt = now();
-      await idb.put(storeName, updated);
-      return updated;
+      return runExclusive(storeName + ':' + id, async () => {
+        const existing = await idb.get(storeName, id);
+        if (!existing) return null;
+        const updated = { ...existing, ...patch, id };
+        if (timestamps) updated.updatedAt = now();
+        await idb.put(storeName, updated);
+        return updated;
+      });
     },
 
     /**
