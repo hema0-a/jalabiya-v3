@@ -12,7 +12,8 @@ import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { MONTH_NAMES, DAY_NAMES_FULL } from '../core/config.js';
 import { getWriteVersion } from '../data/idb.js';
-import { withDepositPayments } from './payments-view.js';
+import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
+import { workerPayments } from '../data/repos/worker-payments.js';
 
 /* ==========================================================================
    1. Cache
@@ -118,12 +119,14 @@ export function calculatePerformanceScore(stats) {
    ========================================================================== */
 
 async function computeKpis(period) {
-  const [ordersList, rawPayments, expensesList, customersList] = await Promise.all([
+  const [ordersList, rawPayments, rawExpenses, customersList, workerPaysList] = await Promise.all([
     orders.list(),
     payments.list(),
     expenses.list(),
     customers.list(),
+    workerPayments.list().catch(() => []),
   ]);
+  const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
 
   const paymentsList = withDepositPayments(rawPayments, ordersList);
 

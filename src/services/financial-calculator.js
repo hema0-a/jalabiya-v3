@@ -13,7 +13,8 @@ import { inventory } from '../data/repos/inventory.js';
 import { MONTH_NAMES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { getWriteVersion } from '../data/idb.js';
-import { withDepositPayments } from './payments-view.js';
+import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
+import { workerPayments } from '../data/repos/worker-payments.js';
 
 /* ==========================================================================
    1. Cache
@@ -206,12 +207,14 @@ function generateTips(data) {
    ========================================================================== */
 
 async function computeFinancials(period) {
-  const [rawPayments, expensesList, ordersList, inventoryList] = await Promise.all([
+  const [rawPayments, rawExpenses, ordersList, inventoryList, workerPaysList] = await Promise.all([
     payments.list(),
     expenses.list(),
     orders.list(),
     inventory.list().catch(() => []),
+    workerPayments.list().catch(() => []),
   ]);
+  const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
 
   const paymentsList = withDepositPayments(rawPayments, ordersList);
 
