@@ -51,6 +51,13 @@ register('audit v3.3.10 regressions', async (t) => {
   const f = await getFinancialData('all');
   await t.test('8. المركز المالي: متوسط الطلب بلا الملغي', Math.round(f.ordersStats.avgOrderValue) === 1000);
 
+  /* دفعة على طلب ملغي لا ترفع معدل التحصيل */
+  const cx = await orders.create({ customerId: c.id, status: 'cancelled', amount: 500, createdAt: now - DAY });
+  await payments.create({ orderId: cx.id, customerId: c.id, amount: 500, createdAt: now - DAY });
+  invFin();
+  const f1 = await getFinancialData('all');
+  await t.test('10. معدل التحصيل لا يحسب دفعات الطلبات الملغاة', Math.round(f1.pending.collectionRate) === 50);
+
   /* --- سقف توقع الإيراد --- */
   await payments.clear(); invFin();
   const n = new Date();

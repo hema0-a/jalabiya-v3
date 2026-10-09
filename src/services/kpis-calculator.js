@@ -185,7 +185,8 @@ async function computeKpis(period) {
   const allExpected = ordersList
     .filter((o) => o.status !== 'cancelled')
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
-  const allPaid = sum(paymentsList.map((p) => p.amount));
+  const cancelledIds = new Set(ordersList.filter((o) => o.status === 'cancelled').map((o) => o.id));
+  const allPaid = sum(paymentsList.filter((p) => !cancelledIds.has(p.orderId)).map((p) => p.amount));
   const collectionRate = safeDiv(allPaid * 100, allExpected, 0);
   const totalRemaining = Math.max(0, allExpected - allPaid);
 

@@ -234,7 +234,9 @@ async function computeFinancials(period) {
 
   const totalExpected = ordersList.filter((o) => o.status !== 'cancelled')
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
-  const totalReceived = sum(paymentsList.map((p) => p.amount));
+  /* دفعات الطلبات الملغاة لا تُحتسب مقابل المتوقع (وإلا يرتفع معدل التحصيل زيفاً) */
+  const cancelledIds = new Set(ordersList.filter((o) => o.status === 'cancelled').map((o) => o.id));
+  const totalReceived = sum(paymentsList.filter((p) => !cancelledIds.has(p.orderId)).map((p) => p.amount));
   const pendingPayments = Math.max(0, totalExpected - totalReceived);
   const collectionRate = safeDiv(totalReceived * 100, totalExpected, 0);
 

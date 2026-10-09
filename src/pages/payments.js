@@ -86,12 +86,12 @@ function openPaymentForm(existing = null) {
 
     orderSelect.disabled = false;
     const customerOrders = state.orders
-      .filter((o) => o.customerId === cid && o.status !== 'cancelled')
+      .filter((o) => o.customerId === cid && (o.status !== 'cancelled' || (isEdit && o.id === existing.orderId)))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     customerOrders.forEach((o) => {
       const label = '#' + String(o.id).slice(-6) + ' — ' +
-        formatEGP(o.amount) + ' (' + (o.status === 'delivered' ? 'تم التسليم' : 'نشط') + ')';
+        formatEGP(o.amount) + ' (' + (o.status === 'delivered' ? 'تم التسليم' : o.status === 'cancelled' ? 'ملغي' : 'نشط') + ')';
       orderSelect.appendChild(el('option', { value: o.id }, label));
     });
 
