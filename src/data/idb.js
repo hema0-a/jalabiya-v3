@@ -196,11 +196,33 @@ async function getStore(storeName, mode = 'readonly') {
   return tx.objectStore(storeName);
 }
 
+/**
+ * تنفيذ عملية كتابة واحدة وانتظار اكتمال المعاملة نفسها (oncomplete) لا نجاح الطلب فقط.
+ * نجاح الطلب لا يعني أن البيانات حُفظت: تجاوز الحصة أو إغلاق التبويب يُلغيان المعاملة عند
+ * الإنهاء، فكان التطبيق يُظهر «تم الحفظ» ثم تضيع البيانات بصمت.
+ */
+async function writeOp(storeName, run) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction(storeName, 'readwrite'); }
+    catch (e) { reject(e); return; }
+    let result;
+    tx.oncomplete = () => { writeVersion++; resolve(result); };
+    tx.onerror = () => reject(tx.error || new Error('[idb] write failed'));
+    tx.onabort = () => reject(tx.error || new Error('[idb] write aborted'));
+    try {
+      const req = run(tx.objectStore(storeName));
+      req.onsuccess = () => { result = req.result; };
+    } catch (e) {
+      try { tx.abort(); } catch (_) { /* ignore */ }
+      reject(e);
+    }
+  });
+}
+
 export async function put(storeName, value) {
-  const store = await getStore(storeName, 'readwrite');
-  const res = await wrap(store.put(value));
-  writeVersion++;
-  return res;
+  return writeOp(storeName, (store) => store.put(value));
 }
 
 export async function get(storeName, id) {
@@ -214,17 +236,11 @@ export async function getAll(storeName) {
 }
 
 export async function remove(storeName, id) {
-  const store = await getStore(storeName, 'readwrite');
-  const res = await wrap(store.delete(id));
-  writeVersion++;
-  return res;
+  return writeOp(storeName, (store) => store.delete(id));
 }
 
 export async function clear(storeName) {
-  const store = await getStore(storeName, 'readwrite');
-  const res = await wrap(store.clear());
-  writeVersion++;
-  return res;
+  return writeOp(storeName, (store) => store.clear());
 }
 
 export async function count(storeName) {

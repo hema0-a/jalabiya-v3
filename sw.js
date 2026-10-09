@@ -213,8 +213,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+          /* لا نخزّن صفحات الأخطاء (404/500) حتى لا تُعرض لاحقاً بلا إنترنت */
+          if (res && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+          }
           return res;
         })
         .catch(() => caches.match('./index.html'))
