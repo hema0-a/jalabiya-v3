@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewWorker } from '../ui/quick-preview.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const SPECIALTIES = [
@@ -251,7 +251,7 @@ function openPaymentForm(worker) {
             await workerPayments.create({
               workerId: worker.id,
               amount,
-              date: new Date(dateInput.value).getTime(),
+              date: parseDateInput(dateInput.value),
               notes: notesInput.value.trim(),
             });
             toast.success('تم تسجيل الدفعة');

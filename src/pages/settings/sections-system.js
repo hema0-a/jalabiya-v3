@@ -18,7 +18,7 @@ import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
-import { formatDate, formatEGP } from '../../core/utils.js';
+import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
 import * as firestoreSync from '../../sync/firestore-sync.js';
 import {
@@ -566,7 +566,7 @@ async function exportAllData() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jalabiya-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.download = 'jalabiya-backup-' + localDateInput() + '.json';
     /* الرابط يجب أن يكون في الـ DOM ولا يُلغى فوراً وإلا يفشل التنزيل في Safari/بعض متصفحات الجوال */
     document.body.appendChild(a);
     a.click();

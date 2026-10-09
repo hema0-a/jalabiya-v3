@@ -9,7 +9,7 @@
 import { el, clear } from '../core/dom.js';
 import { toast } from '../ui/toast.js';
 import { getKpisData, invalidateCache } from '../services/kpis-calculator.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
 
 let state = {
   container: null,
@@ -398,7 +398,7 @@ function exportCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'kpis-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.download = 'kpis-' + localDateInput() + '.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

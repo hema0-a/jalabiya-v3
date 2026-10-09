@@ -10,7 +10,7 @@ import { expenses } from '../data/repos/expenses.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -53,7 +53,7 @@ function openExpenseForm(existing = null) {
   if (isEdit && existing.amount != null) amountInput.value = String(existing.amount);
 
   const dateInput = el('input', { className: 'input', type: 'date' });
-  if (isEdit && existing.date) dateInput.value = new Date(existing.date).toISOString().slice(0, 10);
+  if (isEdit && existing.date) dateInput.value = localDateInput(existing.date);
   else dateInput.value = localDateInput();
 
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
@@ -81,7 +81,7 @@ function openExpenseForm(existing = null) {
           const data = {
             category: categorySelect.value,
             amount,
-            date: dateInput.value ? new Date(dateInput.value).getTime() : Date.now(),
+            date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
             notes: notesInput.value.trim(),
           };
           try {

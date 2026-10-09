@@ -73,14 +73,14 @@ function buildKpiRow(report) {
 /**
  * رسم شريط بياني بسيط.
  */
-function buildBar(label, value, maxValue, color) {
+function buildBar(label, value, maxValue, color, valueText) {
   const width = maxValue > 0 ? Math.max(2, Math.round((value / maxValue) * 100)) : 2;
   return el('div', { style: { marginBottom: '10px' } }, [
     el('div', {
       style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#123C2F', marginBottom: '4px' },
     }, [
       el('span', {}, label),
-      el('span', { style: { fontWeight: '600' } }, formatEGP(value)),
+      el('span', { style: { fontWeight: '600' } }, valueText != null ? valueText : formatEGP(value)),
     ]),
     el('div', {
       style: { background: '#E5DDD0', height: '8px', borderRadius: '4px', overflow: 'hidden' },
@@ -114,7 +114,7 @@ async function buildOrdersByStatus() {
     el('h3', { className: 'card__title' }, '📦 توزيع الطلبات'),
   ]));
   Object.entries(map).forEach(([k, v]) => {
-    card.appendChild(buildBar(labels[k] + ' (' + v + ')', v, max, 'linear-gradient(90deg, #4FC3F7, #1565C0)'));
+    card.appendChild(buildBar(labels[k], v, max, 'linear-gradient(90deg, #4FC3F7, #1565C0)', v + ' طلب'));
   });
   return card;
 }

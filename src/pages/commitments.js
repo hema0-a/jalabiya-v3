@@ -27,7 +27,7 @@ import {
   COMMITMENT_CATEGORIES,
   COMMITMENT_FREQUENCIES,
 } from '../core/config.js';
-import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
 import { previewCommitment, previewGoal } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -386,7 +386,7 @@ function openPaymentForm(commitment) {
             await commitmentPayments.create({
               commitmentId: commitment.id,
               amount,
-              date: new Date(dateInput.value).getTime(),
+              date: parseDateInput(dateInput.value),
               notes: notesInput.value.trim(),
             });
             toast.success('تم تسجيل الدفعة');

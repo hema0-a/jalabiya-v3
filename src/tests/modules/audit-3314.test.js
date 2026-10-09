@@ -5,7 +5,8 @@
 import { register } from '../registry.js';
 import * as idb from '../../data/idb.js';
 import { STORES } from '../../core/config.js';
-import { localDateInput } from '../../core/utils.js';
+import { localDateInput, toLatinDigits, isEgyptPhone, isValidPin, normalizePhone, parseDateInput } from '../../core/utils.js';
+import { withDepositPayments, unrecordedDeposit } from '../../services/payments-view.js';
 import { getPeriodCoverage } from '../../services/commitments-calculator.js';
 
 register('audit v3.3.14 write durability', async (t) => {
@@ -59,4 +60,35 @@ register('audit v3.3.14 local date inputs', async (t) => {
     localDateInput(lateNight) === '2026-10-11');
   await t.test('10. localDateInput يملأ الأصفار (شهر/يوم مفرد)',
     localDateInput(new Date(2026, 0, 5, 12)) === '2026-01-05');
+});
+
+register('audit v3.3.14 arabic digits', async (t) => {
+  await t.test('11. toLatinDigits يحوّل ٠-٩ و۰-۹ ويترك غيرها',
+    toLatinDigits('٠١٠٢٣۴۵abc9') === '0102345abc9' && toLatinDigits(null) === '');
+  await t.test('12. رقم الهاتف بالأرقام العربية يُقبل ويُحوَّل لصيغة دولية',
+    isEgyptPhone('٠١٠١٢٣٤٥٦٧٨') === true && normalizePhone('٠١٠١٢٣٤٥٦٧٨') === '+201012345678');
+  await t.test('13. الرقم السري بالأرقام العربية يُقبل (4 أرقام فقط)',
+    isValidPin('١٢٣٤') === true && isValidPin('١٢٣') === false && isValidPin('12٣٤٥') === false);
+});
+
+register('audit v3.3.14 date round trip', async (t) => {
+  const ts = parseDateInput('2026-10-11');
+  await t.test('14. parseDateInput ثم localDateInput يعيدان اليوم نفسه (بلا انزياح)',
+    localDateInput(ts) === '2026-10-11' && new Date(ts).getHours() === 12);
+  await t.test('15. قيمة فارغة/غير صالحة → null، وأرقام عربية تُقبل',
+    parseDateInput('') === null && parseDateInput('abc') === null && parseDateInput('2026-13-45') === null &&
+    localDateInput(parseDateInput('٢٠٢٦-٠١-٠٥')) === '2026-01-05');
+  await t.test('16. تاريخ قديم محفوظ كمنتصف ليل UTC يبقى يومه في التوقيت المحلي الحالي أو يختلف بيوم واحد فقط',
+    Math.abs(new Date(localDateInput(Date.UTC(2026, 9, 11))).getTime() - new Date('2026-10-11').getTime()) <= 86400000);
+});
+
+register('audit v3.3.14 explicit deposit flag', async (t) => {
+  const order = { id: 'o1', customerId: 'c1', status: 'pending', amount: 2000, deposit: 500 };
+  const sum = (l) => l.reduce((a, p) => a + p.amount, 0);
+  await t.test('17. دفعة لاحقة بمبلغ المقدم نفسه وisDeposit=false → المقدم لا يضيع (1000)',
+    sum(withDepositPayments([{ id: 'p', orderId: 'o1', amount: 500, isDeposit: false }], [order])) === 1000);
+  await t.test('18. دفعة معلَّمة isDeposit=true → المقدم لا يُعدّ مرتين (500)',
+    sum(withDepositPayments([{ id: 'p', orderId: 'o1', amount: 500, isDeposit: true }], [order])) === 500);
+  await t.test('19. توافق قديم: دفعة بلا الحقل وبمبلغ المقدم تُعدّ هي المقدم',
+    unrecordedDeposit(500, [{ amount: 500 }]) === 0 && unrecordedDeposit(500, [{ amount: 300 }]) === 500);
 });

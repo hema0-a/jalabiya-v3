@@ -17,7 +17,7 @@ import {
   HOUSE_EXPENSE_CATEGORY_COLORS,
   LIMITS,
 } from '../core/config.js';
-import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -227,7 +227,7 @@ function openExpenseForm(existing = null) {
 
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
-    ? new Date(existing.date).toISOString().slice(0, 10)
+    ? localDateInput(existing.date)
     : localDateInput();
 
   const noteInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
@@ -251,7 +251,7 @@ function openExpenseForm(existing = null) {
         const data = {
           category: catSelect.value,
           amount,
-          date: new Date(dateInput.value).getTime(),
+          date: parseDateInput(dateInput.value),
           note: noteInput.value.trim(),
         };
         try {

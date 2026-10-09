@@ -10,13 +10,25 @@
    ========================================================================== */
 
 /**
+ * تحويل الأرقام العربية-الهندية (٠-٩) والفارسية (۰-۹) إلى لاتينية.
+ * لوحات المفاتيح العربية تُدخل هذه الأرقام فكانت تُرفض في الهاتف والرقم السري.
+ * @param {*} value
+ * @returns {string}
+ */
+export function toLatinDigits(value) {
+  return String(value == null ? '' : value)
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
+}
+
+/**
  * التحقق من رقم هاتف مصري (01x + 8 أرقام).
  * يقبل: 010/011/012/015.
  * @param {*} phone
  * @returns {boolean}
  */
 export function isEgyptPhone(phone) {
-  const clean = String(phone || '').replace(/\D/g, '');
+  const clean = toLatinDigits(phone).replace(/\D/g, '');
   return /^01[0125]\d{8}$/.test(clean) || /^201[0125]\d{8}$/.test(clean);
 }
 
@@ -36,7 +48,7 @@ export function isEmail(email) {
  * @returns {boolean}
  */
 export function isValidPin(pin) {
-  return /^\d{4}$/.test(String(pin || ''));
+  return /^\d{4}$/.test(toLatinDigits(pin));
 }
 
 /**
@@ -45,7 +57,7 @@ export function isValidPin(pin) {
  * @returns {string} رقم بصيغة +20... أو السلسلة الأصلية
  */
 export function normalizePhone(phone) {
-  const clean = String(phone || '').replace(/\D/g, '');
+  const clean = toLatinDigits(phone).replace(/\D/g, '');
   if (/^01[0125]\d{8}$/.test(clean)) return '+20' + clean.slice(1);
   if (/^201[0125]\d{8}$/.test(clean)) return '+' + clean;
   return String(phone || '');
@@ -227,4 +239,22 @@ export function localDateInput(value = Date.now()) {
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
+}
+
+/**
+ * تحويل قيمة <input type="date"> (YYYY-MM-DD) إلى timestamp.
+ * يُحفظ التاريخ عند الساعة 12:00 ظهراً بالتوقيت المحلي، فيبقى اليوم نفسه في أي منطقة زمنية
+ * (كان يُحفظ كمنتصف ليل UTC فيظهر يوماً سابقاً لمن توقيته غرب UTC).
+ * يتبادل مع localDateInput() بلا انزياح.
+ * @param {string} str
+ * @returns {number|null} null إن كانت القيمة فارغة أو غير صالحة
+ */
+export function parseDateInput(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toLatinDigits(str).trim());
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]) - 1, day = Number(m[3]);
+  const d = new Date(y, mo, day, 12, 0, 0, 0);
+  /* رفض التواريخ المتجاوزة (مثل 2026-13-45 أو 2026-02-31) بدل تحويلها بصمت لتاريخ آخر */
+  if (isNaN(d.getTime()) || d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) return null;
+  return d.getTime();
 }

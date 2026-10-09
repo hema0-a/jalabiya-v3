@@ -15,6 +15,7 @@ import { toast } from '../ui/toast.js';
 import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
+import { withDepositPayments } from '../services/payments-view.js';
 
 /* --- مفتاح المسودة --- */
 const DRAFT_KEY = 'payment-form';
@@ -111,6 +112,35 @@ function openPaymentForm(existing = null) {
     setTimeout(() => { orderSelect.value = existing.orderId; }, 0);
   }
 
+  /* علامة «هذه الدفعة هي المقدم»: تظهر فقط إن كان للطلب المختار مقدم */
+  const depositCheck = el('input', { type: 'checkbox' });
+  const depositField = el('div', { className: 'field', style: { display: 'none' } }, [
+    el('label', { style: { display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' } }, [
+      depositCheck,
+      el('span', {}, 'هذه الدفعة هي مقدّم الطلب نفسه'),
+    ]),
+    el('div', { className: 'field__hint' },
+      'مقدّم الطلب يُحتسب تلقائياً. علّم هذا الخيار فقط إن كنت تسجّل المقدم نفسه كدفعة، حتى لا يُحسب مرتين.'),
+  ]);
+  function refreshDepositField() {
+    const o = state.orders.find((x) => x.id === orderSelect.value);
+    const dep = o ? Number(o.deposit) || 0 : 0;
+    depositField.style.display = dep > 0 ? '' : 'none';
+    if (dep <= 0) depositCheck.checked = false;
+  }
+  orderSelect.addEventListener('change', refreshDepositField);
+  customerSelect.addEventListener('change', () => setTimeout(refreshDepositField, 0));
+  setTimeout(() => {
+    refreshDepositField();
+    if (isEdit && existing.orderId) {
+      const o = state.orders.find((x) => x.id === existing.orderId);
+      const dep = o ? Number(o.deposit) || 0 : 0;
+      /* دفعة قديمة بلا علامة وبمبلغ المقدم نفسه كانت تُعدّ مقدّماً: نحافظ على هذا الحساب */
+      depositCheck.checked = existing.isDeposit === true ||
+        (existing.isDeposit == null && dep > 0 && Math.abs((Number(existing.amount) || 0) - dep) <= 0.009);
+    }
+  }, 0);
+
   /* المبلغ */
   const amountInput = el('input', {
     className: 'input', type: 'number', placeholder: '0', min: '0', step: '0.01',
@@ -140,6 +170,7 @@ function openPaymentForm(existing = null) {
       el('div', { className: 'field__hint' },
         'اختر الطلب لربط الدفعة به — يساعد في تتبع المدفوع/المتبقي'),
     ]),
+    depositField,
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, 'المبلغ (ج.م) *'),
       amountInput,
@@ -175,6 +206,7 @@ function openPaymentForm(existing = null) {
             amount,
             method: methodSelect.value,
             notes: notesInput.value.trim(),
+            isDeposit: !!orderId && depositCheck.checked,
           };
           try {
             if (isEdit) { await payments.update(existing.id, data); toast.success('تم التحديث'); }
@@ -372,6 +404,19 @@ function renderStats() {
     el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#1F6D57' } }, String(linked)),
     el('span', { className: 'stat__label' }, 'مرتبطة بطلب'),
   ]));
+
+  /* المقدمات المقبوضة في الطلبات ولم تُسجَّل كدفعات: تُحتسب في الإيرادات (اللوحة/التقارير)
+     فنعرضها هنا حتى لا يختلف إجمالي هذه الصفحة عن بقية الصفحات بلا تفسير. */
+  const deposits = withDepositPayments(state.payments, state.orders)
+    .filter((p) => p && p.synthetic)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  if (deposits > 0) {
+    wrap.appendChild(el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '🧾'),
+      el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#B8863B' } }, formatEGP(deposits)),
+      el('span', { className: 'stat__label' }, 'مقدمات طلبات (خارج الإجمالي)'),
+    ]));
+  }
 }
 
 function renderFilters() {

@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
 import { HOUSE_EXPENSE_CATEGORIES } from '../core/config.js';
 
 const CAT_MAP = {};
@@ -66,7 +66,7 @@ export function exportCSV(period, list, total) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'house-expenses-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'house-expenses-' + localDateInput() + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -15,6 +15,7 @@ import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS } from '../../core/config.js';
 import { auth } from '../../security/auth.js';
+import { toLatinDigits } from '../../core/utils.js';
 
 /* ==========================================================================
    1. الأمان
@@ -137,7 +138,7 @@ function openSetPinModal() {
       {
         text: 'تعيين', variant: 'primary', action: 'save',
         onClick: async () => {
-          const pin = pinInput.value.trim();
+          const pin = toLatinDigits(pinInput.value).trim();
           if (!/^\d{4}$/.test(pin)) return toast.warning('PIN يجب أن يكون 4 أرقام');
           try {
             await auth.setPinAndSave(pin);
@@ -183,8 +184,8 @@ function openChangePinModal() {
       {
         text: 'تغيير', variant: 'primary', action: 'save',
         onClick: async () => {
-          const oldPin = oldInput.value.trim();
-          const newPin = newInput.value.trim();
+          const oldPin = toLatinDigits(oldInput.value).trim();
+          const newPin = toLatinDigits(newInput.value).trim();
           if (!/^\d{4}$/.test(oldPin) || !/^\d{4}$/.test(newPin)) {
             return toast.warning('كلا الحقلين يجب أن يكونا 4 أرقام');
           }

@@ -19,6 +19,7 @@ import { settings } from '../data/repos/settings.js';
 import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
 import { STORE_NAMES } from '../data/schema.js';
 import * as idb from '../data/idb.js';
+import { toLatinDigits } from '../core/utils.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -191,7 +192,7 @@ function buildOverlay(cfg, onSubmit) {
 
   const submit = async () => {
     if (busy || refreshLockState()) return;
-    const pin = input.value.trim();
+    const pin = toLatinDigits(input.value).trim();
     if (!new RegExp('^\\d{' + PIN_LENGTH + '}$').test(pin)) {
       status.textContent = 'أدخل ' + PIN_LENGTH + ' أرقام';
       return;
@@ -226,7 +227,7 @@ function buildOverlay(cfg, onSubmit) {
   button.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   input.addEventListener('input', () => {
-    input.value = input.value.replace(/\D/g, '').slice(0, PIN_LENGTH);
+    input.value = toLatinDigits(input.value).replace(/\D/g, '').slice(0, PIN_LENGTH);
     if (input.value.length === PIN_LENGTH) submit();
   });
 

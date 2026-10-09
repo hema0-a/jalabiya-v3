@@ -14,7 +14,7 @@ import { toast } from '../ui/toast.js';
 import { personalLoans } from '../data/repos/personal-loans.js';
 import { loanPayments } from '../data/repos/loan-payments.js';
 import { LOAN_TYPES } from '../core/config.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput } from '../core/utils.js';
 import {
   getLoansWithPayments,
   getLoansStats,
@@ -88,12 +88,12 @@ function openLoanForm(existing = null) {
 
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
-    ? new Date(existing.date).toISOString().slice(0, 10)
+    ? localDateInput(existing.date)
     : localDateInput();
 
   const dueDateInput = el('input', { className: 'input', type: 'date' });
   if (isEdit && existing.dueDate) {
-    dueDateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
+    dueDateInput.value = localDateInput(existing.dueDate);
   }
 
   const noteInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
@@ -127,8 +127,8 @@ function openLoanForm(existing = null) {
             personName,
             phone: phoneInput.value.trim(),
             amount,
-            date: dateInput.value ? new Date(dateInput.value).getTime() : Date.now(),
-            dueDate: dueDateInput.value ? new Date(dueDateInput.value).getTime() : null,
+            date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
+            dueDate: (dueDateInput.value ? parseDateInput(dueDateInput.value) : null),
             note: noteInput.value.trim(),
           };
 
@@ -187,7 +187,7 @@ function openPaymentForm(loan) {
             await loanPayments.create({
               loanId: loan.id,
               amount,
-              date: new Date(dateInput.value).getTime(),
+              date: parseDateInput(dateInput.value),
               note: noteInput.value.trim(),
             });
             toast.success('تم تسجيل الدفعة');

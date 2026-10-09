@@ -8,7 +8,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { uid, formatEGP, formatDate } from '../core/utils.js';
+import { uid, formatEGP, formatDate, parseDateInput, localDateInput } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
 import { payments as paymentsRepoForDelete } from '../data/repos/payments.js';
@@ -263,12 +263,12 @@ function openOrderForm(existing = null) {
 
   const receivedDateInput = el('input', { className: 'input', type: 'date' });
   if (isEdit && existing.receivedDate) {
-    receivedDateInput.value = new Date(existing.receivedDate).toISOString().slice(0, 10);
+    receivedDateInput.value = localDateInput(existing.receivedDate);
   }
 
   const dueDateInput = el('input', { className: 'input', type: 'date', style: { flex: '1' } });
   if (isEdit && existing.dueDate) {
-    dueDateInput.value = new Date(existing.dueDate).toISOString().slice(0, 10);
+    dueDateInput.value = localDateInput(existing.dueDate);
   }
 
   const suggestBtn = el('button', {
@@ -283,7 +283,7 @@ function openOrderForm(existing = null) {
           minDays: 3, maxLookaheadDays: 30,
           excludeOrderId: existing ? existing.id : null,
         });
-        dueDateInput.value = new Date(suggestion.timestamp).toISOString().slice(0, 10);
+        dueDateInput.value = localDateInput(suggestion.timestamp);
         toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
       } catch (e) { toast.danger('فشل الاقتراح'); }
     },
@@ -454,8 +454,8 @@ function openOrderForm(existing = null) {
 
           const data = {
             customerId, status: statusSelect.value,
-            dueDate: dueDateInput.value ? new Date(dueDateInput.value).getTime() : null,
-            receivedDate: receivedDateInput.value ? new Date(receivedDateInput.value).getTime() : null,
+            dueDate: (dueDateInput.value ? parseDateInput(dueDateInput.value) : null),
+            receivedDate: (receivedDateInput.value ? parseDateInput(receivedDateInput.value) : null),
             items, discountType: dt, discountValue: dv, discountAmount: totals.discountAmount,
             extraFees, extraFeesTotal: totals.extraFeesTotal,
             subtotal: totals.subtotal, deposit, amount: totals.amount,

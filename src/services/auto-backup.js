@@ -11,7 +11,7 @@
 
 import { STORES, LIMITS, STORAGE_KEYS } from '../core/config.js';
 import { settings } from '../data/repos/settings.js';
-import { uid } from '../core/utils.js';
+import { uid, localDateInput } from '../core/utils.js';
 import * as idb from '../data/idb.js';
 
 /* --- المخازن المُشتركة في النسخة (كل المخازن ما عدا backups) --- */
@@ -354,8 +354,7 @@ export async function exportBackupToFile(id) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jalabiya-backup-' + new Date(backup.createdAt || Date.now())
-      .toISOString().slice(0, 10) + '.json';
+    a.download = 'jalabiya-backup-' + localDateInput(backup.createdAt || Date.now()) + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
