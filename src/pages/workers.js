@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewWorker } from '../ui/quick-preview.js';
-import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const SPECIALTIES = [
@@ -214,7 +214,7 @@ function openPaymentForm(worker) {
   });
 
   const dateInput = el('input', { className: 'input', type: 'date' });
-  dateInput.value = new Date().toISOString().slice(0, 10);
+  dateInput.value = localDateInput();
 
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
 

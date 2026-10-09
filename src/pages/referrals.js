@@ -11,7 +11,7 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { referrals } from '../data/repos/referrals.js';
-import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -66,7 +66,7 @@ function openReferralForm(existing = null) {
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
     ? new Date(existing.date).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+    : localDateInput();
 
   const paidCheckbox = el('input', { type: 'checkbox', className: 'toggle__input' });
   paidCheckbox.checked = isEdit ? (existing.status === 'paid') : false;

@@ -14,7 +14,7 @@ import { toast } from '../ui/toast.js';
 import { personalLoans } from '../data/repos/personal-loans.js';
 import { loanPayments } from '../data/repos/loan-payments.js';
 import { LOAN_TYPES } from '../core/config.js';
-import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput } from '../core/utils.js';
 import {
   getLoansWithPayments,
   getLoansStats,
@@ -89,7 +89,7 @@ function openLoanForm(existing = null) {
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
     ? new Date(existing.date).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+    : localDateInput();
 
   const dueDateInput = el('input', { className: 'input', type: 'date' });
   if (isEdit && existing.dueDate) {
@@ -155,7 +155,7 @@ function openPaymentForm(loan) {
   });
 
   const dateInput = el('input', { className: 'input', type: 'date' });
-  dateInput.value = new Date().toISOString().slice(0, 10);
+  dateInput.value = localDateInput();
 
   const noteInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
 

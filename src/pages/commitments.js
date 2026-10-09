@@ -27,7 +27,7 @@ import {
   COMMITMENT_CATEGORIES,
   COMMITMENT_FREQUENCIES,
 } from '../core/config.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
 import { previewCommitment, previewGoal } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -354,7 +354,7 @@ function openPaymentForm(commitment) {
   });
 
   const dateInput = el('input', { className: 'input', type: 'date' });
-  dateInput.value = new Date().toISOString().slice(0, 10);
+  dateInput.value = localDateInput();
 
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
 

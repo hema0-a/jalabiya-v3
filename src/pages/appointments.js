@@ -13,7 +13,7 @@ import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { formatDate, formatTime } from '../core/utils.js';
+import { formatDate, formatTime, localDateInput } from '../core/utils.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -114,13 +114,13 @@ function splitDateTime(ts) {
   if (!ts) {
     const d = new Date();
     return {
-      dateStr: d.toISOString().slice(0, 10),
+      dateStr: localDateInput(d),
       timeStr: '09:00',
     };
   }
   const d = new Date(ts);
   return {
-    dateStr: d.toISOString().slice(0, 10),
+    dateStr: localDateInput(d),
     timeStr: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'),
   };
 }

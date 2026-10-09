@@ -215,3 +215,16 @@ export function throttle(fn, ms = 300) {
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
+
+/**
+ * تاريخ محلي بصيغة YYYY-MM-DD لحقول <input type="date">.
+ * toISOString() يعيد تاريخ UTC فيظهر «أمس» بين منتصف الليل وفجراً بتوقيت مصر؛ هنا نستخدم أجزاء التاريخ المحلية.
+ * @param {number|Date} [value] — الافتراضي الآن
+ * @returns {string}
+ */
+export function localDateInput(value = Date.now()) {
+  const d = value instanceof Date ? value : new Date(value);
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
