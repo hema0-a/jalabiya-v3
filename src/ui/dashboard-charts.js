@@ -21,13 +21,15 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * إنشاء عنصر SVG.
  * @param {string} tag
  * @param {Object} [attrs]
+ * @param {string|number} [text] نص العنصر (لعناصر <text>) — يُضبط عبر textContent فلا خطر حقن HTML
  * @returns {SVGElement}
  */
-function svgEl(tag, attrs = {}) {
+function svgEl(tag, attrs = {}, text) {
   const node = document.createElementNS(SVG_NS, tag);
   Object.entries(attrs).forEach(([k, v]) => {
     if (v !== null && v !== undefined) node.setAttribute(k, String(v));
   });
+  if (text !== null && text !== undefined) node.textContent = String(text);
   return node;
 }
 

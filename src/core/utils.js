@@ -229,6 +229,18 @@ export function uid() {
 }
 
 /**
+ * تحويل قيمة حقل إدخال إلى رقم غير سالب (للمبالغ والأسعار والكميات).
+ * حقول type="number" لا تمنع كتابة القيم السالبة يدوياً (min للتحقق فقط)، لذا تُنظَّف هنا.
+ * القيم غير الرقمية أو السالبة أو اللانهائية تُعاد كصفر.
+ * @param {*} value
+ * @returns {number}
+ */
+export function toNonNegative(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
  * تاريخ محلي بصيغة YYYY-MM-DD لحقول <input type="date">.
  * toISOString() يعيد تاريخ UTC فيظهر «أمس» بين منتصف الليل وفجراً بتوقيت مصر؛ هنا نستخدم أجزاء التاريخ المحلية.
  * @param {number|Date} [value] — الافتراضي الآن

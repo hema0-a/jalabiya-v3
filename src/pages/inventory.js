@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewInventory } from '../ui/quick-preview.js';
-import { formatEGP } from '../core/utils.js';
+import { formatEGP, toNonNegative } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -145,9 +145,9 @@ function openItemForm(existing = null) {
           const data = {
             name,
             category: categorySelect.value,
-            quantity: Number(qtyInput.value) || 0,
-            minQuantity: Number(minQtyInput.value) || 0,
-            price: Number(priceInput.value) || 0,
+            quantity: toNonNegative(qtyInput.value),
+            minQuantity: toNonNegative(minQtyInput.value),
+            price: toNonNegative(priceInput.value),
             unit: unitInput.value.trim(),
             notes: notesInput.value.trim(),
           };
@@ -192,9 +192,9 @@ function openItemForm(existing = null) {
           const payload = {
             name: nameInput.value,
             category: categorySelect.value,
-            quantity: Number(qtyInput.value) || 0,
-            minQuantity: Number(minQtyInput.value) || 0,
-            price: Number(priceInput.value) || 0,
+            quantity: toNonNegative(qtyInput.value),
+            minQuantity: toNonNegative(minQtyInput.value),
+            price: toNonNegative(priceInput.value),
             unit: unitInput.value,
             notes: notesInput.value,
           };

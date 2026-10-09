@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewWorker } from '../ui/quick-preview.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const SPECIALTIES = [
@@ -181,7 +181,7 @@ function openWorkerForm(existing = null) {
             phone: phoneInput.value.trim(),
             specialty: specSelect.value || 'أخرى',
             salaryType: salaryTypeSelect.value,
-            salary: Number(salaryInput.value) || 0,
+            salary: toNonNegative(salaryInput.value),
             notes: notesInput.value.trim(),
             active: activeCheckbox.checked,
           };

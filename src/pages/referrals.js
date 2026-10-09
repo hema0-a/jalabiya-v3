@@ -11,7 +11,7 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { referrals } from '../data/repos/referrals.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -107,7 +107,7 @@ function openReferralForm(existing = null) {
             referrerName,
             referredName,
             referredPhone: phoneInput.value.trim(),
-            reward: Number(rewardInput.value) || 0,
+            reward: toNonNegative(rewardInput.value),
             date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
             status: paidCheckbox.checked ? 'paid' : 'pending',
             note: noteInput.value.trim(),

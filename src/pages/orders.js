@@ -8,7 +8,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { uid, formatEGP, formatDate, parseDateInput, localDateInput } from '../core/utils.js';
+import { uid, formatEGP, formatDate, parseDateInput, localDateInput, toNonNegative } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
 import { payments as paymentsRepoForDelete } from '../data/repos/payments.js';
@@ -77,17 +77,17 @@ export function filterOrders(list, filterId) {
    2. الحسابات
    ========================================================================== */
 
-function computeTotals(items, discountType, discountValue, extraFees) {
+export function computeTotals(items, discountType, discountValue, extraFees) {
   const subtotal = (items || []).reduce(
-    (s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0
+    (s, it) => s + toNonNegative(it.price) * toNonNegative(it.quantity), 0
   );
-  const dv = Number(discountValue) || 0;
+  const dv = toNonNegative(discountValue);
   let discountAmount = 0;
   if (discountType === 'percent') discountAmount = subtotal * (dv / 100);
   else if (discountType === 'fixed') discountAmount = dv;
   discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
   const extraFeesTotal = (extraFees || []).reduce((s, f) => {
-    const v = Number(f.value) || 0;
+    const v = toNonNegative(f.value);
     if (f.type === 'percent') return s + subtotal * (v / 100);
     return s + v;
   }, 0);
@@ -198,8 +198,8 @@ function buildItemRow(item, onRemove) {
   row._getValues = () => ({
     id: item.id || uid(),
     name: nameIn.value.trim() || 'بند',
-    price: Number(priceIn.value) || 0,
-    quantity: Number(qtyIn.value) || 1,
+    price: toNonNegative(priceIn.value),
+    quantity: toNonNegative(qtyIn.value) || 1,
   });
 
   return row;
@@ -240,7 +240,7 @@ function buildFeeRow(fee, onRemove) {
     id: fee.id || uid(),
     feeType: typeSelect.value,
     type: typeModeSelect.value,
-    value: Number(valueIn.value) || 0,
+    value: toNonNegative(valueIn.value),
   });
 
   return row;
@@ -376,7 +376,7 @@ function openOrderForm(existing = null) {
     const items = Array.from(itemsContainer.children).map((r) => r._getValues());
     const fees = Array.from(feesContainer.children).map((r) => r._getValues());
     const t = computeTotals(items, discountTypeSelect.value, discountValueInput.value, fees);
-    const deposit = Number(depositInput.value) || 0;
+    const deposit = toNonNegative(depositInput.value);
     const remaining = Math.max(0, t.amount - deposit);
 
     clear(totalsSummary);
@@ -448,9 +448,15 @@ function openOrderForm(existing = null) {
             .map((r) => r._getValues()).filter((f) => f.value > 0);
 
           const dt = discountTypeSelect.value;
-          const dv = Number(discountValueInput.value) || 0;
-          const deposit = Number(depositInput.value) || 0;
+          const dv = dt === 'percent'
+            ? Math.min(100, toNonNegative(discountValueInput.value))
+            : toNonNegative(discountValueInput.value);
+          const deposit = toNonNegative(depositInput.value);
           const totals = computeTotals(items, dt, dv, extraFees);
+          if (deposit > totals.amount) {
+            toast.warning('المقدم (' + formatEGP(deposit) + ') أكبر من إجمالي الطلب (' + formatEGP(totals.amount) + ')');
+            return;
+          }
 
           const data = {
             customerId, status: statusSelect.value,

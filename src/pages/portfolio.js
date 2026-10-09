@@ -14,7 +14,7 @@ import { portfolio } from '../data/repos/portfolio.js';
 import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, toNonNegative } from '../core/utils.js';
 import { previewPortfolio } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -185,7 +185,7 @@ function openAddForm() {
               title,
               category: categorySelect.value,
               customerId: customerSelect.value || null,
-              price: Number(priceInput.value) || 0,
+              price: toNonNegative(priceInput.value),
               note: noteInput.value.trim(),
               image: compressedData,
               thumbnail: thumbnailData,
@@ -330,7 +330,7 @@ function openEditForm(item) {
               title,
               category: categorySelect.value,
               customerId: customerSelect.value || null,
-              price: Number(priceInput.value) || 0,
+              price: toNonNegative(priceInput.value),
               note: noteInput.value.trim(),
             });
             toast.success('تم الحفظ');

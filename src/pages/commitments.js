@@ -27,7 +27,7 @@ import {
   COMMITMENT_CATEGORIES,
   COMMITMENT_FREQUENCIES,
 } from '../core/config.js';
-import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 import { previewCommitment, previewGoal } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -628,7 +628,7 @@ function openGoalForm(existing = null) {
         onClick: async () => {
           const name = nameInput.value.trim();
           const target = Number(targetInput.value);
-          const current = Number(currentInput.value) || 0;
+          const current = toNonNegative(currentInput.value);
           if (!name) return toast.warning('الاسم مطلوب');
           if (!target || target <= 0) return toast.warning('أدخل مبلغاً مستهدفاً صحيحاً');
           const data = {
