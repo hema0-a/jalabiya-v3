@@ -379,7 +379,7 @@ function buildLoanCard(loan) {
       className: 'btn btn--sm btn--ghost', type: 'button',
       onClick: () => {
         const phone = normalizePhone(loan.phone).replace(/\D/g, '');
-        window.open('https://wa.me/' + phone, '_blank');
+        window.open('https://wa.me/' + phone, '_blank', 'noopener,noreferrer');
       },
     }, '📱') : null,
     el('button', {

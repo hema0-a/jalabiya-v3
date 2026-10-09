@@ -31,7 +31,9 @@ export function registerServiceWorker() {
     return;
   }
 
-  window.addEventListener('load', () => {
+  /* ⚠️ main.js يستخدم top-level await، فقد يكون حدث 'load' قد انطلق قبل وصولنا هنا.
+     لذلك نُسجّل فوراً إن كانت الصفحة جاهزة، وإلا ننتظر 'load'. */
+  const doRegister = () => {
     navigator.serviceWorker.register('sw.js', { scope: './' })
       .then((reg) => {
         console.log('[PWA] ✅ تم تسجيل SW — النطاق:', reg.scope);
@@ -42,7 +44,7 @@ export function registerServiceWorker() {
         }, 60 * 60 * 1000);
 
         /* --- معالجة أول تسجيل --- */
-        if (reg.waiting) {
+        if (reg.waiting && navigator.serviceWorker.controller) {
           notifyUpdate();
         }
 
@@ -60,12 +62,19 @@ export function registerServiceWorker() {
       .catch((err) => {
         console.warn('[PWA] ❌ فشل تسجيل SW:', err);
       });
-  });
+  };
 
-  /* --- إعادة التحميل عند تغيير الـ controller --- */
+  if (document.readyState === 'complete') {
+    doRegister();
+  } else {
+    window.addEventListener('load', doRegister, { once: true });
+  }
+
+  /* --- إعادة التحميل عند تغيير الـ controller (ليس عند أول تثبيت) --- */
+  const hadController = !!navigator.serviceWorker.controller;
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
+    if (!hadController || refreshing) return;
     refreshing = true;
     console.log('[PWA] 🔄 تحميل نسخة جديدة...');
     window.location.reload();

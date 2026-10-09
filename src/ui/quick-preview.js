@@ -114,7 +114,7 @@ function _whatsapp(phone, message) {
   const normalized = normalizePhone(phone);
   const clean = String(normalized).replace(/\D/g, '');
   if (!clean) return;
-  window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(message), '_blank');
+  window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(message), '_blank', 'noopener,noreferrer');
 }
 
 /**
@@ -485,7 +485,7 @@ export async function previewPortfolio(idOrObj, onEdit) {
       onClick: () => {
         const text = '🌟 ' + (p.title || '') + '\n' +
           (cats[p.category] || '') + (p.price ? '\n💰 ' + formatEGP(p.price) : '') + '\n\nللتواصل:';
-        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
       } },
     { text: 'التفاصيل الكاملة', variant: 'secondary',
       onClick: () => { modal.close(); location.hash = '#/portfolio'; } },

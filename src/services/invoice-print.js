@@ -202,13 +202,23 @@ function openPrintWindow(title, bodyHtml) {
     '</head>' +
     '<body>' +
     '<div class="action-bar">' +
-      '<button class="btn-print" onclick="window.print()">🖨️ طباعة</button>' +
-      '<button class="btn-close" onclick="window.close()">✕ إغلاق</button>' +
+      '<button class="btn-print" type="button">🖨️ طباعة</button>' +
+      '<button class="btn-close" type="button">✕ إغلاق</button>' +
     '</div>' +
     bodyHtml +
     '</body></html>'
   );
   w.document.close();
+
+  /* ⚠️ الـ CSP يمنع onclick المضمَّن، لذلك نربط الأزرار من النافذة الأم */
+  try {
+    const printBtn = w.document.querySelector('.btn-print');
+    const closeBtn = w.document.querySelector('.btn-close');
+    if (printBtn) printBtn.addEventListener('click', () => w.print());
+    if (closeBtn) closeBtn.addEventListener('click', () => w.close());
+  } catch (e) {
+    console.warn('[invoice-print] تعذّر ربط أزرار الطباعة:', e);
+  }
   return w;
 }
 

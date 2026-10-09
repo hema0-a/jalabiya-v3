@@ -236,7 +236,7 @@ function openDetail(item) {
           (item.price ? '\n💰 السعر: ' + formatEGP(item.price) : '') +
           (item.note ? '\n📝 ' + item.note : '') +
           '\n\nللتواصل والطلب يرجى مراسلتنا 🌹';
-        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
       },
     }, '📱 مشاركة واتساب'),
     el('button', {

@@ -154,7 +154,7 @@ export function sendWhatsApp(phone, text) {
   const clean = String(normalized).replace(/\D/g, '');
   if (!clean) return false;
   const url = 'https://wa.me/' + clean + '?text=' + encodeURIComponent(text || '');
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
 

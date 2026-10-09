@@ -36,7 +36,9 @@ let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
 let mountNotifications, openNotifications;
+let APP_CONFIG;
 try {
+  ({ APP_CONFIG } = await import('./core/config.js'));
   ({ el } = await import('./core/dom.js'));
   ({ toast } = await import('./ui/toast.js'));
   ({ createLayout } = await import('./ui/layout.js'));
@@ -86,9 +88,24 @@ async function loadPageModule(pageId) {
       default:                   return null;
     }
   } catch (e) {
-    console.warn('[Main] Page "' + pageId + '" not found.');
-    return null;
+    console.error('[Main] فشل تحميل صفحة "' + pageId + '":', e);
+    return { __loadError: e };
   }
+}
+
+/* لوحة خطأ ودّية داخل منطقة المحتوى بدل صفحة فارغة صامتة */
+function buildErrorPanel(title, err) {
+  const msg = (err && err.message) ? err.message : String(err);
+  return el('div', { className: 'empty-state' }, [
+    el('div', { className: 'empty-state__icon' }, '⚠️'),
+    el('h2', { className: 'empty-state__title', text: title }),
+    el('p', { className: 'empty-state__text' }, msg),
+    el('button', {
+      className: 'btn btn--primary',
+      type: 'button',
+      onClick: () => renderPage(getHashPage()),
+    }, '🔄 إعادة المحاولة'),
+  ]);
 }
 
 const SIDEBAR_SECTIONS = [
@@ -241,11 +258,11 @@ function buildTopbarActions() {
 const layout = createLayout({
   sidebar: {
     title: 'ورشة الجلابيب',
-    subtitle: 'V3 — v3.0.0',
+    subtitle: 'V3 — v' + APP_CONFIG.version,
     logo: '🧵',
     sections: SIDEBAR_SECTIONS,
     activeId: 'dashboard',
-    footer: '© 2026 — v3.0.0',
+    footer: '© 2026 — v' + APP_CONFIG.version,
   },
   topbar: {
     title: 'لوحة التحكم',
@@ -348,7 +365,10 @@ function getSubRoute(fullRoute) {
   return parts[1] || null;
 }
 
+let _renderToken = 0;
+
 async function renderPage(fullRoute) {
+  const token = ++_renderToken;   /* يمنع أن تكتب صفحة قديمة فوق صفحة أحدث */
   const id = getBaseRoute(fullRoute);
   const subRoute = getSubRoute(fullRoute);
 
@@ -366,12 +386,27 @@ async function renderPage(fullRoute) {
   currentPage = null;
 
   const mod = await loadPageModule(id);
+  if (token !== _renderToken) return;
+
+  if (mod && mod.__loadError) {
+    layout.setContent(buildErrorPanel('تعذّر تحميل الصفحة', mod.__loadError));
+    return;
+  }
+
   const exportName = MODULE_EXPORT_MAP[id];
   if (mod && exportName && mod[exportName]) {
     const container = el('div', {});
     layout.setContent(container);
-    await mod[exportName].render(container, subRoute);
-    currentPage = mod[exportName];
+    try {
+      await mod[exportName].render(container, subRoute);
+    } catch (e) {
+      console.error('[Main] خطأ أثناء رسم صفحة "' + id + '":', e);
+      if (token === _renderToken) {
+        layout.setContent(buildErrorPanel('حدث خطأ أثناء عرض الصفحة', e));
+      }
+      return;
+    }
+    if (token === _renderToken) currentPage = mod[exportName];
     return;
   }
 

@@ -215,7 +215,7 @@ function buildReferralCard(item) {
       className: 'btn btn--sm btn--ghost', type: 'button',
       onClick: () => {
         const phone = normalizePhone(item.referredPhone).replace(/\D/g, '');
-        window.open('https://wa.me/' + phone, '_blank');
+        window.open('https://wa.me/' + phone, '_blank', 'noopener,noreferrer');
       },
     }, '📱') : null,
     el('button', {

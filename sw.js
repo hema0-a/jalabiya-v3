@@ -3,12 +3,13 @@
    ==========================================================================
    الاستراتيجية:
      - HTML (navigations): Network-first → fallback لـ index.html
-     - Static (CSS/JS/SVG/JSON): Cache-first → ثم network → تخزين
+     - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
+       (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.2 — دعم كامل للعمل offline
+   الإصدار: v3.3.3 — إكمال الكاش + تحديثات فورية
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.2';
+const CACHE_VERSION = 'v3.3.3';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -97,6 +98,14 @@ const PRECACHE_URLS = [
   './src/ui/toast.js',
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
+  './src/ui/dashboard-charts.js',
+  './src/ui/onboarding.js',
+
+  /* --- Sync (Firebase) --- */
+  './src/sync/auth-sync.js',
+  './src/sync/firebase-config.js',
+  './src/sync/firestore-sync.js',
+  './src/sync/offline-queue.js',
 
   /* --- Services --- */
   './src/services/auto-backup.js',
@@ -108,6 +117,12 @@ const PRECACHE_URLS = [
   './src/services/notifications.js',
   './src/services/order-scheduler.js',
   './src/services/order-timing.js',
+  './src/services/auto-messages.js',
+  './src/services/calendar-events.js',
+  './src/services/financial-export.js',
+  './src/services/house-expenses-export.js',
+  './src/services/image-compressor.js',
+  './src/services/invoice-print.js',
 
   /* --- Pages --- */
   './src/pages/dashboard.js',
@@ -132,6 +147,7 @@ const PRECACHE_URLS = [
   './src/pages/trash.js',
   './src/pages/cloud-sync.js',
   './src/pages/tests.js',
+  './src/pages/appointments.js',
 
   /* --- Settings sub-pages --- */
   './src/pages/settings/index.js',
@@ -202,29 +218,39 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* --- Static assets → Cache-first --- */
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(req)
-        .then((res) => {
-          if (res && res.status === 200 && res.type === 'basic') {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          /* Offline ولا يوجد كاش */
-          return new Response(
-            JSON.stringify({ error: 'offline', url: url.pathname }),
-            { status: 503, headers: { 'Content-Type': 'application/json' } }
-          );
-        });
-    })
-  );
+  /* --- Static assets → Network-first مع مهلة، ثم الكاش --- */
+  event.respondWith(networkFirst(req, url));
 });
+
+function networkFirst(req, url) {
+  const cacheCopy = (res) => {
+    if (res && res.status === 200 && res.type === 'basic') {
+      const clone = res.clone();
+      caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+    }
+    return res;
+  };
+
+  const network = fetch(req).then(cacheCopy);
+
+  /* مهلة 4 ثوانٍ: إن تأخرت الشبكة نستخدم الكاش (إن وُجد) */
+  const timeout = new Promise((resolve) => {
+    setTimeout(() => {
+      caches.match(req).then((cached) => resolve(cached || null));
+    }, 4000);
+  });
+
+  return Promise.race([network, timeout.then((c) => c || network)])
+    .catch(() =>
+      caches.match(req).then((cached) =>
+        cached ||
+        new Response(
+          JSON.stringify({ error: 'offline', url: url.pathname }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+}
 
 /* ==========================================================================
    4. MESSAGE — تفعيل فوري

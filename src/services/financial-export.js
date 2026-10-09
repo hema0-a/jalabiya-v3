@@ -188,7 +188,7 @@ export function buildWhatsAppSummary(data, shopName = 'ورشة الجلابيب
 export function shareViaWhatsApp(data, shopName = 'ورشة الجلابيب') {
   const text = buildWhatsAppSummary(data, shopName);
   const url = 'https://wa.me/?text=' + encodeURIComponent(text);
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /* ==========================================================================
