@@ -19,6 +19,7 @@ import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
 import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
+import { orderPaidBreakdown, withDepositPayments } from '../services/payments-view.js';
 
 /* ============================================================
    1. Helpers
@@ -163,8 +164,11 @@ export async function previewCustomer(idOrObj, onEdit) {
     ordersRepo.findByCustomer(c.id),
     paymentsRepo.findByCustomer(c.id),
   ]);
-  const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const totalOrders = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  /* نفس قاعدة كشف الحساب: لا تُحسب الملغاة، ويُحسب المقدم غير المسجّل كدفعة */
+  const totalPaid = withDepositPayments(payments, orders).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const totalOrders = orders
+    .filter((o) => o.status !== 'cancelled')
+    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const remaining = Math.max(0, totalOrders - totalPaid);
   const recent = [...orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3);
 
@@ -225,9 +229,7 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
   if (!order) return;
 
   const payments = await paymentsRepo.findByOrder(order.id);
-  const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const deposit = Number(order.deposit) || 0;
-  const paidTotal = totalPaid > 0 ? totalPaid : deposit;
+  const paidTotal = orderPaidBreakdown(order, payments).paid;
   const total = Number(order.amount) || 0;
   const remaining = Math.max(0, total - paidTotal);
 

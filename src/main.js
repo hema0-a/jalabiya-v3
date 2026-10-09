@@ -66,8 +66,34 @@ try {
   await ensureUnlocked();
   installAutoLock();
 } catch (e) {
-  /* فشل القفل لا يجب أن يحجب المستخدم عن بياناته بصمت — نسجّل ونكمل */
   console.error('[Lock] تعذّر تشغيل شاشة القفل:', e);
+  /* إن كان هناك PIN: لا نفتح البيانات عند الفشل (fail-closed) ولا نترك شاشة بيضاء —
+     نعرض رسالة مع زر إعادة المحاولة. وإن لم يكن هناك PIN نكمل طبيعياً. */
+  let pinSet = false;
+  try { pinSet = !!(localStorage.getItem('jalabiya_v3_pin_hash') && localStorage.getItem('jalabiya_v3_pin_salt')); } catch (_) { /* ignore */ }
+  if (pinSet) {
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.removeAttribute('inert');
+      appEl.removeAttribute('aria-hidden');
+      appEl.style.visibility = 'visible';
+      appEl.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'boot';
+      box.style.flexDirection = 'column';
+      box.style.gap = '12px';
+      const msg = document.createElement('div');
+      msg.textContent = '🔒 تعذّر عرض شاشة القفل. لحماية بياناتك لم يُفتح التطبيق.';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'إعادة المحاولة';
+      btn.style.cssText = 'padding:10px 20px;border-radius:10px;border:0;background:#1F6D57;color:#fff;font:inherit;cursor:pointer';
+      btn.addEventListener('click', () => location.reload());
+      box.append(msg, btn);
+      appEl.appendChild(box);
+    }
+    throw e;
+  }
 }
 
 async function loadPageModule(pageId) {

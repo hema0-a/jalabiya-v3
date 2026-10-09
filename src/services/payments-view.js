@@ -1,14 +1,44 @@
 /* ==========================================================================
    payments-view.js — عرض موحّد للمدفوعات الفعلية (مع المقدم)
    ==========================================================================
-   القاعدة (نفس قاعدة المعاينة السريعة quick-preview):
-   - الطلب الذي له دفعات مسجّلة → تُحسب دفعاته فقط.
-   - الطلب بلا أي دفعة وله مقدم (deposit) → يُحسب المقدم كمبلغ مقبوض
-     بتاريخ إنشاء الطلب، حتى لا يظهر المقدم في الفاتورة ويغيب عن الحسابات.
-   - الطلبات الملغاة لا يُضاف مقدمها.
-   لا يكتب شيئاً في قاعدة البيانات — حساب عرض فقط، فلا يوجد تكرار عند
-   تسجيل المقدم لاحقاً كدفعة عادية.
+   القاعدة الموحّدة (الحسابات + المعاينة السريعة + الفاتورة):
+   - المقدم (deposit) حقل في الطلب لا يُنشئ سجل دفعة، فهو مبلغ مقبوض فعلاً.
+   - يُحسب المقدم فوق الدفعات المسجّلة، إلا إذا سُجّل صراحةً كدفعة بالمبلغ نفسه
+     (مطابقة واحد لواحد) فلا يُعدّ مرتين.
+   - (قبل v3.3.12 كان المقدم يُتجاهل بمجرد وجود أي دفعة على الطلب، فيظهر المدفوع
+     أقل من الحقيقي والمتبقي أكبر.)
+   - الطلبات الملغاة لا يُضاف مقدمها في الحسابات الإجمالية.
+   لا يكتب شيئاً في قاعدة البيانات — حساب عرض فقط.
    ========================================================================== */
+
+const AMOUNT_EPS = 0.009;
+
+/**
+ * المقدم الذي لم يُسجَّل كدفعة (يُضاف للمدفوع).
+ * @param {number|string} deposit — مقدم الطلب
+ * @param {Array} orderPayments — الدفعات المسجّلة لهذا الطلب فقط
+ * @returns {number} المبلغ الواجب إضافته (0 إن لا مقدم أو سُجّل كدفعة)
+ */
+export function unrecordedDeposit(deposit, orderPayments) {
+  const d = Number(deposit) || 0;
+  if (d <= 0) return 0;
+  const list = Array.isArray(orderPayments) ? orderPayments : [];
+  const recordedAsPayment = list.some((p) => p && Math.abs((Number(p.amount) || 0) - d) <= AMOUNT_EPS);
+  return recordedAsPayment ? 0 : d;
+}
+
+/**
+ * إجمالي المدفوع لطلب واحد = الدفعات المسجّلة + المقدم غير المسجّل.
+ * @param {Object} order
+ * @param {Array} orderPayments — دفعات هذا الطلب فقط
+ * @returns {{recorded:number, deposit:number, paid:number}}
+ */
+export function orderPaidBreakdown(order, orderPayments) {
+  const list = Array.isArray(orderPayments) ? orderPayments : [];
+  const recorded = list.reduce((s, p) => s + (Number(p && p.amount) || 0), 0);
+  const deposit = unrecordedDeposit(order && order.deposit, list);
+  return { recorded, deposit, paid: recorded + deposit };
+}
 
 /**
  * @param {Array} paymentsList — الدفعات المسجّلة
@@ -18,18 +48,23 @@
 export function withDepositPayments(paymentsList, ordersList) {
   const payments = Array.isArray(paymentsList) ? paymentsList : [];
   const orders = Array.isArray(ordersList) ? ordersList : [];
-  const paidOrderIds = new Set(payments.map((p) => p && p.orderId).filter(Boolean));
+  const byOrder = new Map();
+  for (const p of payments) {
+    if (!p || !p.orderId) continue;
+    if (!byOrder.has(p.orderId)) byOrder.set(p.orderId, []);
+    byOrder.get(p.orderId).push(p);
+  }
   const extra = [];
 
   for (const o of orders) {
     if (!o || o.status === 'cancelled') continue;
-    const deposit = Number(o.deposit) || 0;
-    if (deposit <= 0 || paidOrderIds.has(o.id)) continue;
+    const amount = unrecordedDeposit(o.deposit, byOrder.get(o.id));
+    if (amount <= 0) continue;
     extra.push({
       id: 'deposit-' + o.id,
       customerId: o.customerId,
       orderId: o.id,
-      amount: deposit,
+      amount,
       method: 'deposit',
       createdAt: o.createdAt || o.receivedDate || 0,
       synthetic: true,

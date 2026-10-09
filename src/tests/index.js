@@ -25,5 +25,6 @@ import './modules/loans.test.js';
 import './modules/collapsible.test.js';
 import './modules/sub-page.test.js';
 import './modules/audit-3310.test.js';
+import './modules/audit-3312.test.js';
 
 export { runAll, register } from './registry.js';

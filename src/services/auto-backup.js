@@ -279,8 +279,12 @@ export async function restoreBackup(id) {
     /* استبدال ذرّي: إن فشل أي سجل تُلغى العملية كلها وتبقى البيانات كما هي */
     const plan = {};
     for (const s of BACKUP_STORES) {
-      const list = Array.isArray(backup.stores[s]) ? backup.stores[s] : [];
-      plan[s] = { clear: true, records: list.filter((r) => r && typeof r === 'object') };
+      /* مخزن غائب من النسخة (نسخة أقدم أُضيفت بعدها مخازن جديدة) لا يُمسح من البيانات الحالية */
+      if (!Array.isArray(backup.stores[s])) continue;
+      plan[s] = { clear: true, records: backup.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
+    }
+    if (Object.keys(plan).length === 0) {
+      return { ok: false, error: 'النسخة لا تحتوي أي بيانات صالحة' };
     }
     const restored = await idb.writeBatch(plan);
 

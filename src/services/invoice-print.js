@@ -11,7 +11,7 @@
 
 import { settings } from '../data/repos/settings.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
-import { withDepositPayments } from './payments-view.js';
+import { withDepositPayments, orderPaidBreakdown } from './payments-view.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
 /* ==========================================================
@@ -305,14 +305,13 @@ export async function printOrderInvoice(order, customer) {
   const discountAmount = Number(order.discountAmount) || 0;
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
   const total = Number(order.amount) || 0;
-  /* المدفوع: الدفعات المسجّلة للطلب إن وُجدت، وإلا المقدم (نفس قاعدة بقية التطبيق) */
-  let recordedPaid = 0;
-  try {
-    const recorded = await paymentsRepo.findByOrder(order.id);
-    recordedPaid = recorded.reduce((sum, pm) => sum + (Number(pm.amount) || 0), 0);
-  } catch (e) { /* نكمل بالمقدم */ }
-  const hasRecorded = recordedPaid > 0;
-  const deposit = hasRecorded ? recordedPaid : (Number(order.deposit) || 0);
+  /* المدفوع = الدفعات المسجّلة + المقدم غير المسجّل كدفعة (نفس قاعدة بقية التطبيق) */
+  let recordedList = [];
+  try { recordedList = await paymentsRepo.findByOrder(order.id); }
+  catch (e) { /* نكمل بالمقدم */ }
+  const breakdown = orderPaidBreakdown(order, recordedList);
+  const hasRecorded = breakdown.recorded > 0;
+  const deposit = breakdown.paid;
   const paidLabel = hasRecorded ? 'المدفوع' : 'المقدم';
   const remaining = Math.max(0, total - deposit);
 

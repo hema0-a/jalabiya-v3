@@ -76,7 +76,10 @@ export async function push(uid) {
     const counts = {};
 
     for (const s of SYNC_STORES) {
-      const list = await idb.getAll(s).catch(() => []);
+      /* فشل قراءة أي مخزن يوقف الرفع كله: رفع قائمة فارغة بدل الفاشلة كان سيمسح بياناته في السحابة */
+      let list;
+      try { list = await idb.getAll(s); }
+      catch (e) { return { ok: false, error: 'تعذّرت قراءة بيانات «' + s + '» محلياً — لم يُرفع شيء حمايةً لنسخة السحابة' }; }
       stores[s] = list;
       counts[s] = list.length;
     }
@@ -156,8 +159,13 @@ export async function apply(snapshot) {
     /* استبدال ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
     const plan = {};
     for (const s of SYNC_STORES) {
-      const list = Array.isArray(snapshot.stores[s]) ? snapshot.stores[s] : [];
+      /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
+      if (!Array.isArray(snapshot.stores[s])) continue;
+      const list = snapshot.stores[s];
       plan[s] = { clear: true, records: list.filter((r) => r && typeof r === 'object' && r.id != null) };
+    }
+    if (Object.keys(plan).length === 0) {
+      return { ok: false, error: 'النسخة السحابية لا تحتوي أي مخزن صالح' };
     }
     const counts = await idb.writeBatch(plan);
     return { ok: true, counts };
