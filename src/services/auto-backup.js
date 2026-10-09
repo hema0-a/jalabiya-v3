@@ -94,14 +94,14 @@ export async function createBackup(options = {}) {
     const counts = {};
 
     for (const s of BACKUP_STORES) {
-      try {
-        const list = await idb.getAll(s);
-        stores[s] = Array.isArray(list) ? list : [];
-        counts[s] = stores[s].length;
-      } catch {
-        stores[s] = [];
-        counts[s] = 0;
+      let list;
+      try { list = await idb.getAll(s); }
+      catch (e) {
+        /* نسخة ناقصة بصمت أخطر من لا نسخة: الاستعادة منها كانت ستمسح هذا المخزن */
+        return { ok: false, error: 'تعذّرت قراءة «' + s + '» — لم تُنشأ النسخة' };
       }
+      stores[s] = Array.isArray(list) ? list : [];
+      counts[s] = stores[s].length;
     }
 
     const sizeKB = estimateSizeKB(stores);
@@ -133,10 +133,18 @@ export async function createBackup(options = {}) {
 async function pruneOldBackups() {
   const all = await idb.getAll(STORES.BACKUPS);
   const max = LIMITS.maxBackups || 7;
-  if (all.length <= max) return 0;
-
   const sorted = all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  const excess = sorted.slice(max);
+
+  /* كل نسخة تحمل الصور كاملة: عند كبر الحجم الكلي نُبقي أقل عدداً (لا أقل من 3) حتى لا تمتلئ مساحة المتصفح */
+  const MAX_TOTAL_KB = 40 * 1024;
+  let keep = Math.min(sorted.length, max);
+  let total = sorted.slice(0, keep).reduce((n, b) => n + (Number(b.sizeKB) || 0), 0);
+  while (keep > 3 && total > MAX_TOTAL_KB) {
+    keep--;
+    total -= Number(sorted[keep].sizeKB) || 0;
+  }
+  if (sorted.length <= keep) return 0;
+  const excess = sorted.slice(keep);
 
   for (const b of excess) {
     await idb.remove(STORES.BACKUPS, b.id);

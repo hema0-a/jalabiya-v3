@@ -17,6 +17,8 @@ import { el } from '../core/dom.js';
 import { auth } from '../security/auth.js';
 import { settings } from '../data/repos/settings.js';
 import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
+import { STORE_NAMES } from '../data/schema.js';
+import * as idb from '../data/idb.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -68,6 +70,19 @@ function setAppHidden(hidden) {
    2. بناء الواجهة
    ========================================================================== */
 
+/**
+ * «نسيت الرقم السري»: لا يمكن إزالة الرقم دون مسح البيانات (وإلا صار القفل بلا قيمة).
+ * يمسح كل مخازن هذا الجهاز بما فيها النسخ الاحتياطية المحلية، ثم يزيل الرقم والجلسة.
+ * يمكن استعادة البيانات بعدها من السحابة أو من ملف JSON مُصدَّر سابقاً.
+ * @returns {Promise<void>}
+ */
+export async function wipeAllLocalData() {
+  for (const s of STORE_NAMES) {
+    await idb.clear(s);
+  }
+  auth.reset();
+}
+
 function buildOverlay(cfg, onSubmit) {
   const ws = cfg.workshop || {};
   const ls = cfg.lockScreen || DEFAULT_SETTINGS.lockScreen;
@@ -112,6 +127,31 @@ function buildOverlay(cfg, onSubmit) {
   if (ws.name) children.push(el('div', { style: { fontSize: '22px', fontWeight: '700' } }, String(ws.name)));
   children.push(el('div', { style: { fontSize: '15px', opacity: '0.9' } }, String(ls.message || DEFAULT_SETTINGS.lockScreen.message)));
   children.push(input, status, button);
+
+  /* --- نسيت الرقم السري --- */
+  const forgotLink = el('button', {
+    type: 'button',
+    style: {
+      background: 'none', border: 'none', color: '#ffffffcc', textDecoration: 'underline',
+      fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', marginTop: '6px',
+    },
+  }, 'نسيت الرقم السري؟');
+  const confirmInput = el('input', {
+    type: 'text', placeholder: 'اكتب: مسح', autocomplete: 'off', 'aria-label': 'تأكيد المسح',
+    style: { width: '180px', fontSize: '16px', textAlign: 'center', padding: '8px', borderRadius: '10px', border: '2px solid #ffffff88', background: '#ffffffee', color: '#7A1F1F' },
+  });
+  const wipeBtn = el('button', {
+    type: 'button',
+    style: { padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '700', background: '#B3261E', color: '#fff', fontFamily: 'inherit' },
+  }, 'مسح بيانات هذا الجهاز وإزالة الرقم');
+  const forgotPanel = el('div', {
+    style: { display: 'none', flexDirection: 'column', alignItems: 'center', gap: '10px', maxWidth: '320px', fontSize: '13px', lineHeight: '1.7' },
+  }, [
+    el('div', {}, '⚠️ لا يمكن استرجاع الرقم. الاستمرار يمسح كل بيانات التطبيق من هذا الجهاز (العملاء، الطلبات، الدفعات، والنسخ المحلية). يمكنك استعادتها بعدها من السحابة أو من ملف JSON إن كنت قد صدّرته.'),
+    confirmInput,
+    wipeBtn,
+  ]);
+  children.push(forgotLink, forgotPanel);
 
   const bg = ls.background
     ? 'linear-gradient(#0008,#0008), center/cover no-repeat url("' + String(ls.background).replace(/["\\\n\r]/g, '') + '")'
@@ -167,6 +207,21 @@ function buildOverlay(cfg, onSubmit) {
       }
     } finally { busy = false; }
   };
+
+  forgotLink.addEventListener('click', () => {
+    forgotPanel.style.display = forgotPanel.style.display === 'none' ? 'flex' : 'none';
+  });
+  wipeBtn.addEventListener('click', async () => {
+    if (confirmInput.value.trim() !== 'مسح') { status.textContent = 'اكتب كلمة «مسح» للتأكيد'; return; }
+    wipeBtn.disabled = true;
+    try {
+      await wipeAllLocalData();
+      location.reload();
+    } catch (e) {
+      wipeBtn.disabled = false;
+      status.textContent = '❌ تعذّر المسح: ' + (e && e.message ? e.message : e);
+    }
+  });
 
   button.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });

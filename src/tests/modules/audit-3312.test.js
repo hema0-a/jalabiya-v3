@@ -9,6 +9,8 @@ import { STORAGE_KEYS, LIMITS } from '../../core/config.js';
 import { apply as applySnapshot } from '../../sync/firestore-sync.js';
 import * as idb from '../../data/idb.js';
 import { restoreBackup } from '../../services/auto-backup.js';
+import * as fsync from '../../sync/firestore-sync.js';
+import { wipeAllLocalData } from '../../ui/lock-screen.js';
 import { withDepositPayments, orderPaidBreakdown, unrecordedDeposit } from '../../services/payments-view.js';
 
 register('audit v3.3.12 pin security', async (t) => {
@@ -119,4 +121,84 @@ register('audit v3.3.12 restore safety', async (t) => {
   await idb.remove('backups', 'old-backup-test');
   for (const b of await idb.getAll('backups')) { if (String(b.label || '').includes('قبل الاستعادة')) await idb.remove('backups', b.id); }
   await idb.clear('customers'); await idb.clear('referrals');
+});
+
+/* Firestore وهمي في الذاكرة يفرض حد 1 MiB للمستند */
+function fakeFirestore() {
+  const store = new Map();
+  const doc = (db, path) => ({ path });
+  return {
+    store,
+    backend: {
+      db: {},
+      fsMod: {
+        doc,
+        setDoc: async (ref, data) => {
+          if (new TextEncoder().encode(JSON.stringify(data)).length > 1048576) throw new Error('document too large');
+          store.set(ref.path, JSON.parse(JSON.stringify(data)));
+        },
+        getDoc: async (ref) => ({ exists: () => store.has(ref.path), data: () => store.get(ref.path) }),
+        deleteDoc: async (ref) => { store.delete(ref.path); },
+      },
+    },
+  };
+}
+
+register('audit v3.3.12 chunked sync', async (t) => {
+  const fake = fakeFirestore();
+  fsync._setBackendForTest(fake.backend);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+
+  /* ~2.4 MB من البيانات: كان يفشل بحد 1 MB في الصيغة القديمة */
+  const big = 'x'.repeat(60000);
+  for (let i = 0; i < 40; i++) await idb.put('orders', { id: 'o' + i, notes: big });
+  await idb.put('customers', { id: 'c1', name: 'عميل' });
+  await idb.put('workerPayments', { id: 'wp1', amount: 5 });
+  await idb.put('referrals', { id: 'r1', name: 'إحالة' });
+
+  const r = await fsync.push('uid1');
+  const main = fake.store.get('users_v3/uid1/data/main');
+  await t.test('1. رفع بيانات أكبر من 1 MB ينجح (شرائح) ويشمل المخازن الجديدة',
+    r.ok === true && main.version === 2 && main.manifest.orders.chunks >= 3 &&
+    main.manifest.workerPayments.count === 1 && main.manifest.referrals.count === 1);
+
+  const pulled = await fsync.pull('uid1');
+  await t.test('2. pull يعيد تجميع كل السجلات بالعدد نفسه',
+    pulled.ok === true && pulled.data.stores.orders.length === 40 && pulled.data.stores.customers.length === 1);
+
+  await idb.clear('orders'); await idb.clear('workerPayments');
+  const ap = await fsync.apply(pulled.data);
+  await t.test('3. apply يستعيد البيانات محلياً (دورة رفع/تنزيل كاملة)',
+    ap.ok === true && (await idb.getAll('orders')).length === 40 && (await idb.getAll('workerPayments')).length === 1);
+
+  /* شريحة مفقودة = رفض بلا تطبيق جزئي */
+  fake.store.delete('users_v3/uid1/data/store_orders_1');
+  const broken = await fsync.pull('uid1');
+  await t.test('4. شريحة مفقودة → خطأ واضح بدل بيانات ناقصة', broken.ok === false);
+
+  /* تقليل البيانات يحذف الشرائح الزائدة */
+  for (let i = 1; i < 40; i++) await idb.remove('orders', 'o' + i);
+  const r2 = await fsync.push('uid1');
+  await t.test('5. إعادة الرفع بعد التقليل تحذف الشرائح الزائدة',
+    r2.ok === true && !fake.store.has('users_v3/uid1/data/store_orders_1') && fake.store.has('users_v3/uid1/data/store_orders_0'));
+
+  /* توافق مع الصيغة القديمة */
+  fake.store.set('users_v3/uid2/data/main', { stores: { customers: [{ id: 'old1' }] }, updatedAt: 1 });
+  const legacy = await fsync.pull('uid2');
+  await t.test('6. pull يقرأ الصيغة القديمة (مستند واحد)', legacy.ok === true && legacy.data.stores.customers[0].id === 'old1');
+
+  await idb.put('orders', { id: 'huge', notes: 'y'.repeat(800000) });
+  const huge = await fsync.push('uid1');
+  await t.test('7. سجل أكبر من 700KB يُرفض برسالة واضحة', huge.ok === false && /700KB/.test(huge.error));
+
+  fsync._setBackendForTest(null);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+});
+
+register('audit v3.3.12 forgot pin', async (t) => {
+  await idb.put('customers', { id: 'fp1', name: 'x' });
+  await auth.setPinAndSave('1234');
+  await wipeAllLocalData();
+  await t.test('1. «نسيت الرقم»: تُمسح البيانات ويُزال الرقم والجلسة',
+    (await idb.getAll('customers')).length === 0 && auth.hasPin() === false && auth.getSession() === null);
 });
