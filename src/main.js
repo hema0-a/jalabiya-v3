@@ -102,6 +102,7 @@ async function loadPageModule(pageId) {
       case 'dashboard':          return await import('./pages/dashboard.js');
       case 'customers':          return await import('./pages/customers.js');
       case 'orders':             return await import('./pages/orders.js');
+      case 'appointments':       return await import('./pages/appointments.js');
       case 'payments':           return await import('./pages/payments.js');
       case 'inventory':          return await import('./pages/inventory.js');
       case 'workers':            return await import('./pages/workers.js');
@@ -152,6 +153,7 @@ const SIDEBAR_SECTIONS = [
   { title: 'العمليات', items: [
     { id: 'customers', icon: '👥', label: 'العملاء' },
     { id: 'orders',    icon: '📋', label: 'الطلبات' },
+    { id: 'appointments', icon: '🗓️', label: 'المواعيد' },
     { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
     { id: 'payments',  icon: '💰', label: 'الدفعات' },
   ]},
@@ -194,6 +196,7 @@ const MODULE_EXPORT_MAP = {
   dashboard:            'dashboardPage',
   customers:            'customersPage',
   orders:               'ordersPage',
+  appointments:         'appointmentsPage',
   payments:             'paymentsPage',
   inventory:            'inventoryPage',
   workers:              'workersPage',

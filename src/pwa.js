@@ -36,6 +36,7 @@ export function registerServiceWorker() {
   const doRegister = () => {
     navigator.serviceWorker.register('sw.js', { scope: './' })
       .then((reg) => {
+        if (!reg) return;
         console.log('[PWA] ✅ تم تسجيل SW — النطاق:', reg.scope);
 
         /* --- فحص تحديثات دوري (كل ساعة) --- */
