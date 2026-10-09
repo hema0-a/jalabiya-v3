@@ -11,6 +11,7 @@ import { el, clear } from '../core/dom.js';
 import { uid, formatEGP, formatDate } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
+import { payments as paymentsRepoForDelete } from '../data/repos/payments.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
@@ -564,9 +565,17 @@ function openOrderForm(existing = null) {
 async function deleteOrder(order) {
   const c = state.customerMap[order.customerId];
   const label = c ? c.name : 'طلب';
+  let linkedNote = '';
+  try {
+    const linked = await paymentsRepoForDelete.findByOrder(order.id);
+    if (linked.length > 0) {
+      linkedNote = '\n\n⚠️ مرتبط به ' + linked.length +
+        ' دفعة ستبقى محسوبة في الإيرادات (يمكنك حذفها من صفحة المدفوعات).';
+    }
+  } catch (e) { /* نكمل بدون التنبيه */ }
   const ok = await modal.confirm({
     title: 'حذف طلب',
-    message: 'هل أنت متأكد من حذف طلب "' + label + '"؟',
+    message: 'هل أنت متأكد من حذف طلب "' + label + '"؟' + linkedNote,
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;

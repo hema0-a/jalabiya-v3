@@ -10,6 +10,7 @@
    - يعرض 3 رسوم بيانية: مبيعات 7 أيام، توزيع الطلبات، ملخص مالي.
    ========================================================================== */
 
+import { withDepositPayments } from '../services/payments-view.js';
 import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -130,7 +131,7 @@ function computeFinance(paymentsList, expensesList) {
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, paymentsList, expensesList, todayAppts, s] = await Promise.all([
+  const [customersList, ordersList, rawPayments, expensesList, todayAppts, s] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
@@ -138,6 +139,7 @@ async function loadKPIs() {
     appointments.getToday(),
     settings.get().catch(() => ({})),
   ]);
+  const paymentsList = withDepositPayments(rawPayments, ordersList);
 
   const activeOrders = ordersList.filter(
     (o) => o.status !== 'delivered' && o.status !== 'cancelled'

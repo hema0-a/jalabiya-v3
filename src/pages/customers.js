@@ -7,6 +7,7 @@
    - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة).
    ========================================================================== */
 
+import { withDepositPayments } from '../services/payments-view.js';
 import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -69,11 +70,12 @@ export function filterCustomers(list, query) {
    ========================================================================== */
 
 async function loadCustomers() {
-  const [list, ordersList, paymentsList] = await Promise.all([
+  const [list, ordersList, rawPayments] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
   ]);
+  const paymentsList = withDepositPayments(rawPayments, ordersList);
 
   const totals = {};
   paymentsList.forEach((p) => {
@@ -353,9 +355,21 @@ function openCustomerForm(existing = null) {
    ========================================================================== */
 
 async function deleteCustomer(customer) {
+  /* تنبيه بالسجلات المرتبطة: تبقى في التطبيق بلا اسم عميل حتى يُسترجع من السلة */
+  let linkedNote = '';
+  try {
+    const [co, cp] = await Promise.all([
+      orders.findByCustomer(customer.id),
+      payments.findByCustomer(customer.id),
+    ]);
+    if (co.length > 0 || cp.length > 0) {
+      linkedNote = '\n\n⚠️ له ' + co.length + ' طلب و' + cp.length +
+        ' دفعة ستبقى في التطبيق دون اسم عميل. يمكنك استرجاعه من سلة المحذوفات لإعادة الربط.';
+    }
+  } catch (e) { /* نكمل بدون التنبيه */ }
   const ok = await modal.confirm({
     title: 'حذف عميل',
-    message: 'هل أنت متأكد من حذف "' + customer.name + '"؟',
+    message: 'هل أنت متأكد من حذف "' + customer.name + '"؟' + linkedNote,
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;

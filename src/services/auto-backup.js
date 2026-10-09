@@ -250,19 +250,19 @@ export async function restoreBackup(id) {
       return { ok: false, error: 'النسخة غير موجودة أو تالفة' };
     }
 
-    const restored = {};
+    /* نسخة أمان قبل الاستبدال: إن لم تنجح لا نمس البيانات الحالية */
+    const safety = await createBackup({ label: 'قبل الاستعادة' });
+    if (!safety.ok) {
+      return { ok: false, error: 'تعذّر إنشاء نسخة أمان قبل الاستعادة: ' + (safety.error || '') };
+    }
+
+    /* استبدال ذرّي: إن فشل أي سجل تُلغى العملية كلها وتبقى البيانات كما هي */
+    const plan = {};
     for (const s of BACKUP_STORES) {
       const list = Array.isArray(backup.stores[s]) ? backup.stores[s] : [];
-      try {
-        await idb.clear(s);
-      } catch (e) { /* ignore — قد يكون مخزن غير موجود */ }
-
-      for (const rec of list) {
-        try { await idb.put(s, rec); }
-        catch (e) { /* skip */ }
-      }
-      restored[s] = list.length;
+      plan[s] = { clear: true, records: list.filter((r) => r && typeof r === 'object') };
     }
+    const restored = await idb.writeBatch(plan);
 
     return { ok: true, restored };
   } catch (err) {

@@ -225,6 +225,41 @@ export async function getByIndex(storeName, indexName, value) {
   return wrap(store.index(indexName).getAll(value));
 }
 
+/**
+ * كتابة ذرّية (Atomic) لعدة مخازن في معاملة واحدة: كلها تنجح أو كلها تُلغى.
+ * تُستخدم في الاستعادة والاستيراد والمزامنة حتى لا تبقى البيانات نصف مكتوبة.
+ * @param {Object<string,{clear?:boolean, records:Array}>} plan
+ * @returns {Promise<Object<string,number>>} عدد السجلات المكتوبة لكل مخزن
+ */
+export async function writeBatch(plan) {
+  const db = await openDB();
+  const names = Object.keys(plan).filter((n) => db.objectStoreNames.contains(n));
+  if (names.length === 0) return {};
+  return new Promise((resolve, reject) => {
+    const counts = {};
+    let tx;
+    try {
+      tx = db.transaction(names, 'readwrite');
+    } catch (e) { reject(e); return; }
+    tx.oncomplete = () => { writeVersion++; resolve(counts); };
+    tx.onerror = () => reject(tx.error || new Error('[idb] batch failed'));
+    tx.onabort = () => reject(tx.error || new Error('[idb] batch aborted'));
+    try {
+      for (const n of names) {
+        const store = tx.objectStore(n);
+        const { clear: doClear, records } = plan[n];
+        if (doClear) store.clear();
+        let c = 0;
+        for (const rec of (records || [])) { store.put(rec); c++; }
+        counts[n] = c;
+      }
+    } catch (e) {
+      try { tx.abort(); } catch (_) { /* ignore */ }
+      reject(e);
+    }
+  });
+}
+
 export function closeDB() {
   if (dbInstance) {
     dbInstance.close();

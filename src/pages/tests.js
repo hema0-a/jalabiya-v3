@@ -9,6 +9,7 @@
 
 import { el, clear } from '../core/dom.js';
 import { runAll } from '../tests/registry.js';
+import * as idb from '../data/idb.js';
 import '../tests/index.js';  // ← يُشغّل كل register() في modules/
 
 /* ==========================================================================
@@ -100,6 +101,22 @@ function buildSummary() {
 
 async function runTests() {
   if (state.isRunning) return;
+
+  /* 🛡️ حماية: الاختبارات تمسح المخازن (customers.clear() ...) فلا تعمل على بيانات حقيقية */
+  try {
+    const guarded = ['customers', 'orders', 'payments', 'inventory', 'workers',
+      'expenses', 'appointments', 'portfolio', 'commitments', 'houseExpenses',
+      'personalLoans', 'referrals'];
+    let real = 0;
+    for (const sn of guarded) real += await idb.count(sn).catch(() => 0);
+    if (real > 0) {
+      state.outputEl.textContent =
+        '🛑 تم إيقاف الاختبارات لحماية بياناتك.\n' +
+        'الاختبارات تمسح الجداول قبل تجربتها، وفي التطبيق ' + real + ' سجل حقيقي.\n' +
+        'شغّلها فقط على نسخة تجريبية فارغة (متصفح آخر أو بعد مسح بيانات الموقع).';
+      return;
+    }
+  } catch (e) { /* إن تعذّر الفحص نكمل كما كان */ }
 
   state.isRunning = true;
   state.runBtn.disabled = true;

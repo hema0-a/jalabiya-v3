@@ -585,16 +585,34 @@ async function importAllData(file) {
 
   try {
     const data = JSON.parse(await file.text());
-    if (!data || !data.stores) throw new Error('ملف غير صالح');
+    if (!data || !data.stores || typeof data.stores !== 'object') throw new Error('ملف غير صالح');
     const db = await import('../../data/idb.js');
-    let total = 0;
+
+    /* مخازن مسموحة فقط (نفس قائمة التصدير) — لا نكتب في backups/trash ولا في اسم عشوائي */
+    const ALLOWED = [
+      'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
+      'appointments', 'settings', 'portfolio', 'commitments',
+      'commitmentPayments', 'savingsGoals', 'houseExpenses',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
+    ];
+    const plan = {};
+    let skipped = 0;
     for (const [sn, recs] of Object.entries(data.stores)) {
-      if (!Array.isArray(recs)) continue;
-      for (const r of recs) {
-        await db.put(sn, r);
-        total++;
-      }
+      if (!ALLOWED.includes(sn) || !Array.isArray(recs)) continue;
+      const valid = recs.filter((r) => r && typeof r === 'object' && r.id != null);
+      skipped += recs.length - valid.length;
+      plan[sn] = { clear: false, records: valid };
     }
+    if (Object.keys(plan).length === 0) throw new Error('لا توجد بيانات صالحة في الملف');
+
+    /* نسخة أمان قبل الدمج */
+    const safety = await createBackup({ label: 'قبل الاستيراد' });
+    if (!safety.ok) throw new Error('تعذّر إنشاء نسخة أمان: ' + (safety.error || ''));
+
+    /* كتابة ذرّية: كلها أو لا شيء */
+    const counts = await db.writeBatch(plan);
+    const total = Object.values(counts).reduce((a, n) => a + n, 0);
+    if (skipped > 0) toast.warning('تم تجاهل ' + skipped + ' سجل غير صالح');
     toast.success('تم استيراد ' + total + ' عنصر');
   } catch (err) {
     toast.danger('فشل: ' + err.message);
@@ -756,6 +774,14 @@ const cloudSyncSection = {
           }
           if (!res.data) {
             toast.warning('لا توجد بيانات سحابية بعد');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          /* نسخة أمان قبل استبدال البيانات المحلية */
+          const safety = await createBackup({ label: 'قبل التنزيل من السحابة' });
+          if (!safety.ok) {
+            toast.danger('تعذّر إنشاء نسخة أمان — لم تتغير بياناتك');
             pullBtn.disabled = false;
             pullBtn.textContent = '⬇️ تنزيل من السحابة';
             return;

@@ -134,15 +134,13 @@ export async function apply(snapshot) {
     return { ok: false, error: 'snapshot غير صالح' };
   }
   try {
-    const counts = {};
+    /* استبدال ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
+    const plan = {};
     for (const s of SYNC_STORES) {
       const list = Array.isArray(snapshot.stores[s]) ? snapshot.stores[s] : [];
-      await idb.clear(s).catch(() => {});
-      for (const rec of list) {
-        await idb.put(s, rec);
-      }
-      counts[s] = list.length;
+      plan[s] = { clear: true, records: list.filter((r) => r && typeof r === 'object' && r.id != null) };
     }
+    const counts = await idb.writeBatch(plan);
     return { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };

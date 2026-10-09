@@ -12,6 +12,7 @@ import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { MONTH_NAMES, DAY_NAMES_FULL } from '../core/config.js';
 import { getWriteVersion } from '../data/idb.js';
+import { withDepositPayments } from './payments-view.js';
 
 /* ==========================================================================
    1. Cache
@@ -117,12 +118,14 @@ export function calculatePerformanceScore(stats) {
    ========================================================================== */
 
 async function computeKpis(period) {
-  const [ordersList, paymentsList, expensesList, customersList] = await Promise.all([
+  const [ordersList, rawPayments, expensesList, customersList] = await Promise.all([
     orders.list(),
     payments.list(),
     expenses.list(),
     customers.list(),
   ]);
+
+  const paymentsList = withDepositPayments(rawPayments, ordersList);
 
   const { startMs, endMs } = getPeriodRange(period);
   const inRange = (ts) => ts >= startMs && ts < endMs;

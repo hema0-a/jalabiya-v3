@@ -10,6 +10,8 @@
    ========================================================================== */
 
 import { settings } from '../data/repos/settings.js';
+import { payments as paymentsRepo } from '../data/repos/payments.js';
+import { withDepositPayments } from './payments-view.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
 /* ==========================================================
@@ -303,7 +305,15 @@ export async function printOrderInvoice(order, customer) {
   const discountAmount = Number(order.discountAmount) || 0;
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
   const total = Number(order.amount) || 0;
-  const deposit = Number(order.deposit) || 0;
+  /* المدفوع: الدفعات المسجّلة للطلب إن وُجدت، وإلا المقدم (نفس قاعدة بقية التطبيق) */
+  let recordedPaid = 0;
+  try {
+    const recorded = await paymentsRepo.findByOrder(order.id);
+    recordedPaid = recorded.reduce((sum, pm) => sum + (Number(pm.amount) || 0), 0);
+  } catch (e) { /* نكمل بالمقدم */ }
+  const hasRecorded = recordedPaid > 0;
+  const deposit = hasRecorded ? recordedPaid : (Number(order.deposit) || 0);
+  const paidLabel = hasRecorded ? 'المدفوع' : 'المقدم';
   const remaining = Math.max(0, total - deposit);
 
   const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
@@ -366,7 +376,7 @@ export async function printOrderInvoice(order, customer) {
 
   if (deposit > 0) {
     totalsRows +=
-      '<tr class="deposit"><td>المقدم</td>' +
+      '<tr class="deposit"><td>' + paidLabel + '</td>' +
       '<td style="text-align:left">− ' + formatEGP(deposit) + '</td></tr>' +
       '<tr class="' + (remaining > 0 ? 'highlight' : 'grand') + '">' +
         '<td>' + (remaining > 0 ? 'المتبقي' : 'مدفوع بالكامل') + '</td>' +
@@ -473,7 +483,11 @@ export async function printCustomerStatement(customer, orders, payments) {
 
   const workshop = await getWorkshop();
 
-  const totalOrders = (orders || []).reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  /* نفس قواعد بقية التطبيق: لا تُحسب الطلبات الملغاة، ويُحسب المقدم للطلب بلا دفعات */
+  payments = withDepositPayments(payments || [], orders || []);
+  const totalOrders = (orders || [])
+    .filter((o) => o.status !== 'cancelled')
+    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const totalPaid = (payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = Math.max(0, totalOrders - totalPaid);
 
@@ -500,7 +514,7 @@ export async function printCustomerStatement(customer, orders, payments) {
   if (!payments || payments.length === 0) {
     paymentsRows = '<tr><td colspan="3" style="text-align:center;color:#999;padding:20px">لا توجد دفعات</td></tr>';
   } else {
-    const methods = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى' };
+    const methods = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى', deposit: 'مقدم الطلب' };
     const sorted = [...payments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     sorted.forEach((p) => {
       paymentsRows +=
