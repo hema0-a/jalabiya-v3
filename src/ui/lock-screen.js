@@ -16,7 +16,7 @@
 import { el } from '../core/dom.js';
 import { auth } from '../security/auth.js';
 import { settings } from '../data/repos/settings.js';
-import { DEFAULT_SETTINGS } from '../core/config.js';
+import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -162,7 +162,7 @@ function buildOverlay(cfg, onSubmit) {
       if (!res.success) {
         input.value = '';
         if (res.reason === 'locked' || res.locked) refreshLockState();
-        else status.textContent = '❌ الرقم غير صحيح (' + res.attempts + '/5)';
+        else status.textContent = '❌ الرقم غير صحيح (' + res.attempts + '/' + LIMITS.maxPinAttempts + ')';
         input.focus();
       }
     } finally { busy = false; }

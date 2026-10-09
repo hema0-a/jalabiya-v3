@@ -24,7 +24,7 @@ import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { suggestDueDate } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
-  getTotalWorkTime, getActiveSession, startSession, stopSession,
+  getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
 } from '../services/order-timing.js';
 import * as draft from '../services/draft-manager.js';
 
@@ -462,6 +462,12 @@ function openOrderForm(existing = null) {
             notes: notesInput.value.trim(),
             referenceImage: imagePicker.getValue() || '',
           };
+          /* تاريخ التسليم الفعلي (تعتمد عليه مؤشرات الأداء): يُحفظ عند التحوّل لـ delivered ويُمسح عند الرجوع منها */
+          if (data.status === 'delivered') {
+            data.deliveredAt = (isEdit && existing.deliveredAt) || Date.now();
+          } else if (isEdit && existing.deliveredAt) {
+            data.deliveredAt = null;
+          }
 
           try {
             if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }
@@ -592,7 +598,9 @@ async function advanceStatus(order) {
   if (idx < 0 || idx >= STATUS_ORDER.length - 1) { toast.info('لا يمكن تغيير الحالة'); return; }
   const next = STATUS_ORDER[idx + 1];
   try {
-    await orders.update(order.id, { status: next });
+    const patch = { status: next };
+    if (next === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
+    await orders.update(order.id, patch);
     toast.success('الحالة: ' + STATUS_MAP[next].label);
     await refreshAll();
   } catch (err) { toast.danger('فشل التحديث: ' + err.message); }
@@ -761,7 +769,7 @@ function buildUrgentAlerts() {
   const todayMs = todayStart.getTime();
 
   const overdue = state.orders.filter((o) =>
-    o.dueDate && o.dueDate < now &&
+    isPastDue(o.dueDate, now) &&
     o.status !== 'delivered' && o.status !== 'cancelled'
   );
 

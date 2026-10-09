@@ -17,6 +17,7 @@ import { appointments } from '../data/repos/appointments.js';
 import { inventory } from '../data/repos/inventory.js';
 import { commitments } from '../data/repos/commitments.js';
 import { settings } from '../data/repos/settings.js';
+import { isPastDue } from '../services/order-timing.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
 
 /* ==========================================================================
@@ -55,11 +56,11 @@ export async function getNotifications() {
     const soonMs = now + DUE_SOON_DAYS * DAY_MS;
 
     const overdue = allOrders.filter((o) =>
-      o.dueDate && o.dueDate < now &&
+      isPastDue(o.dueDate, now) &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
     const dueSoon = allOrders.filter((o) =>
-      o.dueDate && o.dueDate >= now && o.dueDate <= soonMs &&
+      o.dueDate && !isPastDue(o.dueDate, now) && o.dueDate <= soonMs &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
     const ready = allOrders.filter((o) => o.status === 'ready');

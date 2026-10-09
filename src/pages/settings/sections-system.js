@@ -567,8 +567,11 @@ async function exportAllData() {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'jalabiya-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    /* الرابط يجب أن يكون في الـ DOM ولا يُلغى فوراً وإلا يفشل التنزيل في Safari/بعض متصفحات الجوال */
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success('تم تنزيل النسخة');
   } catch (err) {
     toast.danger('فشل: ' + err.message);

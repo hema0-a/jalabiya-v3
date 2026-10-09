@@ -10,6 +10,7 @@
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { DEFAULT_SETTINGS } from '../core/config.js';
+import { isPastDue } from './order-timing.js';
 
 /* --- مفتاح تتبّع الإشعارات المُرسلة (localStorage) --- */
 const SENT_KEY = 'jalabiya_v3_notif_sent';
@@ -187,7 +188,7 @@ export async function checkAndNotify() {
     const all = await ordersRepo.list();
     const now = Date.now();
     const overdue = all.filter((o) =>
-      o.dueDate && o.dueDate < now &&
+      isPastDue(o.dueDate, now) &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
 

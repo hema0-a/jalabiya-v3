@@ -14,6 +14,7 @@ import { MONTH_NAMES, DAY_NAMES_FULL } from '../core/config.js';
 import { getWriteVersion } from '../data/idb.js';
 import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
+import { dueDayEndMs } from './order-timing.js';
 
 /* ==========================================================================
    1. Cache
@@ -43,6 +44,21 @@ function safeDiv(a, b, fallback = 0) {
 
 function startOfMonth(y, m) {
   return new Date(y, m, 1, 0, 0, 0, 0).getTime();
+}
+
+/** الطلب الملغي لا يُحسب في القيم ولا المتوسطات (نفس قاعدة بقية الشاشات). */
+const isLive = (o) => o && o.status !== 'cancelled';
+
+/** تاريخ التسليم الفعلي: deliveredAt إن وُجد (updatedAt يتغيّر مع أي تعديل لاحق فلا يصلح). */
+const deliveredTs = (o) => Number(o.deliveredAt) || Number(o.updatedAt) || 0;
+
+/** نوع الطلب = اسم أول بند (نفس تجميع صفحة الطلبات)، لا نص الملاحظات الحر. */
+function orderTypeName(o) {
+  if (Array.isArray(o.items) && o.items.length > 0) {
+    const n = String(o.items[0].name || '').trim();
+    if (n && n !== 'بند') return n;
+  }
+  return String(o.garmentType || o.notes || 'بدون نوع').trim() || 'بدون نوع';
 }
 
 /**
@@ -133,7 +149,8 @@ async function computeKpis(period) {
   const { startMs, endMs } = getPeriodRange(period);
   const inRange = (ts) => ts >= startMs && ts < endMs;
 
-  const fOrders = ordersList.filter((o) => inRange(o.createdAt || 0));
+  const liveOrders = ordersList.filter(isLive);
+  const fOrders = liveOrders.filter((o) => inRange(o.createdAt || 0));
   const fPayments = paymentsList.filter((p) => inRange(p.createdAt || 0));
   const fExpenses = expensesList.filter((e) => inRange(e.date || 0));
 
@@ -149,16 +166,16 @@ async function computeKpis(period) {
 
   /* متوسط وقت التنفيذ */
   const completionDays = deliveredOrders
-    .filter((o) => o.createdAt && o.updatedAt)
-    .map((o) => (o.updatedAt - o.createdAt) / DAY_MS)
+    .filter((o) => o.createdAt && deliveredTs(o))
+    .map((o) => (deliveredTs(o) - o.createdAt) / DAY_MS)
     .filter((d) => d > 0 && d < 365);
   const avgCompletionDays = completionDays.length > 0
     ? sum(completionDays) / completionDays.length
     : 0;
 
   /* التسليم في الموعد */
-  const deliveredWithDeadline = deliveredOrders.filter((o) => o.dueDate && o.updatedAt);
-  const onTimeCount = deliveredWithDeadline.filter((o) => o.updatedAt <= o.dueDate).length;
+  const deliveredWithDeadline = deliveredOrders.filter((o) => o.dueDate && deliveredTs(o));
+  const onTimeCount = deliveredWithDeadline.filter((o) => deliveredTs(o) <= dueDayEndMs(o.dueDate)).length;
   const onTimeRate = safeDiv(onTimeCount * 100, deliveredWithDeadline.length, 0);
 
   /* نسبة التسليم */
@@ -174,7 +191,7 @@ async function computeKpis(period) {
 
   /* أفضل 5 عملاء */
   const customerTotals = {};
-  ordersList.forEach((o) => {
+  liveOrders.forEach((o) => {
     if (!o.customerId) return;
     const c = customerTotals[o.customerId] = customerTotals[o.customerId] || { count: 0, total: 0 };
     c.count++;
@@ -194,8 +211,8 @@ async function computeKpis(period) {
 
   /* أكثر الأنواع مبيعاً */
   const typeCounts = {};
-  ordersList.forEach((o) => {
-    const t = o.notes || 'بدون نوع';
+  liveOrders.forEach((o) => {
+    const t = orderTypeName(o);
     if (!typeCounts[t]) typeCounts[t] = { count: 0, revenue: 0 };
     typeCounts[t].count++;
     typeCounts[t].revenue += Number(o.amount) || 0;
@@ -214,7 +231,7 @@ async function computeKpis(period) {
     const d = new Date(y, m - i, 1);
     const s = d.getTime();
     const e = new Date(y, m - i + 1, 1).getTime();
-    const mmOrders = ordersList.filter((o) => (o.createdAt || 0) >= s && (o.createdAt || 0) < e);
+    const mmOrders = liveOrders.filter((o) => (o.createdAt || 0) >= s && (o.createdAt || 0) < e);
     last6Months.push({
       month: MONTH_NAMES[d.getMonth()],
       count: mmOrders.length,
@@ -225,7 +242,7 @@ async function computeKpis(period) {
   /* أداء أيام الأسبوع */
   const dayTotals = [0, 0, 0, 0, 0, 0, 0];
   const dayCounts = [0, 0, 0, 0, 0, 0, 0];
-  ordersList.forEach((o) => {
+  liveOrders.forEach((o) => {
     if (!o.createdAt) return;
     const wd = new Date(o.createdAt).getDay();
     dayTotals[wd] += Number(o.amount) || 0;
@@ -240,7 +257,7 @@ async function computeKpis(period) {
 
   /* إحصائيات عامة */
   const totalCustomersCount = customersList.length;
-  const totalOrdersCount = ordersList.length;
+  const totalOrdersCount = liveOrders.length;
   const avgOrdersPerCustomer = safeDiv(totalOrdersCount, totalCustomersCount, 0);
 
   /* الحسابات النهائية */
@@ -282,7 +299,7 @@ async function computeKpis(period) {
     weekdays,
     performance,
     hasData: fOrders.length > 0 || fPayments.length > 0 || fExpenses.length > 0,
-    lowData: ordersList.length > 0 && ordersList.length < 5,
+    lowData: liveOrders.length > 0 && liveOrders.length < 5,
   };
 }
 
@@ -296,7 +313,7 @@ async function computeKpis(period) {
  * @returns {Promise<Object>}
  */
 export async function getKpisData(period = 'month') {
-  const key = period + '_' + _dataHash + '_' + getWriteVersion();
+  const key = period + '_' + new Date().toDateString() + '_' + _dataHash + '_' + getWriteVersion();
   if (_cache.has(key)) return _cache.get(key);
   const result = await computeKpis(period);
   _cache.set(key, result);
