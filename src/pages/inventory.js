@@ -9,7 +9,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { inventory } from '../data/repos/inventory.js';
+import { inventory, isLowStockItem } from '../data/repos/inventory.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -41,6 +41,7 @@ let state = {
   searchQuery: '',
   container: null,
   stats: null,
+  globalThreshold: 5,
 };
 
 /* ==========================================================================
@@ -63,10 +64,12 @@ export function filterInventory(list, category) {
    ========================================================================== */
 
 async function loadData() {
-  const [list, stats] = await Promise.all([
+  const [list, stats, globalThreshold] = await Promise.all([
     inventory.list(),
     inventory.getStats(),
+    inventory.getGlobalThreshold(),
   ]);
+  state.globalThreshold = globalThreshold;
   list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
   state.items = list;
   state.stats = stats;
@@ -251,8 +254,7 @@ async function adjustStock(item, delta) {
 
 function buildItemCard(item) {
   const cat = CATEGORY_MAP[item.category] || CATEGORY_MAP.other;
-  const threshold = Number(item.minQuantity) > 0 ? Number(item.minQuantity) : 5;
-  const isLow = Number(item.quantity) < threshold;
+  const isLow = isLowStockItem(item, state.globalThreshold);
 
   const card = el('div', {
     className: 'card',
@@ -481,7 +483,7 @@ export const inventoryPage = {
   destroy() {
     state = {
       items: [], activeCategory: 'all', searchQuery: '',
-      container: null, stats: null,
+      container: null, stats: null, globalThreshold: 5,
     };
   },
 };

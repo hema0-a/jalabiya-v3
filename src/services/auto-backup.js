@@ -149,6 +149,20 @@ async function pruneOldBackups() {
    ========================================================================== */
 
 /**
+ * هل في التطبيق أي بيانات حقيقية؟ (نتجاهل الإعدادات لأنها تُنشأ تلقائياً)
+ * @returns {Promise<boolean>}
+ */
+async function hasAnyData() {
+  for (const s of BACKUP_STORES) {
+    if (s === STORES.SETTINGS) continue;
+    try {
+      if ((await idb.count(s)) > 0) return true;
+    } catch (e) { /* مخزن غير متاح — نتجاوزه */ }
+  }
+  return false;
+}
+
+/**
  * التحقق من جدوى النسخ التلقائي وتشغيله إن حان الوقت.
  * @returns {Promise<{ran:boolean, id?:string, sizeKB?:number, reason?:string}>}
  */
@@ -169,6 +183,12 @@ export async function runAutoBackupIfDue() {
 
     if (diffHours < intervalHours) {
       return { ran: false, reason: 'not-due' };
+    }
+
+    /* لا نسخ تلقائي لقاعدة فارغة: وإلا تحلّ نسخٌ فارغة محل النسخ السليمة بعد التقليم
+       (يحتفظ التقليم بآخر 7 نسخ فقط) لو فُقدت البيانات لأي سبب. */
+    if (!(await hasAnyData())) {
+      return { ran: false, reason: 'empty' };
     }
 
     const res = await createBackup({ label: 'نسخة تلقائية' });

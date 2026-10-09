@@ -21,7 +21,19 @@ function wrap(request) {
   });
 }
 
+/* طلب فتح واحد مشترك: عند الإقلاع تُستدعى عشرات القراءات معاً، وكان كل استدعاء
+   يفتح اتصالاً جديداً ويُسقط الأقدم دون إغلاقه — اتصالات يتيمة تُعطّل ترقية القاعدة لاحقاً. */
+let openPromise = null;
+
 export function openDB() {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  if (!openPromise) {
+    openPromise = _openDB().finally(() => { openPromise = null; });
+  }
+  return openPromise;
+}
+
+function _openDB() {
   return new Promise((resolve, reject) => {
     if (dbInstance) return resolve(dbInstance);
 

@@ -508,15 +508,17 @@ export async function previewPortfolio(idOrObj, onEdit) {
  * @returns {Promise<void>}
  */
 export async function previewInventory(idOrObj, onEdit) {
-  const inventoryRepo = (await import('../data/repos/inventory.js')).inventory;
+  const inventoryModule = await import('../data/repos/inventory.js');
+  const inventoryRepo = inventoryModule.inventory;
+  const isLowStockItem = inventoryModule.isLowStockItem;
   const item = (typeof idOrObj === 'string') ? await inventoryRepo.find(idOrObj) : idOrObj;
   if (!item) return;
 
   const cats = {
     fabric: 'قماش', thread: 'خيوط', accessory: 'إكسسوارات',
-    tool: 'أدوات', other: 'أخرى',
+    button: 'أزرار', tool: 'أدوات', dye: 'صباغة', other: 'أخرى',
   };
-  const low = Number(item.quantity) < (Number(item.minQuantity) || 5);
+  const low = isLowStockItem(item, await inventoryRepo.getGlobalThreshold());
 
   const body = el('div', {}, [
     _row('📦', 'الفئة', cats[item.category] || 'أخرى'),

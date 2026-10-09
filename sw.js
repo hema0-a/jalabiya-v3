@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.8 — إكمال الكاش + تحديثات فورية
+   الإصدار: v3.3.9 — شاشة القفل + إصلاحات شاملة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.8';
+const CACHE_VERSION = 'v3.3.9';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -99,6 +99,7 @@ const PRECACHE_URLS = [
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
   './src/ui/dashboard-charts.js',
+  './src/ui/lock-screen.js',
   './src/ui/onboarding.js',
 
   /* --- Sync (Firebase) --- */

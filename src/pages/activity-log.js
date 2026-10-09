@@ -39,6 +39,8 @@ const TYPE_MAP = {
   'inventory:updated': { label: 'تحديث مخزون',     icon: '📦', color: '#1565C0' },
   'settings:updated':  { label: 'تحديث إعدادات',   icon: '⚙️', color: '#666' },
   'trash:restored':    { label: 'استرجاع',         icon: '♻️', color: '#2E7D32' },
+  'auth:login':        { label: 'فتح القفل',       icon: '🔓', color: '#2E7D32' },
+  'auth:failed':       { label: 'محاولة دخول فاشلة', icon: '🔐', color: '#C62828' },
 };
 
 /**

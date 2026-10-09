@@ -36,6 +36,7 @@ let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
 let mountNotifications, openNotifications;
+let ensureUnlocked, installAutoLock;
 let APP_CONFIG;
 try {
   ({ APP_CONFIG } = await import('./core/config.js'));
@@ -54,9 +55,19 @@ try {
   ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
   ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
   ({ mount: mountNotifications, open: openNotifications } = await import('./ui/notifications-center.js'));
+  ({ ensureUnlocked, installAutoLock } = await import('./ui/lock-screen.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
+}
+
+/* 🔒 شاشة القفل: لا تُرسم أي بيانات قبل إدخال الرقم السري (إن كان مُعيَّناً) */
+try {
+  await ensureUnlocked();
+  installAutoLock();
+} catch (e) {
+  /* فشل القفل لا يجب أن يحجب المستخدم عن بياناته بصمت — نسجّل ونكمل */
+  console.error('[Lock] تعذّر تشغيل شاشة القفل:', e);
 }
 
 async function loadPageModule(pageId) {

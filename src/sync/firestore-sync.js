@@ -17,6 +17,8 @@ const SYNC_STORES = [
 ];
 
 const VERSION = '10.12.0';
+/* حد مستند Firestore الواحد = 1,048,576 بايت (نترك هامشاً للترميز الداخلي) */
+const FIRESTORE_DOC_LIMIT_BYTES = 1000000;
 let _fsModule = null;
 
 /**
@@ -79,10 +81,27 @@ export async function push(uid) {
       counts[s] = list.length;
     }
 
+    /* حماية: رفع قاعدة فارغة يمسح نسخة السحابة السليمة (جهاز جديد / بيانات متصفح ممسوحة) */
+    const totalRecords = Object.values(counts).reduce((a, b) => a + b, 0);
+    if (totalRecords === 0) {
+      return { ok: false, error: 'لا توجد بيانات محلية لرفعها — الرفع الآن سيمسح بيانات السحابة' };
+    }
+
     const payload = {
       stores,
       updatedAt: Date.now(),
     };
+
+    /* Firestore يرفض المستند الأكبر من 1 MiB برسالة غامضة — نوضّحها قبل المحاولة */
+    const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+    if (bytes > FIRESTORE_DOC_LIMIT_BYTES) {
+      const mb = (bytes / 1048576).toFixed(2);
+      return {
+        ok: false,
+        error: 'حجم البيانات (' + mb + ' MB) يتجاوز حد المستند الواحد في Firestore (1 MB) — '
+             + 'غالباً بسبب الصور. استخدم النسخ الاحتياطي (تصدير JSON) مؤقتاً.',
+      };
+    }
 
     const ref = fsMod.doc(db, docPath(uid));
     await fsMod.setDoc(ref, payload);

@@ -9,7 +9,7 @@
 import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { orders } from '../data/repos/orders.js';
-import { inventory } from '../data/repos/inventory.js';
+import { inventory, isLowStockItem } from '../data/repos/inventory.js';
 import { MONTH_NAMES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { getWriteVersion } from '../data/idb.js';
@@ -311,7 +311,8 @@ async function computeFinancials(period) {
     o.dueDate && o.dueDate < nowMs && o.status !== 'delivered' && o.status !== 'cancelled'
   ).length;
 
-  const lowStockCount = inventoryList.filter((i) => Number(i.quantity) < 5).length;
+  const globalLowThreshold = await inventory.getGlobalThreshold().catch(() => 5);
+  const lowStockCount = inventoryList.filter((i) => isLowStockItem(i, globalLowThreshold)).length;
 
   const data = {
     summary: { totalRevenue, totalExpenses, netProfit, profitMargin },

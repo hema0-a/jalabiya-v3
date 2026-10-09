@@ -14,6 +14,7 @@ import { toast } from '../ui/toast.js';
 import { STORAGE_KEYS } from '../core/config.js';
 import * as authSync from '../sync/auth-sync.js';
 import * as firestoreSync from '../sync/firestore-sync.js';
+import { createBackup } from '../services/auto-backup.js';
 
 /* --- الحالة --- */
 let state = {
@@ -96,6 +97,12 @@ async function doPull() {
   }
   if (!res.data) {
     toast.warning('لا توجد بيانات سحابية بعد');
+    return;
+  }
+  /* نسخة أمان قبل استبدال البيانات المحلية (كما في مسار الإعدادات) */
+  const safety = await createBackup({ label: 'قبل التنزيل من السحابة' });
+  if (!safety.ok) {
+    toast.danger('تعذّر إنشاء نسخة أمان — لم تتغير بياناتك');
     return;
   }
   const applyRes = await firestoreSync.apply(res.data);

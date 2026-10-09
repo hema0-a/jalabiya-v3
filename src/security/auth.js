@@ -156,11 +156,15 @@ export const auth = {
   },
 
   /**
-   * إنشاء جلسة جديدة مدتها DEFAULT_SETTINGS.security.sessionDurationHours.
+   * إنشاء جلسة جديدة.
+   * @param {number} [durationHours] — المدة من إعدادات المستخدم؛ الافتراضي من DEFAULT_SETTINGS.
    * @returns {{createdAt:number, expiresAt:number}}
    */
-  setSession() {
-    const hours = DEFAULT_SETTINGS.security.sessionDurationHours || 24;
+  setSession(durationHours) {
+    const custom = Number(durationHours);
+    const hours = (isFinite(custom) && custom > 0)
+      ? custom
+      : (DEFAULT_SETTINGS.security.sessionDurationHours || 24);
     const now = Date.now();
     const session = {
       createdAt: now,
@@ -195,10 +199,16 @@ export const auth = {
    * @returns {Promise<boolean>}
    */
   async changePin(oldPin, newPin) {
+    /* نفس حماية unlock: لا تخمين مفتوح للرقم القديم عبر شاشة التغيير */
+    if (auth.isLocked()) return false;
     const storedHash = localStorage.getItem(STORAGE_KEYS.V3_PIN_HASH);
     const storedSalt = localStorage.getItem(STORAGE_KEYS.V3_PIN_SALT);
     const ok = await verifyPin(oldPin, storedHash, storedSalt);
-    if (!ok) return false;
+    if (!ok) {
+      auth._recordFailure();
+      return false;
+    }
+    auth._resetAttempts();
     await setPin(newPin);
     return true;
   },
