@@ -90,7 +90,7 @@ function getMonthlyComparison(allExpenses) {
   const thisTotal = allExpenses
     .filter((e) => {
       if (!e.date) return false;
-      const d = new Date(e.date);
+      const d = localDate(e.date);
       return d.getMonth() === thisM && d.getFullYear() === thisY;
     })
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -98,7 +98,7 @@ function getMonthlyComparison(allExpenses) {
   const lastTotal = allExpenses
     .filter((e) => {
       if (!e.date) return false;
-      const d = new Date(e.date);
+      const d = localDate(e.date);
       return d.getMonth() === lastM && d.getFullYear() === lastY;
     })
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -524,3 +524,8 @@ export const houseExpensesPage = {
     };
   },
 };
+
+/* تاريخ yyyy-mm-dd يُفسَّر محلياً (new Date('yyyy-mm-dd') يعتمد UTC فيُزيح الشهر في المناطق خلف UTC) */
+function localDate(v) {
+  return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? new Date(v + 'T00:00:00') : new Date(v);
+}
