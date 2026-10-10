@@ -26,6 +26,7 @@ import { FIRESTORE_PATHS } from '../core/config.js';
 import * as idb from '../data/idb.js';
 import { markClean, markCleanIfUnchanged } from './dirty-state.js';
 import * as tombstones from './tombstones.js';
+import * as settingsSync from './settings-sync.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -37,6 +38,8 @@ export const SYNC_STORES = [
 
 /* مخزن وهمي في المانيفست يحمل شواهد الحذف (v3.3.24) */
 const TOMB = 'tombstones';
+/* مخزن وهمي في المانيفست لإعدادات العمل (v3.3.25) */
+const SETS = 'settingsSync';
 
 const VERSION = '10.12.0';
 /* حجم الشريحة الواحدة (JSON) — حد Firestore 1,048,576 بايت ونترك هامشاً للترميز */
@@ -104,7 +107,7 @@ export function setKnownRev(rev) {
 function remoteTotal(main) {
   if (!main) return 0;
   if (main.manifest) {
-    return Object.entries(main.manifest).reduce((a, [k, m]) => a + (k === TOMB ? 0 : (Number(m && m.count) || 0)), 0);
+    return Object.entries(main.manifest).reduce((a, [k, m]) => a + (k === TOMB || k === SETS ? 0 : (Number(m && m.count) || 0)), 0);
   }
   if (main.stores) {
     return Object.values(main.stores).reduce((a, l) => a + (Array.isArray(l) ? l.length : 0), 0);
@@ -231,6 +234,13 @@ export async function push(uid, opts = {}) {
     counts[TOMB] = tombList.length;
     plan[TOMB] = splitIntoChunks(tombList).chunks || [];
 
+    /* إعدادات العمل (الأسعار/الحد اليومي/المقاسات…) بوقت تعديل لكل مفتاح */
+    let setsRec;
+    try { setsRec = await settingsSync.buildLocal(); }
+    catch (e) { return { ok: false, error: 'تعذّرت قراءة الإعدادات محلياً — لم يُرفع شيء حمايةً لنسخة السحابة' }; }
+    counts[SETS] = 1;
+    plan[SETS] = splitIntoChunks([setsRec]).chunks || [];
+
     /* حماية: رفع قاعدة فارغة يمسح نسخة السحابة السليمة (جهاز جديد / بيانات متصفح ممسوحة) */
     const totalRecords = SYNC_STORES.reduce((a, s) => a + (counts[s] || 0), 0);
     if (totalRecords === 0) {
@@ -274,7 +284,7 @@ export async function push(uid, opts = {}) {
     const manifest = {};
     const newRev = Math.max(Date.now(), (remoteRev || 0) + 1);
     try {
-      for (const s of [...SYNC_STORES, TOMB]) {
+      for (const s of [...SYNC_STORES, TOMB, SETS]) {
         const chunks = plan[s];
         for (let i = 0; i < chunks.length; i++) {
           const path = chunkPath(uid, s, i, gen);
@@ -312,6 +322,7 @@ export async function push(uid, opts = {}) {
     }
 
     delete counts[TOMB];
+    delete counts[SETS];
     return { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };
@@ -474,7 +485,10 @@ async function buildMergePlan(snapshot) {
     finalTombs.push({ id: k, store: s, rid, deletedAt: d });
     if (localMap.has(k) && !(cloudMap.get(k) >= localMap.get(k))) tombPending++;   /* حذف محلي لم يُرفع بعد */
   }
-  return { perStore, finalTombs, tombPending, totals };
+  /* إعدادات العمل: دمج لكل مفتاح بوقت آخر تعديل */
+  const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
+  const settingsPlan = await settingsSync.planApply(cloudSets, 'merge');
+  return { perStore, finalTombs, tombPending, totals, settingsPlan };
 }
 
 /**
@@ -486,8 +500,8 @@ async function buildMergePlan(snapshot) {
 export async function analyzeLocalVsCloud(snapshot) {
   if (!snapshot || !snapshot.stores) return { ok: false, error: 'snapshot غير صالح' };
   try {
-    const { totals, tombPending } = await buildMergePlan(snapshot);
-    return { ok: true, ...totals, tombPending };
+    const { totals, tombPending, settingsPlan } = await buildMergePlan(snapshot);
+    return { ok: true, ...totals, tombPending, settingsPending: settingsPlan.pending };
   } catch (err) {
     return { ok: false, error: translateError(err) };
   }
@@ -511,12 +525,12 @@ export async function apply(snapshot, opts = {}) {
     tombstones.install(SYNC_STORES);
     /* استبدال/دمج ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
     const plan = {};
-    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, tombPending: 0 };
+    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, tombPending: 0, settingsPending: 0 };
     if (merge) {
       const mp = await buildMergePlan(snapshot);
       for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
-      Object.assign(stats, mp.totals, { tombPending: mp.tombPending });
-      plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs)] };
+      Object.assign(stats, mp.totals, { tombPending: mp.tombPending, settingsPending: mp.settingsPlan.pending });
+      plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs), ...mp.settingsPlan.records] };
     } else {
       for (const s of SYNC_STORES) {
         /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
@@ -524,7 +538,9 @@ export async function apply(snapshot, opts = {}) {
         plan[s] = { clear: true, records: snapshot.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
       }
       const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
-      plan.settings = { clear: false, records: [tombstones.buildRecord(cloudTombs)] };
+      const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
+      const sp = await settingsSync.planApply(cloudSets, 'replace');
+      plan.settings = { clear: false, records: [tombstones.buildRecord(cloudTombs), ...sp.records] };
     }
     if (Object.keys(plan).filter((n) => n !== 'settings').length === 0) {
       return { ok: false, error: 'النسخة السحابية لا تحتوي أي مخزن صالح' };
@@ -534,7 +550,7 @@ export async function apply(snapshot, opts = {}) {
     /* بعد التطبيق صار هذا الجهاز يعرف نسخة السحابة هذه — فيسمح الرفع التالي */
     if (snapshot.updatedAt !== undefined) setKnownRev(snapshot.updatedAt);
     /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات/حذف محلي لم يُرفع = يحتاج رفعاً */
-    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0)) markClean();
+    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0 && stats.settingsPending === 0)) markClean();
     return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };

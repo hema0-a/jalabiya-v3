@@ -323,3 +323,95 @@ register('audit v3.3.24 deletion sync (tombstones)', async (t) => {
   fsync._setBackendForTest(null);
   await reset();
 });
+
+register('audit v3.3.25 settings sync', async (t) => {
+  const ss = await import('../../sync/settings-sync.js');
+  const dirty = await import('../../sync/dirty-state.js');
+  const tomb = await import('../../sync/tombstones.js');
+  const origMain = await idb.get('settings', 'main');
+  const origMeta = await idb.get('settings', 'sync_settings_meta');
+  const origTomb = await idb.get('settings', tomb.TOMB_KEY);
+  const clean = async () => { await idb.remove('settings', 'main'); await idb.remove('settings', 'sync_settings_meta'); await idb.remove('settings', tomb.TOMB_KEY); };
+  const setMain = (o) => idb.put('settings', { id: 'main', createdAt: 1, updatedAt: 1000, ...o });
+  const meta = async () => ((await idb.get('settings', 'sync_settings_meta')) || { times: {} }).times;
+  tomb.install(fsync.SYNC_STORES);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+  await clean();
+
+  /* 1) ختم وقت المفاتيح المُزامَنة التي تغيّرت فقط */
+  dirty.markClean();
+  await ss.noteSaved(
+    { dailyLimit: { dailyOrderLimit: 700 }, appearance: { theme: 'classic' } },
+    { dailyLimit: { dailyOrderLimit: 900 }, appearance: { theme: 'dark' } });
+  let m = await meta();
+  await t.test('1. تغيّر مفتاح مُزامَن يُختم وقته ويضع علامة «غير مرفوع»، ومفتاح الجهاز (المظهر) لا',
+    !!m.dailyLimit && m.appearance === undefined && !!dirty.getState().dirtySince);
+
+  const before = JSON.stringify(await meta());
+  dirty.markClean();
+  await ss.noteSaved({ pricingCalculator: { a: 1, b: 2 } }, { pricingCalculator: { b: 2, a: 1 } });
+  await t.test('2. اختلاف ترتيب الحقول فقط ليس تغييراً', JSON.stringify(await meta()) === before && !dirty.getState().dirtySince);
+
+  /* 3) السجل المحلي للرفع: بلا شعار، ووقت المفتاح المُعدَّل قبل التتبّع = وقت حفظ الإعدادات */
+  await clean();
+  await setMain({ workshop: { name: 'W', logo: 'data:image/png;base64,AAAA' }, dailyLimit: { dailyOrderLimit: 900 } });
+  await idb.put('settings', { id: 'sync_settings_meta', times: { dailyLimit: 5000 }, updatedAt: 1 });
+  const loc = await ss.buildLocal();
+  await t.test('3. الرفع يستثني الشعار ويحمل أوقات المفاتيح',
+    loc.values.workshop.name === 'W' && loc.values.workshop.logo === undefined &&
+    loc.times.dailyLimit === 5000 && loc.times.workshop === 1000);
+
+  /* دمج لكل مفتاح: الأحدث يفوز، المحلي الأحدث يبقى، الشعار ومفاتيح الجهاز لا تُمسّ */
+  await clean();
+  await setMain({
+    workshop: { name: 'Local', logo: 'LOGO' },
+    dailyLimit: { dailyOrderLimit: 900 },
+    grouping: { enabled: true, tolerance: 2, sameTypeOnly: true },
+    appearance: { theme: 'dark' },
+  });
+  await idb.put('settings', { id: 'sync_settings_meta', times: { dailyLimit: 5000 }, updatedAt: 1 });
+  const cloudRec = { id: 'settings',
+    values: {
+      workshop: { name: 'Cloud' },
+      dailyLimit: { dailyOrderLimit: 500 },
+      grouping: { enabled: false, tolerance: 2, sameTypeOnly: true },
+    },
+    times: { workshop: 9000, dailyLimit: 3000, grouping: 9000 } };
+  const snapS = { updatedAt: 8, stores: { orders: [], settingsSync: [cloudRec] } };
+  const anS = await fsync.analyzeLocalVsCloud(snapS);
+  const apS = await fsync.apply(snapS, { mode: 'merge' });
+  const mainAfter = await idb.get('settings', 'main');
+  await t.test('4. دمج الإعدادات: السحابة الأحدث تُؤخذ، والمحلي الأحدث يبقى ويُحتسب معلّقاً',
+    anS.ok && anS.settingsPending === 1 && apS.ok &&
+    mainAfter.dailyLimit.dailyOrderLimit === 900 && mainAfter.grouping.enabled === false &&
+    mainAfter.workshop.name === 'Cloud');
+  await t.test('5. الشعار المحلي ومفاتيح الجهاز (المظهر) لا تتأثر بالدمج',
+    mainAfter.workshop.logo === 'LOGO' && mainAfter.appearance.theme === 'dark');
+  await t.test('6. وقت المفتاح المأخوذ من السحابة يُسجَّل محلياً', (await meta()).grouping === 9000);
+
+  /* الاستبدال يتبنى قيم السحابة */
+  const apR = await fsync.apply(snapS);
+  const mainR = await idb.get('settings', 'main');
+  await t.test('7. وضع الاستبدال يتبنى إعدادات السحابة (والشعار المحلي يبقى)',
+    apR.ok && mainR.dailyLimit.dailyOrderLimit === 500 && mainR.workshop.logo === 'LOGO');
+
+  /* الرفع/التنزيل */
+  const fake = fakeFirestore();
+  fsync._setBackendForTest(fake.backend);
+  await idb.put('orders', { id: 'so1', updatedAt: 1 });
+  const pr = await fsync.push('u3325', { force: true });
+  const pl = await fsync.pull('u3325');
+  const rec = pl.ok && pl.data.stores.settingsSync && pl.data.stores.settingsSync[0];
+  await t.test('8. الرفع يحمل الإعدادات (بلا شعار) ولا تدخل في counts',
+    pr.ok && pr.counts.settingsSync === undefined && !!rec && rec.values.workshop.logo === undefined);
+
+  fsync._setBackendForTest(null);
+  await clean();
+  if (origMain) await idb.put('settings', origMain);
+  if (origMeta) await idb.put('settings', origMeta);
+  if (origTomb) await idb.put('settings', origTomb);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+  dirty.markClean();
+});
