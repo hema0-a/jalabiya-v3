@@ -5,7 +5,7 @@
    - تسجيل دخول / خروج (Email + Password) مع استماع تلقائي للجلسة.
    - رفع / تنزيل البيانات.
    - آخر مزامنة.
-   - يعتمد على: sync/firebase-config.js + sync/auth-sync.js + sync/firestore-sync.js
+   - يعتمد على: sync/firebase-config.js + sync/auth-sync.js + sync/sync-flow.js
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -13,8 +13,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { STORAGE_KEYS } from '../core/config.js';
 import * as authSync from '../sync/auth-sync.js';
-import * as firestoreSync from '../sync/firestore-sync.js';
-import { createBackup } from '../services/auto-backup.js';
+import { pushFlow, pullFlow } from '../sync/sync-flow.js';
 
 /* --- الحالة --- */
 let state = {
@@ -40,12 +39,6 @@ function readLastSync() {
   }
 }
 
-function writeLastSync() {
-  try {
-    localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
-  } catch (e) { /* ignore */ }
-}
-
 function formatDateTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
@@ -61,59 +54,22 @@ function formatDateTime(ts) {
 
 async function doPush() {
   if (!state.user) return toast.warning('سجّل الدخول أولاً');
-  const ok = await modal.confirm({
-    title: 'رفع إلى السحابة',
-    message: 'سيتم رفع البيانات المحلية إلى السحابة. متابعة؟',
-    confirmText: 'رفع', cancelText: 'إلغاء',
-  });
-  if (!ok) return;
-
-  toast.info('جارٍ الرفع...');
-  const res = await firestoreSync.push(state.user.uid);
+  /* المسار الآمن: يحمي السحابة من الاستبدال ويعرض خيار الدمج عند التعارض */
+  const res = await pushFlow(state.user.uid);
   if (res.ok) {
-    writeLastSync();
-    toast.success('تم الرفع');
     state.lastSyncAt = readLastSync();
     renderPage();
-  } else {
-    toast.danger('فشل الرفع: ' + (res.error || 'خطأ غير معروف'));
   }
 }
 
 async function doPull() {
   if (!state.user) return toast.warning('سجّل الدخول أولاً');
-  const ok = await modal.confirm({
-    title: 'تنزيل من السحابة',
-    message: 'سيتم استبدال البيانات المحلية بالبيانات السحابية. متابعة؟',
-    confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
-  });
-  if (!ok) return;
-
-  toast.info('جارٍ التنزيل...');
-  const res = await firestoreSync.pull(state.user.uid);
-  if (!res.ok) {
-    toast.danger('فشل التنزيل: ' + (res.error || 'خطأ غير معروف'));
-    return;
-  }
-  if (!res.data) {
-    toast.warning('لا توجد بيانات سحابية بعد');
-    return;
-  }
-  /* نسخة أمان قبل استبدال البيانات المحلية (كما في مسار الإعدادات) */
-  const safety = await createBackup({ label: 'قبل التنزيل من السحابة' });
-  if (!safety.ok) {
-    toast.danger('تعذّر إنشاء نسخة أمان — لم تتغير بياناتك');
-    return;
-  }
-  const applyRes = await firestoreSync.apply(res.data);
-  if (applyRes.ok) {
-    writeLastSync();
-    toast.success('تم التنزيل — افتح أي صفحة لرؤية البيانات');
+  /* المسار الآمن: دمج أو استبدال بقرارك + نسخة أمان قبل أي تغيير */
+  const res = await pullFlow(state.user.uid);
+  if (res.ok) {
     state.lastSyncAt = readLastSync();
     /* ⚠️ لا نُعيد تحميل الصفحة — لا حاجة، كل صفحة تُحدّث بياناتها عند فتحها */
     renderPage();
-  } else {
-    toast.danger('فشل التطبيق: ' + (applyRes.error || 'خطأ غير معروف'));
   }
 }
 

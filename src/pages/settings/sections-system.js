@@ -20,7 +20,7 @@ import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
 import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
-import * as firestoreSync from '../../sync/firestore-sync.js';
+import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
 import {
   createBackup, listBackups, restoreBackup, deleteBackup,
   clearAllBackups, exportBackupToFile,
@@ -743,13 +743,11 @@ const cloudSyncSection = {
         onClick: async () => {
           pushBtn.disabled = true;
           pushBtn.textContent = '⏳ جارٍ الرفع...';
-          const res = await firestoreSync.push(currentUser.uid);
+          /* المسار الآمن: يحمي السحابة من الاستبدال ويعرض خيار الدمج عند التعارض */
+          const res = await pushFlow(currentUser.uid);
           if (res.ok) {
-            localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
-            toast.success('تم رفع البيانات');
             draw();
           } else {
-            toast.danger(res.error || 'فشل الرفع');
             pushBtn.disabled = false;
             pushBtn.textContent = '⬆️ رفع إلى السحابة';
           }
@@ -760,42 +758,13 @@ const cloudSyncSection = {
         className: 'btn btn--secondary btn--block', type: 'button',
         style: { marginBottom: '8px' },
         onClick: async () => {
-          const ok = await modal.confirm({
-            title: 'تنزيل من السحابة',
-            message: 'سيتم استبدال البيانات المحلية بالبيانات السحابية. متابعة؟',
-            confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
-          });
-          if (!ok) return;
           pullBtn.disabled = true;
           pullBtn.textContent = '⏳ جارٍ التنزيل...';
-          const res = await firestoreSync.pull(currentUser.uid);
-          if (!res.ok) {
-            toast.danger(res.error || 'فشل التنزيل');
-            pullBtn.disabled = false;
-            pullBtn.textContent = '⬇️ تنزيل من السحابة';
-            return;
-          }
-          if (!res.data) {
-            toast.warning('لا توجد بيانات سحابية بعد');
-            pullBtn.disabled = false;
-            pullBtn.textContent = '⬇️ تنزيل من السحابة';
-            return;
-          }
-          /* نسخة أمان قبل استبدال البيانات المحلية */
-          const safety = await createBackup({ label: 'قبل التنزيل من السحابة' });
-          if (!safety.ok) {
-            toast.danger('تعذّر إنشاء نسخة أمان — لم تتغير بياناتك');
-            pullBtn.disabled = false;
-            pullBtn.textContent = '⬇️ تنزيل من السحابة';
-            return;
-          }
-          const applyRes = await firestoreSync.apply(res.data);
-          if (applyRes.ok) {
-            localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
-            toast.success('تم التنزيل — جارٍ إعادة التحميل...');
+          /* المسار الآمن: دمج أو استبدال بقرارك + نسخة أمان قبل أي تغيير */
+          const res = await pullFlow(currentUser.uid);
+          if (res.ok) {
             setTimeout(() => location.reload(), 1500);
           } else {
-            toast.danger(applyRes.error || 'فشل التطبيق');
             pullBtn.disabled = false;
             pullBtn.textContent = '⬇️ تنزيل من السحابة';
           }

@@ -172,15 +172,19 @@ register('audit v3.3.12 chunked sync', async (t) => {
     ap.ok === true && (await idb.getAll('orders')).length === 40 && (await idb.getAll('workerPayments')).length === 1);
 
   /* شريحة مفقودة = رفض بلا تطبيق جزئي */
-  fake.store.delete('users_v3/uid1/data/store_orders_1');
+  const gen1 = fake.store.get('users_v3/uid1/data/main').gen;
+  fake.store.delete('users_v3/uid1/data/store_orders_g' + gen1 + '_1');
   const broken = await fsync.pull('uid1');
   await t.test('4. شريحة مفقودة → خطأ واضح بدل بيانات ناقصة', broken.ok === false);
 
   /* تقليل البيانات يحذف الشرائح الزائدة */
   for (let i = 1; i < 40; i++) await idb.remove('orders', 'o' + i);
-  const r2 = await fsync.push('uid1');
+  const r2 = await fsync.push('uid1', { force: true }); /* تقليل مقصود: يتجاوز حماية «بيانات أقل من السحابة» */
+  const gen2 = fake.store.get('users_v3/uid1/data/main').gen;
   await t.test('5. إعادة الرفع بعد التقليل تحذف الشرائح الزائدة',
-    r2.ok === true && !fake.store.has('users_v3/uid1/data/store_orders_1') && fake.store.has('users_v3/uid1/data/store_orders_0'));
+    r2.ok === true && !fake.store.has('users_v3/uid1/data/store_orders_g' + gen2 + '_1') &&
+    fake.store.has('users_v3/uid1/data/store_orders_g' + gen2 + '_0') &&
+    !fake.store.has('users_v3/uid1/data/store_orders_g' + gen1 + '_0'));
 
   /* توافق مع الصيغة القديمة */
   fake.store.set('users_v3/uid2/data/main', { stores: { customers: [{ id: 'old1' }] }, updatedAt: 1 });
