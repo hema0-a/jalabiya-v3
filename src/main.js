@@ -244,7 +244,7 @@ function buildClientModeAction() {
   const active = isClientMode();
   return {
     id: 'client-mode',
-    icon: active ? '👁️' : '👁️‍🗨️',
+    icon: active ? '👁️' : '👁️🗨️',
     label: active ? 'إلغاء وضع العميل' : 'تفعيل وضع العميل',
     onClick: () => {
       const next = toggleClientMode();
