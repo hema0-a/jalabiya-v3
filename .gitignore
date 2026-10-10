@@ -17,3 +17,4 @@ firebase-debug.log
 
 # Node (احتياطاً)
 node_modules/
+*.bak
