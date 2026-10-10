@@ -22,19 +22,35 @@ const DAY_MS = 86400000;
 export function getDayAmount(orders, dayMs) {
   const end = dayMs + DAY_MS;
   return (orders || [])
-    .filter((o) =>
-      o.dueDate &&
-      o.dueDate >= dayMs &&
-      o.dueDate < end &&
-      o.status !== 'delivered' &&
-      o.status !== 'cancelled'
-    )
+    .filter((o) => {
+      if (!o.dueDate) return false;
+      if (o.status === 'delivered' || o.status === 'cancelled') return false;
+      let d = o.dueDate;
+      if (typeof d === 'string') {
+        const parsed = Date.parse(d);
+        if (isNaN(parsed)) return false;
+        d = parsed;
+      }
+      if (typeof d !== 'number' || isNaN(d)) return false;
+      const dayStart = new Date(dayMs);
+      dayStart.setHours(0, 0, 0, 0);
+      const orderStart = new Date(d);
+      orderStart.setHours(0, 0, 0, 0);
+      return orderStart.getTime() === dayStart.getTime();
+    })
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
 }
 
 /* ==========================================================================
    2. اقتراح تاريخ تسليم
    ========================================================================== */
+
+/* تطبيع بداية اليوم (00:00) */
+function dayStartMs(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+}
 
 /**
  * اقتراح تاريخ تسليم ذكي — يوزّع الطلب على عدة أيام عند تجاوز الحد اليومي.
@@ -114,7 +130,7 @@ export function suggestDueDate(orders, config = {}) {
     if (candidate.getDay() === dayOff) continue;
 
     /* المشغول والسعة */
-    const total = getDayAmount(relevant, candidate.getTime());
+    const total = getDayAmount(relevant, dayStartMs(candidate));
     const capacity = Math.max(0, dailyLimit - total);
 
     if (capacity <= 0) continue;
