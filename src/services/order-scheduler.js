@@ -1,8 +1,10 @@
 /* ==========================================================================
    order-scheduler.js — جدولة المواعيد على أساس الحد اليومي (v3.3.18)
    ==========================================================================
-   تعريف واحد لـ«حِمل اليوم»: مجموع مبالغ الطلبات غير الملغاة التي موعد تسليمها
-   ذلك اليوم التقويمي (الطلب يُحسب بكامل مبلغه على يوم تسليمه).
+   تعريف واحد لـ«حِمل اليوم» (للمجدول وشريط الحد اليومي معاً):
+   - طلب ≤ الحد اليومي: يُحسب بكامل مبلغه على يوم تسليمه.
+   - طلب > الحد اليومي: يُوزَّع على n = ⌈المبلغ ÷ الحد⌉ يوم عمل تنتهي بيوم التسليم
+     (الباقي على يوم التسليم، وكل يوم عمل سابق بالحد كاملاً، وتُتخطّى الإجازة الأسبوعية).
    - buildDayLedger  : سجلّ الحِمل لكل يوم في مرور واحد على الطلبات.
    - getDayAmount    : مجموع يوم معيّن (يستثني المسلَّم والملغى).
    - getDayLoad      : حِمل يوم + الحد + المتبقي + النسبة + الحالة (لشريط الحد اليومي).
@@ -30,28 +32,61 @@ function toPiasters(amount) {
    1. سجلّ الحِمل اليومي
    ========================================================================== */
 
+const MAX_SPREAD_DAYS = 366;
+
+/**
+ * توزيع طلب على أيام العمل (بالمليم). يُعيد [{ts, piasters}] من يوم التسليم رجوعاً.
+ * - بلا حد يومي أو مبلغ ≤ الحد: يوم واحد هو يوم التسليم (كما هو، حتى لو إجازة).
+ * - غير ذلك: n أيام عمل؛ يوم التسليم (أو آخر يوم عمل قبله إن كان إجازة) يأخذ الباقي r،
+ *   وكل يوم عمل قبله يأخذ الحد كاملاً.
+ */
+function allocateOrder(amountP, dueTs, limitP, dayOff) {
+  if (limitP <= 0 || amountP <= limitP) return [{ ts: dueTs, piasters: amountP }];
+  const n = Math.min(MAX_SPREAD_DAYS, Math.ceil(amountP / limitP));
+  const r = amountP - (n - 1) * limitP;
+  const out = [];
+  let back = 0;
+  const workDayBack = () => {
+    while (weekdayOf(addDaysNoon(dueTs, -back)) === dayOff) back++;
+    return addDaysNoon(dueTs, -back);
+  };
+  out.push({ ts: workDayBack(), piasters: r });
+  for (let i = 1; i < n; i++) {
+    back++;
+    out.push({ ts: workDayBack(), piasters: limitP });
+  }
+  return out;
+}
+
 /**
  * @param {Array} orders
  * @param {Object} [opts]
  * @param {string|null} [opts.excludeId=null]   — طلب يُستثنى (عند تعديله)
  * @param {boolean} [opts.includeDelivered=false] — المسلَّم يشغل يومه (لعرض حِمل اليوم الحالي)
+ * @param {number} [opts.dailyLimit=0]  — بالجنيه؛ يفعّل توزيع الطلب الأكبر من الحد على أيام
+ * @param {number} [opts.dayOffWeekday=0] — الإجازة الأسبوعية (تُتخطّى عند التوزيع)
  * @returns {Map<string,{piasters:number,count:number}>} مفتاح اليوم YYYY-MM-DD
  */
 export function buildDayLedger(orders, opts = {}) {
   const excludeId = opts.excludeId || null;
   const includeDelivered = opts.includeDelivered === true;
+  const limitP = toPiasters(opts.dailyLimit);
+  const dayOff = Number(opts.dayOffWeekday ?? 0);
   const ledger = new Map();
   for (const o of orders || []) {
     if (!o) continue;
     if (excludeId && o.id === excludeId) continue;
     if (o.status === 'cancelled') continue;
     if (o.status === 'delivered' && !includeDelivered) continue;
-    const key = dayKey(o.dueDate);
-    if (!key) continue;
-    const entry = ledger.get(key) || { piasters: 0, count: 0 };
-    entry.piasters += toPiasters(o.amount);
-    entry.count += 1;
-    ledger.set(key, entry);
+    const dueTs = toTimestamp(o.dueDate);
+    if (Number.isNaN(dueTs)) continue;
+    for (const part of allocateOrder(toPiasters(o.amount), dueTs, limitP, dayOff)) {
+      const key = dayKey(part.ts);
+      const entry = ledger.get(key) || { piasters: 0, count: 0 };
+      entry.piasters += part.piasters;
+      entry.count += 1;
+      ledger.set(key, entry);
+    }
   }
   return ledger;
 }
@@ -60,10 +95,11 @@ export function buildDayLedger(orders, opts = {}) {
  * مجموع مبالغ الطلبات (غير المسلَّمة وغير الملغاة) في يوم معيّن.
  * @param {Array} orders
  * @param {number|Date|string} day — أي لحظة داخل اليوم المطلوب
+ * @param {Object} [opts] — نفس خيارات buildDayLedger (dailyLimit/dayOffWeekday لتوزيع الطلبات الكبيرة)
  * @returns {number} جنيه
  */
-export function getDayAmount(orders, day) {
-  const entry = buildDayLedger(orders).get(dayKey(day));
+export function getDayAmount(orders, day, opts = {}) {
+  const entry = buildDayLedger(orders, opts).get(dayKey(day));
   return entry ? entry.piasters / 100 : 0;
 }
 
@@ -73,6 +109,7 @@ export function getDayAmount(orders, day) {
  * @param {number|Date|string} day
  * @param {Object} [opts]
  * @param {number} [opts.limit=0]
+ * @param {number} [opts.dayOffWeekday=0]
  * @param {boolean} [opts.includeDelivered=true]
  * @param {string|null} [opts.excludeId=null]
  * @returns {{amount:number,count:number,limit:number,remaining:number,percent:number,
@@ -83,6 +120,8 @@ export function getDayLoad(orders, day, opts = {}) {
   const ledger = buildDayLedger(orders, {
     excludeId: opts.excludeId,
     includeDelivered: opts.includeDelivered !== false,
+    dailyLimit: opts.limit,
+    dayOffWeekday: opts.dayOffWeekday,
   });
   const entry = ledger.get(dayKey(day)) || { piasters: 0, count: 0 };
   const exceeded = limitP > 0 && entry.piasters > limitP;
@@ -105,12 +144,14 @@ export function getDayLoad(orders, day, opts = {}) {
    ========================================================================== */
 
 /**
- * أول يوم عمل يتسع للطلب كاملاً دون تجاوز الحد اليومي.
+ * اقتراح موعد التسليم على أساس الحد اليومي.
  *   - تُتخطّى أيام الإجازة الأسبوعية.
  *   - طلب ≤ الحد: أول يوم سعته المتبقية ≥ المبلغ (المقارنة بالمليم).
- *   - طلب > الحد (لن يتسع في أي يوم): أول يوم عمل فارغ تماماً مع overLimit.
+ *   - طلب > الحد: يُوزَّع على n = ⌈المبلغ ÷ الحد⌉ يوم عمل متتالية؛ الأيام السابقة ليوم
+ *     التسليم يلزم أن تكون فارغة (حِملها الحد كاملاً)، ويوم التسليم تكفي سعته للباقي.
+ *     الموعد = أول يوم تسليم يتحقق فيه ذلك بحيث لا يبدأ العمل قبل (اليوم + minDays).
  *   - لا حد يومي أو مبلغ صفر: أول يوم عمل بعد minDays.
- * الطابع الزمني المُرجَع ظهر اليوم المقترح (نفس صيغة حفظ النموذج للمواعيد).
+ * الطوابع الزمنية المُرجَعة ظهر اليوم (نفس صيغة حفظ النموذج للمواعيد).
  *
  * @param {Array} orders
  * @param {Object} [config]
@@ -120,8 +161,10 @@ export function getDayLoad(orders, day, opts = {}) {
  * @param {number} [config.maxLookaheadDays=60]
  * @param {string|null} [config.excludeOrderId=null]
  * @param {number} [config.orderAmount=0]
- * @returns {{timestamp:number, reason:string, dayOfWeek:number, overLimit:boolean,
- *            daysNeeded:number, daysUsed:number, dayLoad:number, remainingAfter:number}}
+ * @returns {{timestamp:number, startTimestamp:number, reason:string, dayOfWeek:number,
+ *            overLimit:boolean, daysNeeded:number, daysUsed:number,
+ *            dayLoad:number, remainingAfter:number}}
+ *   overLimit = الطلب أكبر من الحد اليومي (يُوزَّع على daysNeeded أيام عمل).
  */
 export function suggestDueDate(orders, config = {}) {
   const dayOff = Number(config.dayOffWeekday ?? 0);
@@ -134,31 +177,47 @@ export function suggestDueDate(orders, config = {}) {
 
   const now = Date.now();
   const dayAt = (i) => addDaysNoon(now, minDays + i);
+  const startTs = dayAt(0);
 
   /* الحالة البسيطة: لا حد يومي أو طلب صفر → أول يوم عمل */
   if (limitP <= 0 || amountP <= 0) {
     for (let i = 0; i < maxDays; i++) {
       const ts = dayAt(i);
       if (weekdayOf(ts) === dayOff) continue;
-      return buildResult(ts, 1, 1, false, 0, 0);
+      return buildResult(ts, ts, 1, false, 0, 0);
     }
-    return fallback(dayAt(0), 'لا يوجد يوم متاح قريباً', false, 1);
+    return fallback(startTs, 'لا يوجد يوم متاح قريباً', false, 1);
   }
 
   const overLimit = amountP > limitP;
-  const daysNeeded = Math.ceil(amountP / limitP);
-  const ledger = buildDayLedger(orders, { excludeId: config.excludeOrderId });
+  const n = overLimit ? Math.min(MAX_SPREAD_DAYS, Math.ceil(amountP / limitP)) : 1;
+  const ledger = buildDayLedger(orders, {
+    excludeId: config.excludeOrderId, dailyLimit: config.dailyOrderLimit, dayOffWeekday: dayOff,
+  });
+  const loadOf = (ts) => (ledger.get(dayKey(ts)) || { piasters: 0 }).piasters;
+  const bound = maxDays + (n > 1 ? n * 2 : 0);
 
-  for (let i = 0; i < maxDays; i++) {
-    const ts = dayAt(i);
-    if (weekdayOf(ts) === dayOff) continue;
-    const loadP = (ledger.get(dayKey(ts)) || { piasters: 0 }).piasters;
-    const fits = overLimit ? loadP <= 0 : (limitP - loadP) >= amountP;
-    if (!fits) continue;
-    return buildResult(ts, daysNeeded, 1, overLimit, loadP, Math.max(0, limitP - loadP - amountP));
+  for (let i = 0; i < bound; i++) {
+    const dueTs = dayAt(i);
+    if (weekdayOf(dueTs) === dayOff) continue;
+
+    if (!overLimit) {
+      const loadP = loadOf(dueTs);
+      if ((limitP - loadP) < amountP) continue;
+      return buildResult(dueTs, dueTs, 1, false, loadP, limitP - loadP - amountP);
+    }
+
+    /* طلب أكبر من الحد: يوم التسليم يأخذ الباقي والأيام السابقة بالحد كاملاً */
+    const parts = allocateOrder(amountP, dueTs, limitP, dayOff);
+    const startOfWork = parts[parts.length - 1].ts;
+    if (dayDiff(startTs, startOfWork) < 0) continue;            /* يبدأ قبل أول يوم مسموح */
+    const ok = parts.every((p) => (limitP - loadOf(p.ts)) >= p.piasters);
+    if (!ok) continue;
+    const loadP = loadOf(dueTs);
+    return buildResult(dueTs, startOfWork, n, true, loadP, limitP - loadP - parts[0].piasters);
   }
 
-  return fallback(dayAt(0), 'لا يوجد يوم كافٍ في الأفق القريب', overLimit, daysNeeded);
+  return fallback(startTs, 'لا يوجد يوم كافٍ في الأفق القريب', overLimit, n);
 }
 
 /* ==========================================================================
@@ -167,12 +226,12 @@ export function suggestDueDate(orders, config = {}) {
 
 function fallback(ts, reason, overLimit, daysNeeded) {
   return {
-    timestamp: ts, reason, dayOfWeek: weekdayOf(ts), overLimit,
+    timestamp: ts, startTimestamp: ts, reason, dayOfWeek: weekdayOf(ts), overLimit,
     daysNeeded, daysUsed: 0, dayLoad: 0, remainingAfter: 0,
   };
 }
 
-function buildResult(ts, daysNeeded, daysUsed, overLimit, loadP, remainingAfterP) {
+function buildResult(ts, startTs, daysNeeded, overLimit, loadP, remainingAfterP) {
   const diff = dayDiff(Date.now(), ts);
   let reason;
   if (diff === 0) reason = 'اليوم';
@@ -181,8 +240,9 @@ function buildResult(ts, daysNeeded, daysUsed, overLimit, loadP, remainingAfterP
   else reason = 'بعد ' + diff + ' أيام';
   if (daysNeeded > 1) reason += ' (يوزَّع على ' + daysNeeded + ' أيام عمل)';
   return {
-    timestamp: ts, reason, dayOfWeek: weekdayOf(ts), overLimit, daysNeeded, daysUsed,
-    dayLoad: loadP / 100, remainingAfter: remainingAfterP / 100,
+    timestamp: ts, startTimestamp: startTs, reason, dayOfWeek: weekdayOf(ts), overLimit,
+    daysNeeded, daysUsed: daysNeeded,
+    dayLoad: loadP / 100, remainingAfter: Math.max(0, remainingAfterP) / 100,
   };
 }
 

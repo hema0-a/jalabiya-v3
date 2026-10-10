@@ -291,7 +291,8 @@ const _orderAmount = Number(_t.amount) || 0;
         dueDateInput.value = localDateInput(suggestion.timestamp);
         toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
         if (suggestion.overLimit) {
-          toast.warning('⚠️ مبلغ الطلب يتجاوز الحد اليومي — تم اختيار أول يوم فارغ');
+          toast.warning('⚠️ الطلب أكبر من الحد اليومي — يُنفَّذ على ' + suggestion.daysNeeded +
+            ' أيام عمل: يبدأ ' + formatDate(suggestion.startTimestamp) + ' وينتهي ' + formatDate(suggestion.timestamp));
         }
       } catch (e) { toast.danger('فشل الاقتراح'); }
     },
@@ -731,7 +732,7 @@ function buildDailyLimitBar() {
   if (limit <= 0) return null;
 
   /* نفس تعريف المجدول: حِمل اليوم = طلبات موعد تسليمها اليوم (يشمل المسلَّم لأنه استهلك سعة اليوم) */
-  const load = getDayLoad(state.orders, Date.now(), { limit, includeDelivered: true });
+  const load = getDayLoad(state.orders, Date.now(), { limit, dayOffWeekday: state.scheduleConfig.dayOffWeekday, includeDelivered: true });
   const todayTotal = load.amount;
   const percent = load.percent;
   const exceeded = load.exceeded;

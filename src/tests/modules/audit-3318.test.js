@@ -64,8 +64,9 @@ register('audit v3.3.18 day math & daily limit', async (t) => {
 
   /* --- حِمل اليوم --- */
   const L = (amount) => getDayLoad([ord('z', amount, 0)], dayAt(0), { limit: 700 });
-  await t.test('12. حالات الشريط: 559 عادي، 560 قريب، 700 قريب (لا تجاوز)، 700.01 تجاوز',
-    L(559).status === 'ok' && L(560).status === 'near' && L(700).status === 'near' && L(700.01).status === 'exceeded');
+  const two = (a, b) => getDayLoad([ord('p', a, 0), ord('q', b, 0)], dayAt(0), { limit: 700 });
+  await t.test('12. حالات الشريط: 559 عادي، 560 قريب، 700 قريب (لا تجاوز)، 400+300.01 تجاوز',
+    L(559).status === 'ok' && L(560).status === 'near' && L(700).status === 'near' && two(400, 300.01).status === 'exceeded' && two(400, 300).status === 'near');
   const l400 = L(400);
   await t.test('13. المتبقي والنسبة والعدد', l400.remaining === 300 && l400.percent === 57 && l400.count === 1 && l400.amount === 400);
   await t.test('14. بلا حد يومي → status none ولا تجاوز', getDayLoad([ord('z', 9999, 0)], dayAt(0), { limit: 0 }).status === 'none');
@@ -80,6 +81,44 @@ register('audit v3.3.18 day math & daily limit', async (t) => {
   await t.test('17. minDays = 0 يسمح باليوم نفسه', sameDay(r0.timestamp, 0) && r0.reason === 'اليوم');
   await t.test('18. التاريخ المقترح يمرّ عبر حقل التاريخ والحفظ بلا انزياح',
     isSameDay(parseDateInput(localDateInput(r.timestamp)), r.timestamp));
+
+
+  /* --- طلب أكبر من الحد: يُوزَّع فعلياً على أيام العمل --- */
+  const big = { dayOffWeekday: farOff(), dailyOrderLimit: 700, minDays: 1, maxLookaheadDays: 60 };
+  const rb = suggestDueDate([], { ...big, orderAmount: 5000 });
+  await t.test('21. 5000 ÷ 700 → 8 أيام عمل (يتخطى الإجازة): يبدأ غداً وينتهي اليوم التاسع',
+    rb.daysNeeded === 8 && sameDay(rb.startTimestamp, 1) && sameDay(rb.timestamp, 9) && /يوزَّع على 8/.test(rb.reason));
+  const placed = [{ id: 'big', amount: 5000, dueDate: rb.timestamp, status: 'pending' }];
+  const loadOn = (n, list = placed) => getDayLoad(list, dayAt(n), { limit: 700, dayOffWeekday: farOff() });
+  await t.test('22. الحِمل: 700 على كل يوم عمل من 1 إلى 8 عدا الإجازة، والباقي 100 على يوم التسليم، والإجازة فارغة',
+    [1, 2, 3, 4, 5, 7, 8].every((n) => loadOn(n).amount === 700 && !loadOn(n).exceeded) &&
+    loadOn(9).amount === 100 && loadOn(6).amount === 0);
+  const r2 = suggestDueDate(placed, { ...big, orderAmount: 600 });
+  await t.test('23. طلب 600 يتسع في سعة اليوم الأخير المتبقية (600) ولا يُدفع بعده', sameDay(r2.timestamp, 9));
+  const r3 = suggestDueDate(placed, { ...big, orderAmount: 5000 });
+  await t.test('24. طلب كبير ثانٍ لا يبدأ قبل فراغ الأيام الممتلئة (يبدأ اليوم 10 فأكثر)',
+    r3.daysNeeded === 8 && dayDiff(dayAt(0), r3.startTimestamp) >= 10);
+
+  /* --- خاصية: أي تسلسل اقتراحات لا يتجاوز الحد اليومي في أي يوم، ولا يبدأ قبل الغد --- */
+  let seed = 12345;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  let propOk = true, propMsg = '';
+  for (let run = 0; run < 25 && propOk; run++) {
+    const cfg2 = { dayOffWeekday: Math.floor(rnd() * 7), dailyOrderLimit: 300 + Math.floor(rnd() * 900), minDays: 1, maxLookaheadDays: 90 };
+    let list = [];
+    for (let i = 0; i < 12; i++) {
+      const amount = Math.round((50 + rnd() * 6000) * 100) / 100;
+      const sg = suggestDueDate(list, { ...cfg2, orderAmount: amount });
+      if (/لا يوجد/.test(sg.reason)) continue;
+      if (dayDiff(new Date(), sg.startTimestamp) < 1) { propOk = false; propMsg = 'يبدأ قبل الغد'; break; }
+      list.push({ id: 'o' + i, amount, dueDate: sg.timestamp, status: 'pending' });
+    }
+    const led = buildDayLedger(list, { dailyLimit: cfg2.dailyOrderLimit, dayOffWeekday: cfg2.dayOffWeekday });
+    for (const [, v] of led) {
+      if (v.piasters > Math.round(cfg2.dailyOrderLimit * 100)) { propOk = false; propMsg = 'تجاوز الحد'; break; }
+    }
+  }
+  await t.test('25. خاصية (25 سيناريو عشوائي × 12 طلباً): لا يوم يتجاوز الحد ولا بدء قبل الغد ' + propMsg, propOk);
 
   /* --- حالة الموعد والتأخر --- */
   await t.test('19. getDeadlineInfo: اليوم/غداً/أمس/بعد 7 أيام بغض النظر عن ساعة الحفظ',

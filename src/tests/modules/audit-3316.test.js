@@ -45,7 +45,8 @@ register('audit v3.3.16 order scheduler', async (t) => {
   await t.test('5. يتجاوز بجنيه واحد (201+500) → يُتخطّى', sameDay(r.timestamp, 2));
 
   r = suggestDueDate([ord('a', 100, 1)], cfg({ orderAmount: 900 }));
-  await t.test('6. طلب أكبر من الحد → أول يوم فارغ مع overLimit', sameDay(r.timestamp, 2) && r.overLimit === true);
+  await t.test('6. طلب 900 (أكبر من الحد) → يُوزَّع على يومين: 700 ثم 200، فيبدأ يوماً فارغاً وينتهي بعده',
+    sameDay(r.timestamp, 3) && sameDay(r.startTimestamp, 2) && r.overLimit === true && r.daysNeeded === 2);
 
   r = suggestDueDate([ord('a', 600, 1, { status: 'delivered' }), ord('b', 600, 1, { status: 'cancelled' })], cfg());
   await t.test('7. المسلَّم والملغى لا يشغلان اليوم', sameDay(r.timestamp, 1));
