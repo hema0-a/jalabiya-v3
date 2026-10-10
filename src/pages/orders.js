@@ -21,7 +21,7 @@ import { openSignaturePad } from '../ui/signature-pad.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
-import { suggestDueDate, getDayLoad } from '../services/order-scheduler.js';
+import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
@@ -271,6 +271,9 @@ function openOrderForm(existing = null) {
     dueDateInput.value = localDateInput(existing.dueDate);
   }
 
+  /* آخر خطة عمل اقترحها زر ✨ (تُحفظ مع الطلب إن بقي المبلغ والتاريخ كما هما) */
+  let suggestedPlan = null;
+
   const suggestBtn = el('button', {
     className: 'btn btn--sm btn--secondary', type: 'button',
     title: 'اقتراح موعد تلقائي',
@@ -289,10 +292,12 @@ const _orderAmount = Number(_t.amount) || 0;
           orderAmount: _orderAmount,
         });
         dueDateInput.value = localDateInput(suggestion.timestamp);
+        suggestedPlan = { amount: _orderAmount, dueTs: suggestion.timestamp, plan: suggestion.workPlan || [] };
         toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
-        if (suggestion.overLimit) {
-          toast.warning('⚠️ الطلب أكبر من الحد اليومي — يُنفَّذ على ' + suggestion.daysNeeded +
-            ' أيام عمل: يبدأ ' + formatDate(suggestion.startTimestamp) + ' وينتهي ' + formatDate(suggestion.timestamp));
+        if (suggestion.daysUsed > 1) {
+          toast.warning((suggestion.overLimit ? '⚠️ الطلب أكبر من الحد اليومي — ' : 'ℹ️ السعة المتبقية موزّعة — ') +
+            'يُنفَّذ على ' + suggestion.daysUsed + ' أيام عمل: يبدأ ' + formatDate(suggestion.startTimestamp) +
+            ' وينتهي ' + formatDate(suggestion.timestamp));
         }
       } catch (e) { toast.danger('فشل الاقتراح'); }
     },
@@ -483,6 +488,40 @@ const _orderAmount = Number(_t.amount) || 0;
           } else if (isEdit && existing.deliveredAt) {
             data.deliveredAt = null;
           }
+
+          /* خطة العمل على أساس الحد اليومي: تُحفظ مع الطلب فتُحسب سعة كل يوم بدقة (حتى الجزئية) */
+          const planLimit = state.scheduleConfig.dailyOrderLimit || 0;
+          const planActive = data.status !== 'delivered' && data.status !== 'cancelled';
+          const cents = (v) => Math.round((Number(v) || 0) * 100);
+          if (planActive && data.dueDate && planLimit > 0 && data.amount > 0) {
+            const unchanged = isEdit && isValidWorkPlan(existing) &&
+              cents(existing.amount) === cents(data.amount) && existing.dueDate === data.dueDate;
+            if (unchanged) {
+              data.workPlan = existing.workPlan;                 /* لا نحرّك خطة سبق الوعد بها */
+            } else if (suggestedPlan && suggestedPlan.dueTs === data.dueDate &&
+                       cents(suggestedPlan.amount) === cents(data.amount) && suggestedPlan.plan.length > 0) {
+              data.workPlan = suggestedPlan.plan;                /* الخطة التي اقترحها ✨ */
+            } else {
+              const pl = planOrder(state.orders, {
+                orderAmount: data.amount, dailyOrderLimit: planLimit,
+                dayOffWeekday: state.scheduleConfig.dayOffWeekday,
+                endDate: data.dueDate, excludeOrderId: isEdit ? existing.id : null, minDays: 0,
+              });
+              if (pl) {
+                data.workPlan = pl.plan;
+              } else {
+                data.workPlan = null;
+                const alt = suggestDueDate(state.orders, {
+                  dayOffWeekday: state.scheduleConfig.dayOffWeekday, dailyOrderLimit: planLimit,
+                  minDays: 1, maxLookaheadDays: 60, excludeOrderId: isEdit ? existing.id : null,
+                  orderAmount: data.amount,
+                });
+                toast.warning('⚠️ السعة اليومية لا تتسع للطلب حتى هذا التاريخ — أقرب موعد ممكن: ' + formatDate(alt.timestamp));
+              }
+            }
+          } else if (planActive) {
+            data.workPlan = null;
+          }                                                      /* المسلَّم/الملغى: تبقى خطته كما هي */
 
           try {
             if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }

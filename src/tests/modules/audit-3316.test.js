@@ -33,10 +33,12 @@ register('audit v3.3.16 order scheduler', async (t) => {
   r = suggestDueDate([ord('a', 400, 1)], cfg());
   await t.test('2. 400 موجودة + طلب 500 (سعة 300) → يُتخطّى غداً', sameDay(r.timestamp, 2));
 
-  /* الانحدار: غداً 400 وبعد غد 400 → كان يقترح بعد غد (900 > 700) */
+  /* الانحدار: غداً 400 وبعد غد 400 → كان يقترح بعد غد على أساس 900 > 700.
+     الآن تُستغل السعة الجزئية: 300 غداً + 200 بعد غد، فلا يتجاوز أي يوم الحد وينتهي بعد غد */
   r = suggestDueDate([ord('a', 400, 1), ord('b', 400, 2)], cfg());
-  const total = getDayAmount([ord('a', 400, 1), ord('b', 400, 2), { id: 'new', amount: 500, dueDate: r.timestamp, status: 'pending' }], r.timestamp);
-  await t.test('3. لا يقترح يوماً يتجاوز مجموعه الحد (المقترح ' + total + ')', total <= 700 && sameDay(r.timestamp, 3));
+  const placed3 = [ord('a', 400, 1), ord('b', 400, 2), { id: 'new', amount: 500, dueDate: r.timestamp, status: 'pending', workPlan: r.workPlan }];
+  const maxLoad = Math.max(...[1, 2, 3, 4].map((n) => getDayAmount(placed3, dayAt(n), { dailyLimit: 700, dayOffWeekday: farOff() })));
+  await t.test('3. لا يتجاوز أي يوم الحد (أقصى حِمل ' + maxLoad + ') وينتهي بعد غد بالسعة الجزئية', maxLoad <= 700 && sameDay(r.timestamp, 2));
 
   r = suggestDueDate([ord('a', 200, 1)], cfg());
   await t.test('4. السعة المتبقية = المبلغ تماماً (200+500≤700) → يُقبل غداً', sameDay(r.timestamp, 1));
@@ -45,8 +47,8 @@ register('audit v3.3.16 order scheduler', async (t) => {
   await t.test('5. يتجاوز بجنيه واحد (201+500) → يُتخطّى', sameDay(r.timestamp, 2));
 
   r = suggestDueDate([ord('a', 100, 1)], cfg({ orderAmount: 900 }));
-  await t.test('6. طلب 900 (أكبر من الحد) → يُوزَّع على يومين: 700 ثم 200، فيبدأ يوماً فارغاً وينتهي بعده',
-    sameDay(r.timestamp, 3) && sameDay(r.startTimestamp, 2) && r.overLimit === true && r.daysNeeded === 2);
+  await t.test('6. طلب 900 (أكبر من الحد) مع 100 محجوزة غداً → 600 غداً + 300 بعد غد (يستغل السعة الجزئية)',
+    sameDay(r.startTimestamp, 1) && sameDay(r.timestamp, 2) && r.overLimit === true && r.daysNeeded === 2);
 
   r = suggestDueDate([ord('a', 600, 1, { status: 'delivered' }), ord('b', 600, 1, { status: 'cancelled' })], cfg());
   await t.test('7. المسلَّم والملغى لا يشغلان اليوم', sameDay(r.timestamp, 1));

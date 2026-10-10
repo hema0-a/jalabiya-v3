@@ -4,7 +4,7 @@
 
 import { register } from '../registry.js';
 import { toTimestamp, startOfDay, endOfDay, addDaysNoon, dayKey, dayDiff, isSameDay, weekdayOf } from '../../core/day-math.js';
-import { buildDayLedger, getDayAmount, getDayLoad, suggestDueDate } from '../../services/order-scheduler.js';
+import { buildDayLedger, getDayAmount, getDayLoad, suggestDueDate, planOrder, isValidWorkPlan } from '../../services/order-scheduler.js';
 import { getDeadlineInfo, isPastDue } from '../../services/order-timing.js';
 import { localDateInput, parseDateInput } from '../../core/utils.js';
 
@@ -96,8 +96,39 @@ register('audit v3.3.18 day math & daily limit', async (t) => {
   const r2 = suggestDueDate(placed, { ...big, orderAmount: 600 });
   await t.test('23. طلب 600 يتسع في سعة اليوم الأخير المتبقية (600) ولا يُدفع بعده', sameDay(r2.timestamp, 9));
   const r3 = suggestDueDate(placed, { ...big, orderAmount: 5000 });
-  await t.test('24. طلب كبير ثانٍ لا يبدأ قبل فراغ الأيام الممتلئة (يبدأ اليوم 10 فأكثر)',
-    r3.daysNeeded === 8 && dayDiff(dayAt(0), r3.startTimestamp) >= 10);
+  await t.test('24. طلب كبير ثانٍ يبدأ باليوم الذي فيه سعة جزئية (اليوم 9: 600 متاحة)',
+    sameDay(r3.startTimestamp, 9) && r3.workPlan[0].amount === 600 && r3.workPlan.reduce((a, p) => a + p.amount, 0) === 5000);
+
+
+  /* --- خطة العمل المحفوظة والسعة الجزئية --- */
+  const d1 = dayAt(1), d2 = dayAt(2);
+  const planned = [{ id: 'p', amount: 500, dueDate: d2.getTime(), status: 'pending',
+    workPlan: [{ day: dayKey(d1), amount: 300 }, { day: dayKey(d2), amount: 200 }] }];
+  const lg = buildDayLedger(planned, { dailyLimit: 700, dayOffWeekday: farOff() });
+  await t.test('26. خطة محفوظة صالحة تُحسب كما هي (300 + 200 لا 500 على يوم التسليم)',
+    lg.get(dayKey(d1)).piasters === 30000 && lg.get(dayKey(d2)).piasters === 20000 && isValidWorkPlan(planned[0]));
+  const stale = [{ ...planned[0], amount: 800 }];
+  const ls = buildDayLedger(stale, { dailyLimit: 700, dayOffWeekday: farOff() });
+  await t.test('27. خطة لا يطابق مجموعها المبلغ (بعد تعديل المبلغ) تُتجاهل ويُستخدم التوزيع الافتراضي',
+    isValidWorkPlan(stale[0]) === false && ls.get(dayKey(d2)).piasters === 10000);
+
+  const jit = planOrder([], { ...big, orderAmount: 1500, endDate: dayAt(4).getTime(), minDays: 0 });
+  await t.test('28. موعد يدوي (اليوم 4): الخطة في آخر لحظة 700 + 700 + 100 على الأيام 4 و3 و2',
+    jit && jit.plan.length === 3 && jit.plan[0].amount === 100 && jit.plan[2].amount === 700 &&
+    jit.plan[2].day === dayKey(dayAt(4)) && jit.plan[0].day === dayKey(dayAt(2)));
+  await t.test('29. موعد يدوي مبكر لا تتسع له السعة → null (يُحذَّر المستخدم)',
+    planOrder([], { ...big, orderAmount: 5000, endDate: dayAt(1).getTime(), minDays: 0 }) === null);
+
+  const partial = [ord('a', 500, 1), ord('b', 500, 2), ord('c', 500, 3)];
+  const rp = suggestDueDate(partial, { ...big, orderAmount: 500 });
+  await t.test('30. 200 متاحة في كل من 3 أيام + طلب 500 → ينتهي اليوم 3 (200+200+100) بدل اليوم 4',
+    sameDay(rp.timestamp, 3) && rp.workPlan.length === 3 && rp.workPlan.reduce((a, p) => a + p.amount, 0) === 500);
+  const rs = suggestDueDate([], { ...big, orderAmount: 500 });
+  await t.test('31. جدول فارغ وطلب 500 → يوم واحد بلا تفتيت', sameDay(rs.timestamp, 1) && rs.workPlan.length === 1);
+  const tiny = [ord('t', 650, 1)];
+  const rt = suggestDueDate(tiny, { ...big, orderAmount: 1000 });
+  await t.test('32. يوم متبقٍ فيه 50 (أقل من 10% من الحد) لا يُستخدم لطلب كبير: يبدأ اليوم 2',
+    sameDay(rt.startTimestamp, 2));
 
   /* --- خاصية: أي تسلسل اقتراحات لا يتجاوز الحد اليومي في أي يوم، ولا يبدأ قبل الغد --- */
   let seed = 12345;
@@ -111,14 +142,20 @@ register('audit v3.3.18 day math & daily limit', async (t) => {
       const sg = suggestDueDate(list, { ...cfg2, orderAmount: amount });
       if (/لا يوجد/.test(sg.reason)) continue;
       if (dayDiff(new Date(), sg.startTimestamp) < 1) { propOk = false; propMsg = 'يبدأ قبل الغد'; break; }
-      list.push({ id: 'o' + i, amount, dueDate: sg.timestamp, status: 'pending' });
+      list.push({ id: 'o' + i, amount, dueDate: sg.timestamp, status: 'pending', workPlan: sg.workPlan });
+    }
+    for (let m = 0; m < 4; m++) {          /* مواعيد يدوية: خطة «في آخر لحظة» لا تتجاوز الحد أيضاً */
+      const amount = Math.round((50 + rnd() * 4000) * 100) / 100;
+      const end = dayAt(1 + Math.floor(rnd() * 25)).getTime();
+      const pl = planOrder(list, { ...cfg2, orderAmount: amount, endDate: end, minDays: 0 });
+      if (pl) list.push({ id: 'm' + m, amount, dueDate: end, status: 'pending', workPlan: pl.plan });
     }
     const led = buildDayLedger(list, { dailyLimit: cfg2.dailyOrderLimit, dayOffWeekday: cfg2.dayOffWeekday });
     for (const [, v] of led) {
       if (v.piasters > Math.round(cfg2.dailyOrderLimit * 100)) { propOk = false; propMsg = 'تجاوز الحد'; break; }
     }
   }
-  await t.test('25. خاصية (25 سيناريو عشوائي × 12 طلباً): لا يوم يتجاوز الحد ولا بدء قبل الغد ' + propMsg, propOk);
+  await t.test('25. خاصية (25 سيناريو: 12 اقتراحاً + 4 مواعيد يدوية): لا يوم يتجاوز الحد ولا بدء قبل الغد ' + propMsg, propOk);
 
   /* --- حالة الموعد والتأخر --- */
   await t.test('19. getDeadlineInfo: اليوم/غداً/أمس/بعد 7 أيام بغض النظر عن ساعة الحفظ',
