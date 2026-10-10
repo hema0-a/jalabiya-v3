@@ -108,6 +108,19 @@ export async function compress(file, options = {}) {
     attempts++;
   }
 
+  /* لم تكفِ الجودة وحدها (صورة معقّدة): نصغّر الأبعاد تدريجياً حتى يتحقق الحد */
+  let shrinks = 0;
+  while (sizeKB > maxSizeKB && shrinks < 4 && w > 400 && h > 400) {
+    w = Math.round(w * 0.8);
+    h = Math.round(h * 0.8);
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    compressed = canvas.toDataURL('image/jpeg', Math.max(q, 0.5));
+    sizeKB = (compressed.length * 3 / 4) / 1024;
+    shrinks++;
+  }
+
   const savedPercent = originalKB > 0
     ? Math.round((1 - sizeKB / originalKB) * 100)
     : 0;

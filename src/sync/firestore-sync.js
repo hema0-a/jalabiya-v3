@@ -6,6 +6,8 @@
      users_v3/{uid}/data/store_{s}_g{gen}_{n} ← شريحة سجلات { store, index, records:[...] }
    (الصيغة السابقة بلا gen: store_{s}_{n} — ما زالت تُقرأ.)
    كل شريحة أقل من ~700KB فلا يصطدم الرفع بحد 1 MB للمستند، ويغطي كل مخازن البيانات.
+   سجل أكبر من ~700KB (مثلاً عدة صور في طلب واحد) يُقسَّم إلى «قطع» متتالية { big:{k,n,data} }
+   وتُعاد تجميعه عند التنزيل — فلا يوقف سجل كبير الرفع كله (v3.3.23). الحد الأقصى للسجل 8MB.
 
    ضمانات عدم فقدان البيانات (v3.3.21):
      1) كل رفع يكتب شرائح «جيل» جديد بمسارات جديدة، ولا يلمس شرائح النسخة الحالية.
@@ -35,6 +37,10 @@ export const SYNC_STORES = [
 const VERSION = '10.12.0';
 /* حجم الشريحة الواحدة (JSON) — حد Firestore 1,048,576 بايت ونترك هامشاً للترميز */
 const CHUNK_LIMIT_BYTES = 700000;
+/* أكبر سجل واحد مسموح (يُقسَّم إلى قطع) */
+const MAX_RECORD_BYTES = 8 * 1024 * 1024;
+/* حجم القطعة بالأحرف: 250k × 3 بايت (أسوأ حالة UTF-8) = 750KB < 1MB */
+const PIECE_CHARS = 250000;
 let _fsModule = null;
 let _testBackend = null;
 
@@ -138,22 +144,43 @@ function translateError(err) {
 
 /**
  * تقسيم سجلات مخزن إلى شرائح أقل من الحد.
- * @returns {{chunks:Array[], oversized:Object|null}}
+ * كل شريحة إما { records:[...] } أو { big:{k,n,data} } (قطعة k من n لسجل كبير واحد).
+ * @returns {{chunks:Array<Object>|null, oversized:Object|null}}
  */
 function splitIntoChunks(list) {
   const enc = new TextEncoder();
   const chunks = [];
   let cur = [];
   let curBytes = 0;
+  const flush = () => { if (cur.length > 0) { chunks.push({ records: cur }); cur = []; curBytes = 0; } };
+
   for (const rec of list) {
-    const bytes = enc.encode(JSON.stringify(rec)).length + 1;
-    if (bytes > CHUNK_LIMIT_BYTES) return { chunks: null, oversized: rec };
-    if (cur.length > 0 && curBytes + bytes > CHUNK_LIMIT_BYTES) {
-      chunks.push(cur); cur = []; curBytes = 0;
+    const json = JSON.stringify(rec);
+    const bytes = enc.encode(json).length + 1;
+    if (bytes > MAX_RECORD_BYTES) return { chunks: null, oversized: rec };
+
+    if (bytes > CHUNK_LIMIT_BYTES) {
+      /* سجل كبير: قطع متتالية (لا نقطع في منتصف زوج surrogate فلا يفسد النص) */
+      flush();
+      const pieces = [];
+      let pos = 0;
+      while (pos < json.length) {
+        let end = Math.min(pos + PIECE_CHARS, json.length);
+        if (end < json.length) {
+          const code = json.charCodeAt(end - 1);
+          if (code >= 0xD800 && code <= 0xDBFF) end--;
+        }
+        pieces.push(json.slice(pos, end));
+        pos = end;
+      }
+      pieces.forEach((data, k) => chunks.push({ big: { k, n: pieces.length, data } }));
+      continue;
     }
+
+    if (cur.length > 0 && curBytes + bytes > CHUNK_LIMIT_BYTES) flush();
     cur.push(rec); curBytes += bytes;
   }
-  if (cur.length > 0) chunks.push(cur);
+  flush();
   return { chunks, oversized: null };
 }
 
@@ -187,7 +214,7 @@ export async function push(uid, opts = {}) {
       counts[s] = list.length;
       const { chunks, oversized } = splitIntoChunks(list);
       if (oversized) {
-        return { ok: false, error: 'سجل واحد في «' + s + '» يتجاوز 700KB (غالباً صورة كبيرة جداً) — صغّر الصورة ثم أعد الرفع' };
+        return { ok: false, error: 'سجل واحد في «' + s + '» يتجاوز 8MB (غالباً صور كثيرة/كبيرة جداً) — صغّر الصور ثم أعد الرفع' };
       }
       plan[s] = chunks;
     }
@@ -239,7 +266,7 @@ export async function push(uid, opts = {}) {
         const chunks = plan[s];
         for (let i = 0; i < chunks.length; i++) {
           const path = chunkPath(uid, s, i, gen);
-          await fsMod.setDoc(fsMod.doc(db, path), { store: s, index: i, records: chunks[i] });
+          await fsMod.setDoc(fsMod.doc(db, path), { store: s, index: i, ...chunks[i] });
           written.push(path);
         }
         manifest[s] = { chunks: chunks.length, count: counts[s] };
@@ -312,6 +339,7 @@ export async function pull(uid) {
       for (const s of Object.keys(main.manifest)) {
         const info = main.manifest[s] || {};
         const records = [];
+        let bigParts = [];
         for (let i = 0; i < (Number(info.chunks) || 0); i++) {
           const c = await fsMod.getDoc(fsMod.doc(db, chunkPath(uid, s, i, gen)));
           if (!c.exists()) {
@@ -319,10 +347,26 @@ export async function pull(uid) {
             retry = true;
             break;
           }
-          const arr = c.data() && c.data().records;
-          if (Array.isArray(arr)) records.push(...arr);
+          const cd = c.data() || {};
+          if (cd.big) {
+            /* قطعة من سجل كبير: نجمّعها بالترتيب ثم نفكّ JSON عند القطعة الأخيرة */
+            if (Number(cd.big.k) !== bigParts.length || typeof cd.big.data !== 'string') {
+              return { ok: false, error: 'قطع سجل كبير في «' + s + '» غير متسلسلة — لم يُطبَّق شيء' };
+            }
+            bigParts.push(cd.big.data);
+            if (bigParts.length === Number(cd.big.n)) {
+              try { records.push(JSON.parse(bigParts.join(''))); }
+              catch (e) { return { ok: false, error: 'سجل كبير في «' + s + '» تالف في السحابة — لم يُطبَّق شيء' }; }
+              bigParts = [];
+            }
+          } else if (Array.isArray(cd.records)) {
+            records.push(...cd.records);
+          }
         }
         if (retry) break;
+        if (bigParts.length > 0) {
+          return { ok: false, error: 'سجل كبير في «' + s + '» ناقص في السحابة — لم يُطبَّق شيء' };
+        }
         if (records.length !== (Number(info.count) || 0)) {
           return { ok: false, error: 'عدد سجلات «' + s + '» في السحابة لا يطابق المانيفست — لم يُطبَّق شيء' };
         }

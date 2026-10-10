@@ -193,7 +193,14 @@ register('audit v3.3.12 chunked sync', async (t) => {
 
   await idb.put('orders', { id: 'huge', notes: 'y'.repeat(800000) });
   const huge = await fsync.push('uid1');
-  await t.test('7. سجل أكبر من 700KB يُرفض برسالة واضحة', huge.ok === false && /700KB/.test(huge.error));
+  const hugePull = await fsync.pull('uid1');
+  const hugeRec = hugePull.ok && hugePull.data.stores.orders.find((o) => o.id === 'huge');
+  await t.test('7. سجل أكبر من 700KB يُرفع مقسَّماً ويعود كاملاً (v3.3.23)',
+    huge.ok === true && !!hugeRec && hugeRec.notes.length === 800000);
+
+  await idb.put('orders', { id: 'huge', notes: 'y'.repeat(9 * 1024 * 1024) });
+  const absurd = await fsync.push('uid1');
+  await t.test('8. سجل أكبر من 8MB يُرفض برسالة واضحة', absurd.ok === false && /8MB/.test(absurd.error));
 
   fsync._setBackendForTest(null);
   for (const s of fsync.SYNC_STORES) await idb.clear(s);

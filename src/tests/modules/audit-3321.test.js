@@ -14,6 +14,7 @@ function fakeFirestore() {
   const fsMod = {
     doc: (db, path) => ({ path }),
     setDoc: async (ref, data) => {
+      if (new TextEncoder().encode(JSON.stringify(data)).length > 1048576) throw new Error('document too large');
       if (hooks.beforeSet) await hooks.beforeSet(ref.path);
       store.set(ref.path, clone(data));
     },
@@ -191,6 +192,44 @@ register('audit v3.3.22 dirty tracking & auto-sync', async (t) => {
   auto.setUser(null);
   fsync._setBackendForTest(null);
   dirty.markClean();
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+});
+
+register('audit v3.3.23 big records', async (t) => {
+  const fake = fakeFirestore();
+  fsync._setBackendForTest(fake.backend);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+
+  /* طلب بعدة صور (data URL) + نص بإيموجي (أزواج surrogate) وعربي: يتجاوز 700KB بكثير */
+  const fakeImg = (n) => 'data:image/jpeg;base64,' + 'QUJD'.repeat(n);
+  const big = {
+    id: 'big1', updatedAt: 10,
+    images: [fakeImg(150000), fakeImg(150000), fakeImg(150000)],
+    notes: '😀'.repeat(200000) + 'ورشة'.repeat(100000),
+  };
+  await idb.put('orders', { id: 'a', updatedAt: 1 });
+  await idb.put('orders', big);
+  await idb.put('orders', { id: 'z', updatedAt: 2 });
+  await idb.put('customers', { id: 'c1' });
+
+  const r = await fsync.push('u3323', { force: true });
+  const main = fake.store.get('users_v3/u3323/data/main');
+  await t.test('1. سجل كبير (عدة صور) لا يوقف الرفع: ينجح مقسَّماً', r.ok === true && main.manifest.orders.count === 3 && main.manifest.orders.chunks >= 4);
+
+  const p = await fsync.pull('u3323');
+  const got = p.ok && p.data.stores.orders;
+  const same = got && got.length === 3 && JSON.stringify(got.find((o) => o.id === 'big1')) === JSON.stringify(big);
+  await t.test('2. التنزيل يعيد السجل الكبير مطابقاً حرفاً بحرف (إيموجي/عربي/صور) وبقية السجلات سليمة',
+    !!same && got.some((o) => o.id === 'a') && got.some((o) => o.id === 'z'));
+
+  const gen = main.gen;
+  fake.store.delete('users_v3/u3323/data/store_orders_g' + gen + '_2');
+  const broken = await fsync.pull('u3323');
+  await t.test('3. قطعة مفقودة من سجل كبير → خطأ واضح بدل بيانات ناقصة', broken.ok === false);
+
+  fsync._setBackendForTest(null);
   for (const s of fsync.SYNC_STORES) await idb.clear(s);
   fsync.setKnownRev(null);
 });
