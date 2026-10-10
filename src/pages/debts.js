@@ -12,12 +12,61 @@ import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
-import { formatEGP } from '../core/utils.js';
+import { formatEGP, formatDate } from '../core/utils.js';
+import { modal } from '../ui/modal.js';
 import { sendWhatsApp } from '../services/auto-messages.js';
 import { toast } from '../ui/toast.js';
 import { computeReceivables, buildReminderText } from '../services/receivables.js';
 
 let state = { container: null, showAll: false, data: null, workshop: '' };
+
+async function loadData() {
+  const [ord, pay, cus, st] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get()]);
+  state.workshop = (st.workshop && st.workshop.name) || '';
+  state.data = computeReceivables(ord, pay, cus);
+}
+
+/* لوحة ربط الدفعات غير المربوطة بطلب — الربط يدوي بقرار المستخدم (لا تخمين تلقائي) */
+function linkPanel(c) {
+  const panel = el('div', { style: { display: 'none', marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' } });
+  c.unlinkedPayments.forEach((p) => {
+    const select = el('select', { style: { flex: '1', minWidth: '0', fontSize: '12px', padding: '4px' } },
+      c.orders.map((o) => el('option', { value: String(o.id) },
+        '#' + String(o.id).slice(-6) + ' — متبقٍّ ' + formatEGP(o.remaining))));
+    const btn = el('button', {
+      className: 'btn btn--primary', type: 'button', style: { fontSize: '12px', padding: '4px 10px' },
+      onClick: async () => {
+        const order = c.orders.find((o) => String(o.id) === select.value);
+        if (!order) return;
+        if (p.amount > order.remaining + 0.009) {
+          const ok = await modal.confirm({
+            title: 'الدفعة أكبر من المتبقي',
+            message: 'الدفعة ' + formatEGP(p.amount) + ' أكبر من المتبقي على الطلب ' + formatEGP(order.remaining) + '. هل تريد الربط رغم ذلك؟',
+            confirmText: 'اربط', cancelText: 'إلغاء',
+          });
+          if (!ok) return;
+        }
+        btn.disabled = true;
+        try {
+          await payments.update(p.id, { orderId: order.id });
+          toast.success('تم ربط الدفعة بالطلب');
+          await loadData();
+          draw();
+        } catch (err) {
+          console.error('[debts] link payment:', err);
+          btn.disabled = false;
+          toast.error('تعذّر ربط الدفعة');
+        }
+      },
+    }, 'ربط');
+    panel.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0', fontSize: '12px' } }, [
+      el('span', { style: { whiteSpace: 'nowrap', fontWeight: '600' } },
+        formatEGP(p.amount) + (p.date ? ' · ' + formatDate(p.date) : '')),
+      select, btn,
+    ]));
+  });
+  return panel;
+}
 
 function statCard(label, value, color) {
   return el('div', { className: 'card', style: { padding: '10px', textAlign: 'center' } }, [
@@ -58,6 +107,14 @@ function customerCard(c) {
   }, '▼ الطلبات (' + c.orders.length + ')');
 
   const actions = [toggle];
+  let linker = null;
+  if (c.unlinkedPayments && c.unlinkedPayments.length && c.orders.length) {
+    linker = linkPanel(c);
+    actions.push(el('button', {
+      className: 'btn btn--secondary', type: 'button', style: { fontSize: '12px', padding: '4px 10px' },
+      onClick: () => { linker.style.display = linker.style.display === 'none' ? 'block' : 'none'; },
+    }, '🔗 ربط الدفعات (' + c.unlinkedPayments.length + ')'));
+  }
   if (hasOverdue) {
     actions.unshift(el('button', {
       className: 'btn btn--primary', type: 'button', style: { fontSize: '12px', padding: '4px 10px' },
@@ -88,6 +145,7 @@ function customerCard(c) {
     ]),
     meta.length ? el('div', { style: { fontSize: '11px', color: '#666', marginTop: '4px', lineHeight: '1.7' } }, meta.join(' · ')) : null,
     el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' } }, actions),
+    linker,
     details,
   ].filter(Boolean));
 }
@@ -140,9 +198,7 @@ export const debtsPage = {
     state = { container, showAll: false, data: null, workshop: '' };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ الحساب...'));
     try {
-      const [ord, pay, cus, st] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get()]);
-      state.workshop = (st.workshop && st.workshop.name) || '';
-      state.data = computeReceivables(ord, pay, cus);
+      await loadData();
       draw();
     } catch (err) {
       console.error('[debts] render:', err);

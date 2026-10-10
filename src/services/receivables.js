@@ -44,6 +44,7 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
 
   const byOrder = new Map();
   const unlinked = new Map();   /* customerId → مجموع الدفعات بلا orderId */
+  const unlinkedList = new Map(); /* customerId → [{id, amount, date}] لربطها يدوياً بطلب */
   for (const p of pays) {
     if (!p) continue;
     if (p.orderId) {
@@ -51,6 +52,10 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
       byOrder.get(p.orderId).push(p);
     } else if (p.customerId != null) {
       unlinked.set(p.customerId, (unlinked.get(p.customerId) || 0) + (Number(p.amount) || 0));
+      if ((Number(p.amount) || 0) > 0 && p.id != null) {
+        if (!unlinkedList.has(p.customerId)) unlinkedList.set(p.customerId, []);
+        unlinkedList.get(p.customerId).push({ id: p.id, amount: Number(p.amount) || 0, date: p.date || p.createdAt || null });
+      }
     }
   }
 
@@ -78,6 +83,7 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
         phone: (c && c.phone) || '',
         overdue: 0, pending: 0, oldestDays: 0,
         unlinkedCredit: unlinked.get(o.customerId) || 0,
+        unlinkedPayments: unlinkedList.get(o.customerId) || [],
         orders: [],
       };
       byCustomer.set(o.customerId, row);

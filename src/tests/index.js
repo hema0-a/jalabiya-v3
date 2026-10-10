@@ -32,5 +32,6 @@ import './modules/audit-3316.test.js';
 import './modules/audit-3318.test.js';
 import './modules/audit-3321.test.js';
 import './modules/audit-3326.test.js';
+import './modules/audit-3327.test.js';
 
 export { runAll, register } from './registry.js';
