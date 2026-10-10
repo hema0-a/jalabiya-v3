@@ -120,7 +120,7 @@ function openLoanForm(existing = null) {
           const personName = nameInput.value.trim();
           const amount = Number(amountInput.value);
           if (!personName) return toast.warning('اسم الشخص مطلوب');
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
 
           const data = {
             type: typeSelect.value,
@@ -181,7 +181,7 @@ function openPaymentForm(loan) {
         text: 'حفظ الدفعة', variant: 'primary', action: 'save',
         onClick: async () => {
           const amount = Number(amountInput.value);
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           if (!dateInput.value) return toast.warning('التاريخ مطلوب');
           try {
             await loanPayments.create({

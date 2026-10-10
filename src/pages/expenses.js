@@ -77,7 +77,7 @@ function openExpenseForm(existing = null) {
         action: 'save',
         onClick: async () => {
           const amount = Number(amountInput.value);
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           const data = {
             category: categorySelect.value,
             amount,

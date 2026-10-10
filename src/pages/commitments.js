@@ -319,7 +319,7 @@ function openCommitmentForm(existing = null) {
           const name = nameInput.value.trim();
           const amount = Number(amountInput.value);
           if (!name) return toast.warning('الاسم مطلوب');
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           const dueVal = dueInput.value.trim();
           const data = {
             name,
@@ -380,7 +380,7 @@ function openPaymentForm(commitment) {
         text: 'حفظ الدفعة', variant: 'primary', action: 'save',
         onClick: async () => {
           const amount = Number(amountInput.value);
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           if (!dateInput.value) return toast.warning('التاريخ مطلوب');
           try {
             await commitmentPayments.create({
@@ -676,7 +676,7 @@ function openGoalDeposit(goal) {
         text: 'إيداع', variant: 'primary', action: 'save',
         onClick: async () => {
           const amount = Number(amountInput.value);
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           try {
             await savingsGoals.deposit(goal.id, amount);
             toast.success('تم الإيداع');

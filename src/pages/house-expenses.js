@@ -246,7 +246,7 @@ function openExpenseForm(existing = null) {
       text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
       onClick: async () => {
         const amount = Number(amountInput.value);
-        if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+        if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
         if (!dateInput.value) return toast.warning('التاريخ مطلوب');
         const data = {
           category: catSelect.value,
