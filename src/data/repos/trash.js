@@ -58,7 +58,8 @@ export const trash = {
   async restore(trashId) {
     const item = await base.find(trashId);
     if (!item || !item.originalStore || !item.data) return null;
-    await idb.put(item.originalStore, item.data);
+    /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
+    await idb.put(item.originalStore, { ...item.data, updatedAt: Date.now() });
     await base.remove(trashId);
     return item.data;
   },

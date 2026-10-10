@@ -228,8 +228,19 @@ async function writeOp(storeName, run) {
   });
 }
 
+/* مستمعو تعديل السجلات الفردية (لشواهد الحذف): (storeName, id) بعد نجاح العملية */
+const putListeners = [];
+const removeListeners = [];
+export function onPut(cb) { if (typeof cb === 'function') putListeners.push(cb); }
+export function onRemove(cb) { if (typeof cb === 'function') removeListeners.push(cb); }
+function notifyRec(list, storeName, id) {
+  for (const cb of list) { try { cb(storeName, id); } catch (e) { console.warn('[idb] record listener:', e); } }
+}
+
 export async function put(storeName, value) {
-  return writeOp(storeName, (store) => store.put(value));
+  const res = await writeOp(storeName, (store) => store.put(value));
+  notifyRec(putListeners, storeName, value ? value.id : undefined);
+  return res;
 }
 
 export async function get(storeName, id) {
@@ -243,7 +254,9 @@ export async function getAll(storeName) {
 }
 
 export async function remove(storeName, id) {
-  return writeOp(storeName, (store) => store.delete(id));
+  const res = await writeOp(storeName, (store) => store.delete(id));
+  notifyRec(removeListeners, storeName, id);
+  return res;
 }
 
 export async function clear(storeName) {
@@ -263,7 +276,8 @@ export async function getByIndex(storeName, indexName, value) {
 /**
  * كتابة ذرّية (Atomic) لعدة مخازن في معاملة واحدة: كلها تنجح أو كلها تُلغى.
  * تُستخدم في الاستعادة والاستيراد والمزامنة حتى لا تبقى البيانات نصف مكتوبة.
- * @param {Object<string,{clear?:boolean, records:Array}>} plan
+ * @param {Object<string,{clear?:boolean, deletes?:Array, records:Array}>} plan
+ *   الترتيب داخل المخزن: clear ← deletes ← records (فالسجل المكتوب يغلب حذفاً لنفس المعرّف).
  * @returns {Promise<Object<string,number>>} عدد السجلات المكتوبة لكل مخزن
  */
 export async function writeBatch(plan) {
@@ -282,8 +296,9 @@ export async function writeBatch(plan) {
     try {
       for (const n of names) {
         const store = tx.objectStore(n);
-        const { clear: doClear, records } = plan[n];
+        const { clear: doClear, records, deletes } = plan[n];
         if (doClear) store.clear();
+        for (const id of (deletes || [])) store.delete(id);
         let c = 0;
         for (const rec of (records || [])) { store.put(rec); c++; }
         counts[n] = c;

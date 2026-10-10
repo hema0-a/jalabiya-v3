@@ -25,6 +25,7 @@ import { loadFirebase } from './firebase-config.js';
 import { FIRESTORE_PATHS } from '../core/config.js';
 import * as idb from '../data/idb.js';
 import { markClean, markCleanIfUnchanged } from './dirty-state.js';
+import * as tombstones from './tombstones.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -33,6 +34,9 @@ export const SYNC_STORES = [
   'portfolio', 'commitments', 'commitmentPayments', 'savingsGoals',
   'houseExpenses', 'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
 ];
+
+/* مخزن وهمي في المانيفست يحمل شواهد الحذف (v3.3.24) */
+const TOMB = 'tombstones';
 
 const VERSION = '10.12.0';
 /* حجم الشريحة الواحدة (JSON) — حد Firestore 1,048,576 بايت ونترك هامشاً للترميز */
@@ -100,7 +104,7 @@ export function setKnownRev(rev) {
 function remoteTotal(main) {
   if (!main) return 0;
   if (main.manifest) {
-    return Object.values(main.manifest).reduce((a, m) => a + (Number(m && m.count) || 0), 0);
+    return Object.entries(main.manifest).reduce((a, [k, m]) => a + (k === TOMB ? 0 : (Number(m && m.count) || 0)), 0);
   }
   if (main.stores) {
     return Object.values(main.stores).reduce((a, l) => a + (Array.isArray(l) ? l.length : 0), 0);
@@ -219,8 +223,16 @@ export async function push(uid, opts = {}) {
       plan[s] = chunks;
     }
 
+    /* شواهد الحذف المحلية (تنتقل مع البيانات فينتشر الحذف إلى الأجهزة الأخرى) */
+    tombstones.install(SYNC_STORES);
+    let tombList;
+    try { tombList = await tombstones.getAllPurged(); }
+    catch (e) { return { ok: false, error: 'تعذّرت قراءة سجل الحذف محلياً — لم يُرفع شيء حمايةً لنسخة السحابة' }; }
+    counts[TOMB] = tombList.length;
+    plan[TOMB] = splitIntoChunks(tombList).chunks || [];
+
     /* حماية: رفع قاعدة فارغة يمسح نسخة السحابة السليمة (جهاز جديد / بيانات متصفح ممسوحة) */
-    const totalRecords = Object.values(counts).reduce((a, b) => a + b, 0);
+    const totalRecords = SYNC_STORES.reduce((a, s) => a + (counts[s] || 0), 0);
     if (totalRecords === 0) {
       return { ok: false, error: 'لا توجد بيانات محلية لرفعها — الرفع الآن سيمسح بيانات السحابة' };
     }
@@ -262,7 +274,7 @@ export async function push(uid, opts = {}) {
     const manifest = {};
     const newRev = Math.max(Date.now(), (remoteRev || 0) + 1);
     try {
-      for (const s of SYNC_STORES) {
+      for (const s of [...SYNC_STORES, TOMB]) {
         const chunks = plan[s];
         for (let i = 0; i < chunks.length; i++) {
           const path = chunkPath(uid, s, i, gen);
@@ -299,6 +311,7 @@ export async function push(uid, opts = {}) {
       }
     }
 
+    delete counts[TOMB];
     return { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };
@@ -388,46 +401,93 @@ export async function pull(uid) {
 function recTime(r) { return Number(r && r.updatedAt) || 0; }
 
 /**
- * مقارنة سجلات سحابية بالمحلية في مخزن واحد.
- * @returns {{toPut:Array, added:number, updated:number, localOnly:number, localNewer:number}}
- *   toPut: سجلات السحابة التي يجب كتابتها محلياً في الدمج (جديدة أو أحدث).
+ * مقارنة سجلات سحابية بالمحلية في مخزن واحد مع مراعاة شواهد الحذف.
+ * قاعدة الشاهد (وقت الحذف d): السجل الذي updatedAt ≤ d يُعدّ محذوفاً؛ الأحدث من d يبقى.
+ * @param {Array} local
+ * @param {Array} cloud
+ * @param {string} store
+ * @param {Map<string,number>} tomb — اتحاد شواهد الجهاز والسحابة
+ * @returns {{toPut:Array, toDelete:Array, added:number, updated:number, localOnly:number, localNewer:number, deleted:number, survivors:Map<string,number>}}
  */
-function compareStore(local, cloud) {
+function compareStore(local, cloud, store, tomb) {
+  const dOf = (id) => (tomb ? tomb.get(store + ':' + id) : undefined);
   const localMap = new Map();
   for (const r of local) if (r && r.id != null) localMap.set(r.id, r);
   const cloudIds = new Set();
   const toPut = [];
-  let added = 0, updated = 0, localNewer = 0;
+  const toDelete = [];
+  const survivors = new Map();
+  let added = 0, updated = 0, localNewer = 0, deleted = 0, localOnly = 0;
+
   for (const c of cloud) {
     if (!c || typeof c !== 'object' || c.id == null) continue;
     cloudIds.add(c.id);
+    const d = dOf(c.id);
+    if (d !== undefined && d >= recTime(c)) continue;          /* حُذف بعد آخر تعديل له */
     const l = localMap.get(c.id);
-    if (!l) { toPut.push(c); added++; }
-    else if (recTime(c) > recTime(l)) { toPut.push(c); updated++; }
+    if (!l) { toPut.push(c); added++; survivors.set(String(c.id), recTime(c)); }
+    else if (recTime(c) > recTime(l)) { toPut.push(c); updated++; survivors.set(String(c.id), recTime(c)); }
     else if (recTime(l) > recTime(c)) { localNewer++; }
   }
-  let localOnly = 0;
-  for (const id of localMap.keys()) if (!cloudIds.has(id)) localOnly++;
-  return { toPut, added, updated, localOnly, localNewer };
+  for (const [id, l] of localMap) {
+    const d = dOf(id);
+    if (d !== undefined && d >= recTime(l)) { toDelete.push(id); deleted++; continue; }
+    survivors.set(String(id), Math.max(survivors.get(String(id)) || 0, recTime(l)));
+    if (!cloudIds.has(id)) localOnly++;
+  }
+  return { toPut, toDelete, added, updated, localOnly, localNewer, deleted, survivors };
+}
+
+/**
+ * حساب خطة الدمج الكاملة (قراءة فقط): مقارنة كل مخزن + اتحاد الشواهد وتنقيتها.
+ * @returns {Promise<{perStore:Object, finalTombs:Array, tombPending:number, totals:Object}>}
+ */
+async function buildMergePlan(snapshot) {
+  tombstones.install(SYNC_STORES);
+  const localTombs = await tombstones.getAll();
+  const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
+  const localMap = tombstones.toMap(localTombs);
+  const cloudMap = tombstones.toMap(cloudTombs);
+  const union = new Map(cloudMap);
+  for (const [k, d] of localMap) if (!(union.get(k) >= d)) union.set(k, d);
+
+  const perStore = {};
+  const survivorsByStore = {};
+  const totals = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0 };
+  for (const s of SYNC_STORES) {
+    if (!Array.isArray(snapshot.stores[s])) continue;
+    const local = await idb.getAll(s);
+    const r = compareStore(Array.isArray(local) ? local : [], snapshot.stores[s], s, union);
+    perStore[s] = r;
+    survivorsByStore[s] = r.survivors;
+    for (const k of Object.keys(totals)) totals[k] += r[k];
+  }
+
+  /* تنقية الشواهد: يسقط الشاهد إن وُجد سجل ناجٍ أحدث منه */
+  const finalTombs = [];
+  let tombPending = 0;
+  for (const [k, d] of union) {
+    const i = k.indexOf(':');
+    const s = k.slice(0, i); const rid = k.slice(i + 1);
+    const surv = survivorsByStore[s] ? survivorsByStore[s].get(rid) : undefined;
+    if (surv !== undefined && surv > d) continue;
+    finalTombs.push({ id: k, store: s, rid, deletedAt: d });
+    if (localMap.has(k) && !(cloudMap.get(k) >= localMap.get(k))) tombPending++;   /* حذف محلي لم يُرفع بعد */
+  }
+  return { perStore, finalTombs, tombPending, totals };
 }
 
 /**
  * ماذا سيحدث لو دُمجت السحابة مع المحلي؟ (للقراءة فقط — لا يكتب شيئاً)
  * @param {Object} snapshot — { stores }
- * @returns {Promise<{ok:boolean, localOnly?:number, localNewer?:number, added?:number, updated?:number, error?:string}>}
+ * @returns {Promise<{ok:boolean, localOnly?:number, localNewer?:number, added?:number, updated?:number, deleted?:number, tombPending?:number, error?:string}>}
+ *   deleted: سجلات محلية ستُحذف لأنها حُذفت على جهاز آخر · tombPending: حذف محلي لم يُرفع بعد
  */
 export async function analyzeLocalVsCloud(snapshot) {
   if (!snapshot || !snapshot.stores) return { ok: false, error: 'snapshot غير صالح' };
   try {
-    const tot = { localOnly: 0, localNewer: 0, added: 0, updated: 0 };
-    for (const s of SYNC_STORES) {
-      if (!Array.isArray(snapshot.stores[s])) continue;
-      const local = await idb.getAll(s);
-      const r = compareStore(Array.isArray(local) ? local : [], snapshot.stores[s]);
-      tot.localOnly += r.localOnly; tot.localNewer += r.localNewer;
-      tot.added += r.added; tot.updated += r.updated;
-    }
-    return { ok: true, ...tot };
+    const { totals, tombPending } = await buildMergePlan(snapshot);
+    return { ok: true, ...totals, tombPending };
   } catch (err) {
     return { ok: false, error: translateError(err) };
   }
@@ -435,9 +495,9 @@ export async function analyzeLocalVsCloud(snapshot) {
 
 /**
  * تطبيق بيانات السحابة محلياً (ذرّياً).
- *  - mode 'replace' (الافتراضي): استبدال مخازن الـ snapshot بالسحابة.
- *  - mode 'merge': لا يُمسح أي سجل محلي؛ سجلات السحابة الجديدة تُضاف، وفي التعارض يفوز الأحدث updatedAt
- *    (والمحلي عند التساوي). ثمنه: سجل حُذف على جهاز آخر قد يعود هنا — أهون من ضياع بيانات.
+ *  - mode 'replace' (الافتراضي): استبدال مخازن الـ snapshot بالسحابة (وشواهد الحذف أيضاً).
+ *  - mode 'merge': لا يُمسح سجل محلي إلا بشاهد حذف أحدث منه؛ سجلات السحابة الجديدة تُضاف،
+ *    وفي التعارض يفوز الأحدث updatedAt (والمحلي عند التساوي). الحذف على أي جهاز ينتقل للآخر.
  * @param {Object} snapshot — { stores: {...}, updatedAt }
  * @param {{mode?:'replace'|'merge'}} [opts]
  * @returns {Promise<{ok:boolean, counts?:Object, merge?:Object, error?:string}>}
@@ -448,31 +508,33 @@ export async function apply(snapshot, opts = {}) {
   }
   const merge = !!(opts && opts.mode === 'merge');
   try {
+    tombstones.install(SYNC_STORES);
     /* استبدال/دمج ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
     const plan = {};
-    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0 };
-    for (const s of SYNC_STORES) {
-      /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
-      if (!Array.isArray(snapshot.stores[s])) continue;
-      const list = snapshot.stores[s];
-      if (merge) {
-        const local = await idb.getAll(s);
-        const r = compareStore(Array.isArray(local) ? local : [], list);
-        plan[s] = { clear: false, records: r.toPut };
-        stats.added += r.added; stats.updated += r.updated;
-        stats.localOnly += r.localOnly; stats.localNewer += r.localNewer;
-      } else {
-        plan[s] = { clear: true, records: list.filter((r) => r && typeof r === 'object' && r.id != null) };
+    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, tombPending: 0 };
+    if (merge) {
+      const mp = await buildMergePlan(snapshot);
+      for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
+      Object.assign(stats, mp.totals, { tombPending: mp.tombPending });
+      plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs)] };
+    } else {
+      for (const s of SYNC_STORES) {
+        /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
+        if (!Array.isArray(snapshot.stores[s])) continue;
+        plan[s] = { clear: true, records: snapshot.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
       }
+      const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
+      plan.settings = { clear: false, records: [tombstones.buildRecord(cloudTombs)] };
     }
-    if (Object.keys(plan).length === 0) {
+    if (Object.keys(plan).filter((n) => n !== 'settings').length === 0) {
       return { ok: false, error: 'النسخة السحابية لا تحتوي أي مخزن صالح' };
     }
     const counts = await idb.writeBatch(plan);
+    delete counts.settings;
     /* بعد التطبيق صار هذا الجهاز يعرف نسخة السحابة هذه — فيسمح الرفع التالي */
     if (snapshot.updatedAt !== undefined) setKnownRev(snapshot.updatedAt);
-    /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات محلية = يحتاج رفعاً */
-    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0)) markClean();
+    /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات/حذف محلي لم يُرفع = يحتاج رفعاً */
+    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0)) markClean();
     return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };

@@ -152,13 +152,14 @@ export async function pullFlow(uid) {
   }
 
   let mode = 'replace';
-  if (an.localOnly + an.localNewer > 0) {
+  if (an.localOnly + an.localNewer + an.tombPending > 0) {
     const parts = [];
     if (an.localOnly) parts.push(an.localOnly + ' سجل موجود هنا وغير موجود في السحابة');
     if (an.localNewer) parts.push(an.localNewer + ' سجل معدَّل هنا أحدث من نسخته في السحابة');
+    if (an.tombPending) parts.push(an.tombPending + ' حذف لم يُرفع بعد');
     const choice = await choose({
       title: 'بيانات على هذا الجهاز لم تُرفع',
-      message: 'على هذا الجهاز: ' + parts.join('، ') + '.\n\n«الدمج» يحفظ كل شيء ويأخذ الأحدث لكل سجل. «الاستبدال» يمسح هذه السجلات من الجهاز.',
+      message: 'على هذا الجهاز: ' + parts.join('، ') + '.\n\n«الدمج» يحفظ كل شيء ويأخذ الأحدث لكل سجل وينقل الحذف بين الأجهزة. «الاستبدال» يمسح هذه السجلات من الجهاز ويُرجع المحذوف.',
       actions: [
         { text: '🔀 دمج (يحفظ كل شيء)', variant: 'primary', value: 'merge' },
         { text: '⚠️ استبدال بالسحابة', variant: 'danger', value: 'replace' },
@@ -170,7 +171,7 @@ export async function pullFlow(uid) {
   } else {
     const ok = await modal.confirm({
       title: 'تنزيل من السحابة',
-      message: 'سيتم تحديث البيانات المحلية بالبيانات السحابية. متابعة؟',
+      message: 'سيتم تحديث البيانات المحلية بالبيانات السحابية' + (an.deleted ? ' (وحذف ' + an.deleted + ' سجل حُذف من جهاز آخر)' : '') + '. متابعة؟',
       confirmText: 'تنزيل', cancelText: 'إلغاء',
     });
     if (!ok) return { ok: false, cancelled: true };

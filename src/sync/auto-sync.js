@@ -12,6 +12,7 @@
 import * as authSync from './auth-sync.js';
 import * as fsync from './firestore-sync.js';
 import * as dirty from './dirty-state.js';
+import * as tombstones from './tombstones.js';
 import { STORAGE_KEYS } from '../core/config.js';
 
 const K_AUTO = 'jalabiya_v3_auto_sync';
@@ -116,6 +117,7 @@ export function start() {
   if (started) return;
   started = true;
   dirty.installTracking(fsync.SYNC_STORES);
+  tombstones.install(fsync.SYNC_STORES);   /* شواهد الحذف: لا يضيع أي حذف قبل أول مزامنة */
 
   dirty.subscribe((st) => {
     emit();

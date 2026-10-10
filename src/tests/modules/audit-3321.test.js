@@ -233,3 +233,93 @@ register('audit v3.3.23 big records', async (t) => {
   for (const s of fsync.SYNC_STORES) await idb.clear(s);
   fsync.setKnownRev(null);
 });
+
+register('audit v3.3.24 deletion sync (tombstones)', async (t) => {
+  const tomb = await import('../../sync/tombstones.js');
+  const fake = fakeFirestore();
+  fsync._setBackendForTest(fake.backend);
+  tomb.install(fsync.SYNC_STORES);
+  const reset = async () => {
+    for (const s of fsync.SYNC_STORES) await idb.clear(s);
+    await idb.remove('settings', tomb.TOMB_KEY);
+    await tomb.flush();
+    fsync.setKnownRev(null);
+  };
+  const ids = async () => (await tomb.getAll()).map((x) => x.id).sort();
+  await reset();
+
+  await idb.put('orders', { id: 't1', updatedAt: 1 });
+  await idb.remove('orders', 't1');
+  await tomb.flush();
+  await t.test('1. حذف سجل في مخزن مُزامَن يترك شاهد حذف', (await ids()).includes('orders:t1'));
+
+  await idb.put('orders', { id: 't1', updatedAt: 2 });
+  await tomb.flush();
+  await t.test('2. إعادة كتابة السجل (استرجاع) تمسح شاهده', !(await ids()).includes('orders:t1'));
+
+  await idb.put('orders', { id: 'k1', updatedAt: 1 });
+  await idb.put('orders', { id: 'k2', updatedAt: 1 });
+  await idb.clear('orders');
+  await tomb.flush();
+  await t.test('3. المسح الجماعي (clear) لا يُنشئ شواهد: المسح المحلي لا ينتشر', (await ids()).length === 0);
+
+  /* الرفع يحمل الشواهد والتنزيل يعيدها، ولا تُحتسب ضمن عدّاد السجلات */
+  await reset();
+  for (let i = 0; i < 12; i++) await idb.put('orders', { id: 'p' + i, updatedAt: 10 });
+  await idb.remove('orders', 'p0');
+  await tomb.flush();
+  const pr = await fsync.push('u3324', { force: true });
+  const pl = await fsync.pull('u3324');
+  await t.test('4. الرفع يشمل الشواهد والتنزيل يعيدها ولا تدخل في counts',
+    pr.ok && pr.counts.tombstones === undefined && pl.ok &&
+    pl.data.stores.tombstones.some((x) => x.id === 'orders:p0'));
+
+  /* دمج: الحذف القادم من السحابة يُطبَّق، والسجل الأحدث من حذفه يبقى */
+  await reset();
+  await idb.put('orders', { id: 'X', updatedAt: 100 });
+  await idb.put('orders', { id: 'Y', updatedAt: 900 });
+  await idb.put('orders', { id: 'W', updatedAt: 100 });
+  const snapA = { updatedAt: 5, stores: {
+    orders: [{ id: 'W', updatedAt: 100 }],
+    tombstones: [
+      { id: 'orders:X', store: 'orders', rid: 'X', deletedAt: 500 },
+      { id: 'orders:Y', store: 'orders', rid: 'Y', deletedAt: 500 },
+    ] } };
+  const anA = await fsync.analyzeLocalVsCloud(snapA);
+  const apA = await fsync.apply(snapA, { mode: 'merge' });
+  const left = (await idb.getAll('orders')).map((x) => x.id).sort();
+  await tomb.flush();
+  await t.test('5. دمج: الحذف من جهاز آخر يُطبَّق على السجل الأقدم ويبقى الأحدث',
+    anA.ok && anA.deleted === 1 && apA.ok && left.join() === 'W,Y' && apA.merge.deleted === 1);
+  await t.test('6. شاهد السجل الذي عُدّل بعد حذفه يسقط ويبقى شاهد المحذوف فعلاً',
+    JSON.stringify(await ids()) === JSON.stringify(['orders:X']));
+
+  /* حذف محلي لا يُعاد من السحابة، وسجل عُدّل بعد حذفه يعود */
+  await reset();
+  await idb.put('orders', { id: 'Z', updatedAt: 50 });
+  await idb.put('orders', { id: 'Q', updatedAt: 50 });
+  await idb.remove('orders', 'Z');
+  await idb.remove('orders', 'Q');
+  await tomb.flush();
+  const dz = (await tomb.getAll()).find((x) => x.id === 'orders:Z').deletedAt;
+  const snapB = { updatedAt: 6, stores: { orders: [
+    { id: 'Z', updatedAt: dz - 1 },            /* حُذف محلياً بعد آخر تعديل → لا يعود */
+    { id: 'Q', updatedAt: dz + 100000 },       /* عُدّل في السحابة بعد حذفه → يعود */
+  ] } };
+  const apB = await fsync.apply(snapB, { mode: 'merge' });
+  const got = (await idb.getAll('orders')).map((x) => x.id).sort();
+  await tomb.flush();
+  await t.test('7. لا يُعاد سجل حُذف محلياً من السحابة، ويعود ما عُدّل بعد حذفه',
+    apB.ok && got.join() === 'Q' && JSON.stringify(await ids()) === JSON.stringify(['orders:Z']));
+  await t.test('8. حذف محلي لم يُرفع بعد يُحتسب (tombPending) فيبقى الجهاز «غير مرفوع»', apB.merge.tombPending === 1);
+
+  /* الاستبدال يتبنى شواهد السحابة */
+  const snapC = { updatedAt: 7, stores: { orders: [{ id: 'Only', updatedAt: 1 }],
+    tombstones: [{ id: 'orders:Gone', store: 'orders', rid: 'Gone', deletedAt: 123 }] } };
+  const apC = await fsync.apply(snapC);
+  await tomb.flush();
+  await t.test('9. وضع الاستبدال يتبنى شواهد السحابة', apC.ok && JSON.stringify(await ids()) === JSON.stringify(['orders:Gone']));
+
+  fsync._setBackendForTest(null);
+  await reset();
+});
