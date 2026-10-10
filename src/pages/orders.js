@@ -277,14 +277,22 @@ function openOrderForm(existing = null) {
     style: { flexShrink: '0' },
     onClick: async () => {
       try {
+         const _items = Array.from(itemsContainer.children).map((r) => r._getValues());
+const _fees = Array.from(feesContainer.children).map((r) => r._getValues());
+const _t = computeTotals(_items, discountTypeSelect.value, discountValueInput.value, _fees);
+const _orderAmount = Number(_t.amount) || 0;
         const suggestion = suggestDueDate(state.orders, {
           dayOffWeekday: state.scheduleConfig.dayOffWeekday,
           dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
-          minDays: 3, maxLookaheadDays: 30,
+          minDays: 1, maxLookaheadDays: 60,
           excludeOrderId: existing ? existing.id : null,
+          orderAmount: _orderAmount,
         });
         dueDateInput.value = localDateInput(suggestion.timestamp);
         toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
+        if (suggestion.overLimit) {
+          toast.warning('⚠️ مبلغ الطلب يتجاوز الحد اليومي — تم اختيار أول يوم فارغ');
+        }
       } catch (e) { toast.danger('فشل الاقتراح'); }
     },
   }, '✨');
