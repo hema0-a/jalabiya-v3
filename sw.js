@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.27 — ربط الدفعات بالطلبات
+   الإصدار: v3.3.29 — تحسينات الأداء والبنية
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.27';
+const CACHE_VERSION = 'v3.3.29';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -23,7 +23,6 @@ const PRECACHE_URLS = [
   './manifest.json',
 
   /* --- Styles --- */
-  './styles/main.css',
   './styles/base.css',
   './styles/components.css',
   './styles/layout.css',
@@ -127,6 +126,7 @@ const PRECACHE_URLS = [
   './src/services/order-scheduler.js',
   './src/core/day-math.js',
   './src/services/order-timing.js',
+  './src/services/order-profit.js',
   './src/services/payments-view.js',
   './src/services/auto-messages.js',
   './src/services/calendar-events.js',

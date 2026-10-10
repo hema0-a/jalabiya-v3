@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.27',
+  version: '3.3.29',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -285,12 +285,4 @@ export const LIMITS = {
   imageMaxSizeKB: 500,
   imageMaxDimensionPx: 1600,
   lowDataThreshold: 5,
-};
-
-/* --- 22. المزامنة --- */
-export const SYNC_CONFIG = {
-  debounceMs: 30000,
-  maxRetries: 3,
-  retryDelayMs: 2000,
-  offlineCheckMs: 30000,
 };

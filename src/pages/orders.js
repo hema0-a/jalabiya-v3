@@ -27,6 +27,7 @@ import {
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
 } from '../services/order-timing.js';
 import * as draft from '../services/draft-manager.js';
+import { orderProfit, summarizeProfit } from '../services/order-profit.js';
 
 /* --- مفاتيح المسودات --- */
 const DRAFT_KEY = 'order-form';
@@ -377,6 +378,13 @@ const _orderAmount = Number(_t.amount) || 0;
   });
   depositInput.addEventListener('input', recalc);
 
+  /* --- تكلفة الطلب (اختياري — لحساب الربح التقديري) --- */
+  const costInput = el('input', {
+    className: 'input', type: 'number', min: '0', step: '0.01', placeholder: 'قماش + خيط + أجر (اختياري)',
+    value: isEdit ? (existing.cost || '') : '',
+  });
+  costInput.addEventListener('input', recalc);
+
   /* --- الملاحظات --- */
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
@@ -409,6 +417,11 @@ const _orderAmount = Number(_t.amount) || 0;
       el('span', {}, 'المتبقي:'),
       el('span', { style: { color: remaining > 0 ? '#F57C00' : '#2E7D32' } }, formatEGP(remaining)),
     ]));
+    const pr = orderProfit({ amount: t.amount, cost: costInput.value });
+    if (pr.hasCost) {
+      totalsSummary.appendChild(row('الربح التقديري:',
+        formatEGP(pr.profit) + ' (' + pr.margin + '%)', pr.profit < 0 ? '#C62828' : '#2E7D32'));
+    }
   }
 
   /* --- body --- */
@@ -435,6 +448,7 @@ const _orderAmount = Number(_t.amount) || 0;
       feesContainer, addFeeBtn,
     ]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '💰 المقدم'), depositInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '🧵 التكلفة (لحساب الربح)'), costInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '📝 ملاحظات'), notesInput]),
     imagePicker.node,
     totalsSummary,
@@ -479,6 +493,7 @@ const _orderAmount = Number(_t.amount) || 0;
             items, discountType: dt, discountValue: dv, discountAmount: totals.discountAmount,
             extraFees, extraFeesTotal: totals.extraFeesTotal,
             subtotal: totals.subtotal, deposit, amount: totals.amount,
+            cost: toNonNegative(costInput.value),
             notes: notesInput.value.trim(),
             referenceImage: imagePicker.getValue() || '',
           };
@@ -551,6 +566,7 @@ const _orderAmount = Number(_t.amount) || 0;
         }
         if (savedDraft.discountValue != null) discountValueInput.value = String(savedDraft.discountValue);
         if (savedDraft.deposit != null) depositInput.value = String(savedDraft.deposit);
+        if (savedDraft.cost != null && savedDraft.cost !== 0) costInput.value = String(savedDraft.cost);
         if (typeof savedDraft.notes === 'string') notesInput.value = savedDraft.notes;
         if (savedDraft.image && typeof imagePicker.setValue === 'function') {
           imagePicker.setValue(savedDraft.image);
@@ -591,6 +607,7 @@ const _orderAmount = Number(_t.amount) || 0;
             discountType: discountTypeSelect.value,
             discountValue: Number(discountValueInput.value) || 0,
             deposit: Number(depositInput.value) || 0,
+            cost: Number(costInput.value) || 0,
             notes: notesInput.value,
             image: imagePicker.getValue() || '',
             items: itemsData,
@@ -959,6 +976,9 @@ function buildOrderCard(o) {
   const metaChildren = [];
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
+  { const pr = orderProfit(o);
+    if (pr.hasCost) metaChildren.push(el('span', { style: { color: pr.profit < 0 ? '#C62828' : '#2E7D32' } },
+      '📈 ربح ' + formatEGP(pr.profit))); }
   if (itemsCount > 0) metaChildren.push(el('span', {}, '📦 ' + itemsCount + ' بند'));
 
   const card = el('div', {
@@ -1230,6 +1250,15 @@ function renderStats() {
     el('span', { className: 'stat__value' }, formatEGP(totalAmount)),
     el('span', { className: 'stat__label' }, 'إجمالي المبالغ'),
   ]));
+
+  const sp = summarizeProfit(state.orders);
+  if (sp.count > 0) {
+    wrap.appendChild(el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '📈'),
+      el('span', { className: 'stat__value', style: { color: sp.profit < 0 ? '#C62828' : '#2E7D32' } }, formatEGP(sp.profit)),
+      el('span', { className: 'stat__label' }, 'ربح المسلَّم (' + sp.margin + '% من ' + sp.count + ' طلب)'),
+    ]));
+  }
 }
 
 function renderTopBanners() {
