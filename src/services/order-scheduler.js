@@ -1,17 +1,19 @@
 /* ==========================================================================
-   order-scheduler.js — جدولة مواعيد التسليم
+   order-scheduler.js — جدولة المواعيد الذكية
    ==========================================================================
-   - suggestDueDate(orders, config) — يقترح تاريخ تسليم يتخطى:
-     · يوم الإجازة الأسبوعي (dayOffWeekday).
-     · الأيام التي بلغت الحد اليومي (dailyOrderLimit).
-   - getDayAmount(orders, dayMs) — إجمالي المبالغ المتعهدة في يوم.
+   - suggestDueDate(orders, config) — اقتراح تاريخ تسليم:
+     يعتمد على:
+       - أيام الإجازة الأسبوعية (dayOffWeekday).
+       - الحد اليومي لطلبات الورشة (dailyOrderLimit).
+       - مبلغ الطلب الجديد (orderAmount).
+   - getDayAmount(orders, dayMs) — مجموع مبالغ الطلبات في يوم معيّن.
    ========================================================================== */
 
 const DAY_MS = 86400000;
 
 /**
- * حساب إجمالي المبالغ المتعهدة في يوم معيّن.
- * يستثني الطلبات المُسلَّمة والملغاة.
+ * حساب مجموع مبالغ الطلبات في يوم معيّن.
+ * يستثني الطلبات المسلَّمة والملغاة.
  * @param {Array} orders
  * @param {number} dayMs — بداية اليوم (00:00)
  * @returns {number}
@@ -30,36 +32,42 @@ export function getDayAmount(orders, dayMs) {
 }
 
 /**
- * اقتراح تاريخ تسليم مناسب.
+ * اقتراح تاريخ تسليم ذكي.
  *
- * الخوارزمية:
+ * المنطق:
  *   1. ابدأ من (اليوم + minDays).
- *   2. تجاوز يوم الإجازة الأسبوعي.
- *   3. تجاوز الأيام التي بلغت الحد اليومي للمبالغ.
- *   4. أول يوم مقبول = الاقتراح.
+ *   2. تجاهل أيام الإجازة الأسبوعية.
+ *   3. تجاهل الأيام التي يتجاوز مجموعها + الطلب الجديد الحد اليومي.
+ *   4. إن كان الطلب الجديد أكبر من الحد اليومي → ابحث عن أول يوم فارغ.
+ *   5. أول يوم يتحقق فيه الشرط = الاقتراح.
  *
  * @param {Array} orders — كل الطلبات الحالية
  * @param {Object} [config]
  * @param {number} [config.dayOffWeekday=0] — 0-6 (0=الأحد)
  * @param {number} [config.dailyOrderLimit=0] — 0 = لا حد
- * @param {number} [config.minDays=3] — أقل عدد أيام من اليوم
- * @param {number} [config.maxLookaheadDays=30] — أقصى بحث مستقبلي
- * @param {string|null} [config.excludeOrderId=null] — استثناء طلب من الحساب (للتحرير)
- * @returns {{timestamp:number, reason:string, dayOfWeek:number}}
+ * @param {number} [config.minDays=1] — أقل عدد أيام من اليوم
+ * @param {number} [config.maxLookaheadDays=60] — أقصى بحث
+ * @param {string|null} [config.excludeOrderId=null] — استثناء طلب معيّن (عند التعديل)
+ * @param {number} [config.orderAmount=0] — مبلغ الطلب الجديد
+ * @returns {{timestamp:number, reason:string, dayOfWeek:number, overLimit:boolean}}
  */
 export function suggestDueDate(orders, config = {}) {
   const dayOff = Number(config.dayOffWeekday ?? 0);
   const dailyLimit = Number(config.dailyOrderLimit) || 0;
-  const minDays = Number(config.minDays) || 3;
-  const maxDays = Number(config.maxLookaheadDays) || 30;
+  const minDays = Number(config.minDays) || 1;
+  const maxDays = Number(config.maxLookaheadDays) || 60;
   const excludeId = config.excludeOrderId || null;
+  const orderAmount = Number(config.orderAmount) || 0;
 
-  /* استثناء الطلب الحالي (في حالة التعديل) والمُسلَّمة/الملغاة */
+  /* استثناء الطلب الحالي (عند التعديل) */
   const relevant = (orders || []).filter((o) =>
     o.id !== excludeId &&
     o.status !== 'delivered' &&
     o.status !== 'cancelled'
   );
+
+  /* هل الطلب الجديد أكبر من الحد اليومي؟ */
+  const orderExceedsLimit = dailyLimit > 0 && orderAmount > dailyLimit;
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -69,32 +77,41 @@ export function suggestDueDate(orders, config = {}) {
     const candidate = new Date(start.getTime() + i * DAY_MS);
     const wd = candidate.getDay();
 
-    /* 1. تخطى يوم الإجازة */
+    /* 1. تجاهل أيام الإجازة الأسبوعية */
     if (wd === dayOff) continue;
 
-    /* 2. تحقق من الحد اليومي */
     const total = getDayAmount(relevant, candidate.getTime());
-    if (dailyLimit > 0 && total >= dailyLimit) continue;
 
+    /* 2. الطلب أكبر من الحد → اقبل فقط الأيام الفارغة تماماً */
+    if (orderExceedsLimit) {
+      if (total > 0) continue;
+    }
+    /* 3. الحالة العادية → يجب أن يتناسب الطلب مع المساحة المتبقية */
+    else if (dailyLimit > 0 && (total + orderAmount) > dailyLimit) {
+      continue;
+    }
+
+    /* ✅ وجدنا يوماً مناسباً */
     let reason;
-    if (i === 0) reason = 'أقرب موعد متاح';
-    else if (i === 1) reason = 'تخطّي يوم واحد';
-    else reason = 'تخطّي ' + i + ' أيام (إجازة/حد يومي)';
+    if (i === 0) reason = 'أول يوم متاح';
+    else if (i === 1) reason = 'غداً';
+    else reason = 'بعد ' + i + ' أيام';
 
     return {
       timestamp: candidate.getTime(),
       reason,
       dayOfWeek: wd,
+      overLimit: orderExceedsLimit,
     };
   }
 
-  /* فشل — عُد للحد الأدنى */
+  /* fallback — لا يوجد يوم مناسب */
   return {
     timestamp: start.getTime(),
-    reason: 'الموعد الافتراضي',
+    reason: 'لا يوجد يوم متاح قريباً',
     dayOfWeek: start.getDay(),
+    overLimit: orderExceedsLimit,
   };
 }
 
-/* --- تصدير داخلي للاختبار --- */
-export const _internal = { DAY_MS };
+export const __internal = { DAY_MS };
