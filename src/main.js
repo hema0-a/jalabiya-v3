@@ -107,6 +107,7 @@ async function loadPageModule(pageId) {
       case 'orders':             return await import('./pages/orders.js');
       case 'appointments':       return await import('./pages/appointments.js');
       case 'payments':           return await import('./pages/payments.js');
+      case 'debts':              return await import('./pages/debts.js');
       case 'inventory':          return await import('./pages/inventory.js');
       case 'workers':            return await import('./pages/workers.js');
       case 'expenses':           return await import('./pages/expenses.js');
@@ -159,6 +160,7 @@ const SIDEBAR_SECTIONS = [
     { id: 'appointments', icon: '🗓️', label: 'المواعيد' },
     { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
     { id: 'payments',  icon: '💰', label: 'الدفعات' },
+    { id: 'debts',     icon: '🧾', label: 'مستحقات العملاء' },
   ]},
   { title: 'إدارة الورشة', items: [
     { id: 'inventory',          icon: '📦', label: 'المخزون' },
@@ -201,6 +203,7 @@ const MODULE_EXPORT_MAP = {
   orders:               'ordersPage',
   appointments:         'appointmentsPage',
   payments:             'paymentsPage',
+  debts:                'debtsPage',
   inventory:            'inventoryPage',
   workers:              'workersPage',
   expenses:             'expensesPage',
