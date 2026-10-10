@@ -22,6 +22,7 @@
 import { loadFirebase } from './firebase-config.js';
 import { FIRESTORE_PATHS } from '../core/config.js';
 import * as idb from '../data/idb.js';
+import { markClean, markCleanIfUnchanged } from './dirty-state.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -170,6 +171,7 @@ function splitIntoChunks(list) {
 export async function push(uid, opts = {}) {
   if (!uid) return { ok: false, error: 'uid مطلوب' };
   const force = !!(opts && opts.force);
+  const startedAt = Date.now(); /* تعديل بعد هذه اللحظة يبقى «غير مرفوع» */
 
   try {
     const { db, fsMod } = await ensureFirestore();
@@ -258,6 +260,7 @@ export async function push(uid, opts = {}) {
     }
 
     setKnownRev(newRev);
+    markCleanIfUnchanged(startedAt);
 
     /* 3) حذف شرائح الجيل السابق (best-effort) — بعد اعتماد الجديد فقط */
     if (oldManifest) {
@@ -424,6 +427,8 @@ export async function apply(snapshot, opts = {}) {
     const counts = await idb.writeBatch(plan);
     /* بعد التطبيق صار هذا الجهاز يعرف نسخة السحابة هذه — فيسمح الرفع التالي */
     if (snapshot.updatedAt !== undefined) setKnownRev(snapshot.updatedAt);
+    /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات محلية = يحتاج رفعاً */
+    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0)) markClean();
     return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };

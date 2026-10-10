@@ -14,6 +14,13 @@ let dbInstance = null;
 let writeVersion = 0;
 export function getWriteVersion() { return writeVersion; }
 
+/* مستمعو الكتابة: يُستدعون بعد اكتمال كل معاملة كتابة بأسماء المخازن (تتبّع «تعديلات لم تُرفع») */
+const writeListeners = [];
+export function onWrite(cb) { if (typeof cb === 'function') writeListeners.push(cb); }
+function notifyWrite(names) {
+  for (const cb of writeListeners) { try { cb(names); } catch (e) { console.warn('[idb] onWrite listener:', e); } }
+}
+
 function wrap(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -208,7 +215,7 @@ async function writeOp(storeName, run) {
     try { tx = db.transaction(storeName, 'readwrite'); }
     catch (e) { reject(e); return; }
     let result;
-    tx.oncomplete = () => { writeVersion++; resolve(result); };
+    tx.oncomplete = () => { writeVersion++; notifyWrite([storeName]); resolve(result); };
     tx.onerror = () => reject(tx.error || new Error('[idb] write failed'));
     tx.onabort = () => reject(tx.error || new Error('[idb] write aborted'));
     try {
@@ -269,7 +276,7 @@ export async function writeBatch(plan) {
     try {
       tx = db.transaction(names, 'readwrite');
     } catch (e) { reject(e); return; }
-    tx.oncomplete = () => { writeVersion++; resolve(counts); };
+    tx.oncomplete = () => { writeVersion++; notifyWrite(names); resolve(counts); };
     tx.onerror = () => reject(tx.error || new Error('[idb] batch failed'));
     tx.onabort = () => reject(tx.error || new Error('[idb] batch aborted'));
     try {

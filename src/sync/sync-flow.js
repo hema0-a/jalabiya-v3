@@ -20,9 +20,11 @@ import { toast } from '../ui/toast.js';
 import { STORAGE_KEYS } from '../core/config.js';
 import { createBackup } from '../services/auto-backup.js';
 import * as firestoreSync from './firestore-sync.js';
+import { onManualSyncDone } from './auto-sync.js';
 
 function markSynced() {
   try { localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now())); } catch (e) { /* ignore */ }
+  onManualSyncDone();
 }
 
 /**

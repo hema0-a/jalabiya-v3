@@ -14,6 +14,7 @@ import { toast } from '../ui/toast.js';
 import { STORAGE_KEYS } from '../core/config.js';
 import * as authSync from '../sync/auth-sync.js';
 import { pushFlow, pullFlow } from '../sync/sync-flow.js';
+import * as autoSync from '../sync/auto-sync.js';
 
 /* --- الحالة --- */
 let state = {
@@ -24,6 +25,7 @@ let state = {
   _unsubAuth: null,
   _unsubOnline: null,
   _unsubOffline: null,
+  _unsubSync: null,
 };
 
 /* ==========================================================================
@@ -37,6 +39,16 @@ function readLastSync() {
   } catch {
     return null;
   }
+}
+
+function relativeTime(ts) {
+  if (!ts) return '—';
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return 'الآن';
+  if (mins < 60) return 'قبل ' + mins + ' دقيقة';
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return 'قبل ' + hrs + ' ساعة';
+  return 'قبل ' + Math.round(hrs / 24) + ' يوم';
 }
 
 function formatDateTime(ts) {
@@ -200,6 +212,32 @@ function buildUserCard() {
   return card;
 }
 
+function buildAutoSyncCard() {
+  const st = autoSync.getStatus();
+  const card = el('div', { className: 'card', style: { padding: '12px', marginBottom: '16px' } });
+
+  let line1, color;
+  if (st.blocked) { line1 = '🔴 الرفع التلقائي متوقف — يحتاج قرارك'; color = '#C62828'; }
+  else if (st.dirtySince) { line1 = '🟠 تعديلات غير مرفوعة منذ ' + relativeTime(st.dirtySince).replace('قبل ', ''); color = '#E65100'; }
+  else { line1 = '✅ كل بياناتك مرفوعة'; color = '#2E7D32'; }
+
+  card.appendChild(el('div', { style: { fontSize: '14px', fontWeight: '600', color } }, line1));
+  card.appendChild(el('div', { style: { fontSize: '11px', color: '#666', marginTop: '4px' } },
+    'آخر رفع: ' + relativeTime(st.lastPush)));
+  if (st.blocked) {
+    card.appendChild(el('div', { style: { fontSize: '12px', color: '#C62828', marginTop: '6px', lineHeight: '1.6' } },
+      'السحابة فيها بيانات من جهاز آخر. اضغط «رفع إلى السحابة» واختر «دمج ثم رفع» — لن يُرفع شيء تلقائياً قبل ذلك.'));
+  }
+
+  const cb = el('input', { type: 'checkbox' });
+  cb.checked = st.auto;
+  cb.addEventListener('change', () => autoSync.setAutoEnabled(cb.checked));
+  card.appendChild(el('label', {
+    style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px', cursor: 'pointer' },
+  }, [cb, el('span', {}, 'رفع تلقائي هادئ (بعد 3 دقائق من آخر تعديل وعند إغلاق التطبيق)')]));
+  return card;
+}
+
 function buildActionsCard() {
   const card = el('div', {
     style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' },
@@ -251,6 +289,7 @@ function renderPage() {
     c.appendChild(buildLoginCard());
   } else {
     c.appendChild(buildUserCard());
+    c.appendChild(buildAutoSyncCard());
     c.appendChild(buildActionsCard());
   }
 }
@@ -269,10 +308,12 @@ export const cloudSyncPage = {
     /* ⚠️ لا نستدعي current() — onAuthChange يُحدّث state.user تلقائياً */
     /* (يُستدعى فوراً بـ null، ثم يُستدعى بـ user عند استعادة الجلسة) */
     state._unsubAuth = authSync.onAuthChange((user) => {
+      autoSync.setUser(user);
       if (!state.container) return;
       state.user = user;
       renderPage();
     });
+    state._unsubSync = autoSync.subscribe(() => { if (state.container && state.user) renderPage(); });
 
     /* تحديث تلقائي عند تغير حالة الاتصال */
     const onOnline = () => { state.online = true; if (state.container) renderPage(); };
@@ -290,6 +331,7 @@ export const cloudSyncPage = {
     if (state._unsubAuth) {
       try { state._unsubAuth(); } catch (e) { /* ignore */ }
     }
+    if (state._unsubSync) { try { state._unsubSync(); } catch (e) { /* ignore */ } }
     if (state._unsubOnline) {
       try { window.removeEventListener('online', state._unsubOnline); } catch (e) { /* ignore */ }
     }
@@ -304,6 +346,7 @@ export const cloudSyncPage = {
       _unsubAuth: null,
       _unsubOnline: null,
       _unsubOffline: null,
+      _unsubSync: null,
     };
   },
 };

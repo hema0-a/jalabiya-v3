@@ -143,3 +143,54 @@ register('audit v3.3.21 cloud merge', async (t) => {
   for (const s of fsync.SYNC_STORES) await idb.clear(s);
   fsync.setKnownRev(null);
 });
+
+register('audit v3.3.22 dirty tracking & auto-sync', async (t) => {
+  const dirty = await import('../../sync/dirty-state.js');
+  const auto = await import('../../sync/auto-sync.js');
+  const fake = fakeFirestore();
+  fsync._setBackendForTest(fake.backend);
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+  dirty.installTracking(fsync.SYNC_STORES);
+  dirty.markClean();
+
+  await idb.put('orders', { id: 'd1', updatedAt: 1 });
+  await t.test('1. أي كتابة في مخزن مُزامَن تضع علامة «غير مرفوع»', !!dirty.getState().dirtySince);
+
+  await idb.put('settings', { id: 'x', v: 1 }).catch(() => {});
+  dirty.markClean();
+  await idb.put('settings', { id: 'x', v: 2 }).catch(() => {});
+  await t.test('2. الكتابة في مخزن غير مُزامَن (settings) لا تضع علامة', !dirty.getState().dirtySince);
+
+  await idb.put('orders', { id: 'd2', updatedAt: 2 });
+  const r = await fsync.push('u3322');
+  await t.test('3. الرفع الناجح يمسح العلامة ويسجّل وقت آخر رفع',
+    r.ok === true && !dirty.getState().dirtySince && !!dirty.getState().lastPush);
+
+  /* تعديل أثناء الرفع يبقى «غير مرفوع» */
+  fake.hooks.beforeSet = async () => { fake.hooks.beforeSet = null; await new Promise((x) => setTimeout(x, 5)); await idb.put('orders', { id: 'd3', updatedAt: 3 }); };
+  const r2 = await fsync.push('u3322');
+  await t.test('4. تعديل أثناء الرفع يبقى مُعلَّماً غير مرفوع', r2.ok === true && !!dirty.getState().dirtySince);
+
+  /* auto-sync: لا يرفع بلا مستخدم، ويتوقف عند التعارض */
+  const skip = await auto.tryAutoPush();
+  await t.test('5. الرفع التلقائي لا يعمل بلا مستخدم مسجّل', skip && skip.skipped === true);
+
+  auto.setUser({ uid: 'u3322' });
+  const other = JSON.parse(JSON.stringify(fake.store.get('users_v3/u3322/data/main'))); other.updatedAt += 5000;
+  fake.store.set('users_v3/u3322/data/main', other);
+  const res = await auto.tryAutoPush();
+  await t.test('6. تعارض: الرفع التلقائي يتوقف ويضع علامة «يحتاج قرارك» ولا يلمس السحابة',
+    res && res.ok === false && !!auto.getBlocked() && fake.store.get('users_v3/u3322/data/main').updatedAt === other.updatedAt);
+
+  const again = await auto.tryAutoPush();
+  await t.test('7. بعد التعارض لا يكرّر المحاولة حتى يقرر المستخدم', again && again.skipped === true);
+  auto.onManualSyncDone();
+  await t.test('8. القرار اليدوي يرفع الإيقاف', auto.getBlocked() === null);
+
+  auto.setUser(null);
+  fsync._setBackendForTest(null);
+  dirty.markClean();
+  for (const s of fsync.SYNC_STORES) await idb.clear(s);
+  fsync.setKnownRev(null);
+});

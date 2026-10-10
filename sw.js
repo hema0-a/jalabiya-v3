@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.21 — مزامنة سحابية بلا فقدان بيانات
+   الإصدار: v3.3.22 — رفع تلقائي هادئ + تنبيه المزامنة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.21';
+const CACHE_VERSION = 'v3.3.22';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -88,6 +88,7 @@ const PRECACHE_URLS = [
   './src/ui/modal.js',
   './src/ui/notifications-center.js',
   './src/ui/offline-indicator.js',
+  './src/ui/sync-indicator.js',
   './src/ui/order-image-picker.js',
   './src/ui/progressive-list.js',
   './src/ui/quick-preview.js',
@@ -108,6 +109,8 @@ const PRECACHE_URLS = [
   './src/sync/firestore-sync.js',
   './src/sync/offline-queue.js',
   './src/sync/sync-flow.js',
+  './src/sync/dirty-state.js',
+  './src/sync/auto-sync.js',
 
   /* --- Services --- */
   './src/services/auto-backup.js',

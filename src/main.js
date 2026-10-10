@@ -35,6 +35,7 @@ let installErrorHandler;
 let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
+let startAutoSync, mountSyncIndicator;
 let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
 let APP_CONFIG;
@@ -54,6 +55,8 @@ try {
   ({ mount: mountFab } = await import('./ui/fab.js'));
   ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
   ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
+  ({ start: startAutoSync } = await import('./sync/auto-sync.js'));
+  ({ mount: mountSyncIndicator } = await import('./ui/sync-indicator.js'));
   ({ mount: mountNotifications, open: openNotifications } = await import('./ui/notifications-center.js'));
   ({ ensureUnlocked, installAutoLock } = await import('./ui/lock-screen.js'));
 } catch (e) {
@@ -353,6 +356,14 @@ try {
   }
 } catch (err) {
   console.warn('[OfflineIndicator] فشل التثبيت:', err);
+}
+
+/* ☁️ الرفع التلقائي الهادئ + تنبيه المزامنة (لا يعمل قبل فتح القفل) */
+try {
+  if (typeof startAutoSync === 'function') startAutoSync();
+  if (typeof mountSyncIndicator === 'function') mountSyncIndicator();
+} catch (err) {
+  console.warn('[AutoSync] فشل التشغيل:', err);
 }
 
 /* 🔔 مركز التنبيهات — عدّاد + قائمة موحّدة */

@@ -21,6 +21,7 @@ import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/co
 import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
 import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
+import * as autoSync from '../../sync/auto-sync.js';
 import {
   createBackup, listBackups, restoreBackup, deleteBackup,
   clearAllBackups, exportBackupToFile,
@@ -791,6 +792,7 @@ const cloudSyncSection = {
 
     /* --- استماع تلقائي لحالة المصادقة (v3.3.2) --- */
     unsubAuth = authSync.onAuthChange((user) => {
+      autoSync.setUser(user);
       if (destroyed) return;
       currentUser = user || null;
       draw();
