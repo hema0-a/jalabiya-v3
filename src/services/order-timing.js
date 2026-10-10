@@ -8,6 +8,8 @@
    - getActiveSession(workSessions) — هل المؤقت يعمل الآن؟
    ========================================================================== */
 
+import { dayDiff, endOfDay } from '../core/day-math.js';
+
 /* ==========================================================================
    0. حدّ "التأخير": نهاية يوم الموعد وليس بدايته
    ========================================================================== */
@@ -21,8 +23,7 @@
  */
 export function dueDayEndMs(dueDate) {
   if (!dueDate) return NaN;
-  const d = new Date(dueDate);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+  return endOfDay(dueDate);
 }
 
 /**
@@ -51,13 +52,12 @@ export function getDeadlineInfo(dueDate) {
       bg: '#F0EAE0', icon: '⏱️', daysLeft: null };
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dueDate);
-  target.setHours(0, 0, 0, 0);
-
-  const diffMs = target.getTime() - today.getTime();
-  const daysLeft = Math.round(diffMs / 86400000);
+  /* فرق أيام تقويمي دقيق (لا يتأثر بالتوقيت الصيفي ولا بساعة حفظ التاريخ) */
+  const daysLeft = dayDiff(Date.now(), dueDate);
+  if (Number.isNaN(daysLeft)) {
+    return { status: 'none', label: 'بدون موعد', color: '#666',
+      bg: '#F0EAE0', icon: '⏱️', daysLeft: null };
+  }
 
   if (daysLeft < 0) {
     const abs = Math.abs(daysLeft);

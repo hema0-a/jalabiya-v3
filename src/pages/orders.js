@@ -21,7 +21,7 @@ import { openSignaturePad } from '../ui/signature-pad.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
-import { suggestDueDate } from '../services/order-scheduler.js';
+import { suggestDueDate, getDayLoad } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
@@ -730,18 +730,12 @@ function buildDailyLimitBar() {
   const limit = state.scheduleConfig.dailyOrderLimit || 0;
   if (limit <= 0) return null;
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const startMs = startOfToday.getTime();
-  const endMs = startMs + DAY_MS;
-
-  const todayTotal = state.orders
-    .filter((o) => o.createdAt && o.createdAt >= startMs && o.createdAt < endMs)
-    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
-
-  const percent = Math.min(100, Math.round((todayTotal / limit) * 100));
-  const exceeded = todayTotal > limit;
-  const near = !exceeded && percent >= 80;
+  /* نفس تعريف المجدول: حِمل اليوم = طلبات موعد تسليمها اليوم (يشمل المسلَّم لأنه استهلك سعة اليوم) */
+  const load = getDayLoad(state.orders, Date.now(), { limit, includeDelivered: true });
+  const todayTotal = load.amount;
+  const percent = load.percent;
+  const exceeded = load.exceeded;
+  const near = load.near;
   const barColor = exceeded ? '#C62828' : (near ? '#F57C00' : '#2E7D32');
   const bgColor = exceeded ? '#FFEBEE' : (near ? '#FFF3E0' : '#E8F5E9');
 
@@ -754,7 +748,7 @@ function buildDailyLimitBar() {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
   }, [
     el('div', { style: { fontSize: '13px', fontWeight: '600', color: barColor } },
-      exceeded ? '🚨 تجاوزت الحد اليومي' : (near ? '⚠️ اقتربت من الحد اليومي' : '📊 الحد اليومي')),
+      exceeded ? '🚨 تجاوزت الحد اليومي' : (near ? '⚠️ اقتربت من الحد اليومي' : '📊 حِمل تسليم اليوم')),
     el('div', { style: { fontSize: '13px', fontWeight: '700', color: barColor } },
       formatEGP(todayTotal) + ' / ' + formatEGP(limit)),
   ]));
