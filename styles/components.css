@@ -872,3 +872,51 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 }
 .scroll-row::-webkit-scrollbar { display: none; }
 .scroll-row > * { flex: 0 0 auto; scroll-snap-align: start; }
+
+/* ==========================================================================
+   نموذج الطلب (v3.3.36) — بسيط على الجوال، لا يتجاوز حدود النافذة
+   ========================================================================== */
+.modal__body { overflow-x: hidden; }
+.modal__body input, .modal__body select, .modal__body textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+
+/* بند الطلب: الاسم بعرض كامل، ثم السعر والكمية والحذف، ثم إجمالي البند */
+.order-item {
+  display: grid;
+  grid-template-columns: 1fr 84px 44px;
+  gap: var(--space-xs) var(--space-s);
+  align-items: end;
+  padding: var(--space-s);
+  margin-bottom: var(--space-s);
+  background: var(--color-bg, #F6F1E6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+}
+.order-item__name { grid-column: 1 / -1; }
+.order-item__f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.order-item__lbl { font-size: var(--font-size-xs); color: var(--color-primary-light); }
+.order-item__remove { min-height: 44px; min-width: 44px; padding: 0; }
+.order-item__total { grid-column: 1 / -1; font-size: var(--font-size-xs); color: var(--color-primary-dark); font-weight: var(--font-weight-medium); }
+.order-item__total:empty { display: none; }
+
+/* اقتراح التاريخ: زر بعرض كامل + نتيجة تحت الحقل */
+.order-form .field > .btn--block { margin-top: var(--space-xs); }
+.order-hint { margin-top: var(--space-xs); font-size: var(--font-size-sm); line-height: 1.6; color: var(--color-primary-dark); }
+.order-hint:empty { display: none; }
+.order-hint--warn { color: var(--color-warning); }
+
+/* خيارات إضافية: مطوية افتراضياً */
+.order-extras { margin-bottom: var(--space-m); border: 1px dashed var(--color-border); border-radius: var(--radius-m); }
+.order-extras__summary {
+  cursor: pointer; padding: var(--space-s) var(--space-m); min-height: 44px; display: flex; align-items: center;
+  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-primary);
+  list-style: none;
+}
+.order-extras__summary { justify-content: space-between; gap: var(--space-s); }
+.order-extras__summary::after { content: '＋'; font-size: 18px; flex-shrink: 0; }
+.order-extras[open] > .order-extras__summary::after { content: '－'; }
+.order-extras__hint { flex: 1; text-align: end; font-size: var(--font-size-xs); font-weight: normal; color: var(--color-primary-light); }
+.order-extras__summary::-webkit-details-marker { display: none; }
+.order-extras[open] > .order-extras__summary { border-bottom: 1px dashed var(--color-border); }
+.order-extras__body { padding: var(--space-m) var(--space-m) 0; }
+.order-extras__summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.order-extras[open] .order-extras__hint { display: none; }

@@ -209,17 +209,25 @@ function syncTypesDatalist() {
 
 function buildItemRow(item, onRemove) {
   const nameIn = el('input', {
-    className: 'input', type: 'text', placeholder: 'اسم البند',
-    value: item.name || '', style: { flex: '2', minWidth: '0' },
+    className: 'input', type: 'text', placeholder: 'اسم البند (مثال: جلابية سادة)',
+    'aria-label': 'اسم البند', value: item.name || '',
   });
   const priceIn = el('input', {
-    className: 'input', type: 'number', min: '0', step: '0.01', placeholder: 'السعر',
-    value: item.price || '', style: { flex: '1', minWidth: '0' },
+    className: 'input', type: 'number', min: '0', step: '0.01', inputmode: 'decimal', placeholder: '0',
+    'aria-label': 'السعر', value: item.price || '',
   });
   const qtyIn = el('input', {
-    className: 'input', type: 'number', min: '1', step: '1', placeholder: 'الكمية',
-    value: item.quantity || 1, style: { width: '70px' },
+    className: 'input', type: 'number', min: '1', step: '1', inputmode: 'numeric',
+    'aria-label': 'الكمية', value: item.quantity || 1,
   });
+  const totalEl = el('div', { className: 'order-item__total', 'aria-live': 'polite' });
+  const updateTotal = () => {
+    const v = toNonNegative(priceIn.value) * (toNonNegative(qtyIn.value) || 1);
+    totalEl.textContent = v > 0 ? 'إجمالي البند: ' + formatEGP(v) : '';
+  };
+  priceIn.addEventListener('input', updateTotal);
+  qtyIn.addEventListener('input', updateTotal);
+  updateTotal();
 
   /* اختيار نوع من الإعدادات يملأ السعر إن كان فارغاً (لا يكتب فوق سعر أدخله المستخدم) */
   nameIn.setAttribute('list', TYPES_DL_ID);
@@ -231,15 +239,20 @@ function buildItemRow(item, onRemove) {
     }
   });
 
-  const row = el('div', {
-    style: { display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' },
-  }, [
-    nameIn, priceIn, qtyIn,
+  const labeled = (txt, input, cls) => el('label', { className: 'order-item__f ' + (cls || '') }, [
+    el('span', { className: 'order-item__lbl' }, txt), input,
+  ]);
+
+  const row = el('div', { className: 'order-item' }, [
+    el('div', { className: 'order-item__name' }, [nameIn]),
+    labeled('السعر (ج.م)', priceIn),
+    labeled('الكمية', qtyIn, 'order-item__f--qty'),
     el('button', {
-      className: 'btn btn--sm btn--danger', type: 'button',
-      style: { flexShrink: '0' },
+      className: 'btn btn--sm btn--danger order-item__remove', type: 'button',
+      'aria-label': 'حذف البند', title: 'حذف البند',
       onClick: () => onRemove(row),
     }, '✕'),
+    totalEl,
   ]);
 
   row._getValues = () => ({
@@ -294,6 +307,7 @@ function buildFeeRow(fee, onRemove) {
 }
 function openOrderForm(existing = null) {
   const isEdit = existing !== null;
+  let draftDone = false;   /* بعد الحفظ الناجح لا تُعاد كتابة المسودة عند إغلاق النافذة */
 
   const customerSelect = el('select', { className: 'select' });
   customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
@@ -313,7 +327,7 @@ function openOrderForm(existing = null) {
     receivedDateInput.value = localDateInput(existing.receivedDate);
   }
 
-  const dueDateInput = el('input', { className: 'input', type: 'date', style: { flex: '1' } });
+  const dueDateInput = el('input', { className: 'input', type: 'date', 'aria-label': 'تاريخ التسليم' });
   if (isEdit && existing.dueDate) {
     dueDateInput.value = localDateInput(existing.dueDate);
   }
@@ -321,16 +335,24 @@ function openOrderForm(existing = null) {
   /* آخر خطة عمل اقترحها زر ✨ (تُحفظ مع الطلب إن بقي المبلغ والتاريخ كما هما) */
   let suggestedPlan = null;
 
+  /* نتيجة الاقتراح تظهر تحت الحقل نفسه (بدل إشعارات عائمة تختفي وتتراكب مع النموذج) */
+  const dueHint = el('div', { className: 'order-hint', role: 'status', 'aria-live': 'polite' });
+  const setHint = (lines, warn) => {
+    clear(dueHint);
+    dueHint.classList.toggle('order-hint--warn', !!warn);
+    lines.forEach((l) => dueHint.appendChild(el('div', {}, l)));
+  };
+  dueDateInput.addEventListener('input', () => setHint([]));
+
   const suggestBtn = el('button', {
-    className: 'btn btn--sm btn--secondary', type: 'button',
-    title: 'اقتراح موعد تلقائي',
-    style: { flexShrink: '0' },
+    className: 'btn btn--sm btn--secondary btn--block', type: 'button',
+    title: 'اقتراح أقرب موعد تسليم يناسب الحد اليومي',
     onClick: async () => {
       try {
-         const _items = Array.from(itemsContainer.children).map((r) => r._getValues());
-const _fees = Array.from(feesContainer.children).map((r) => r._getValues());
-const _t = computeTotals(_items, discountTypeSelect.value, discountValueInput.value, _fees);
-const _orderAmount = Number(_t.amount) || 0;
+        const _items = Array.from(itemsContainer.children).map((r) => r._getValues());
+        const _fees = Array.from(feesContainer.children).map((r) => r._getValues());
+        const _t = computeTotals(_items, discountTypeSelect.value, discountValueInput.value, _fees);
+        const _orderAmount = Number(_t.amount) || 0;
         const suggestion = suggestDueDate(state.orders, {
           dayOffWeekday: state.scheduleConfig.dayOffWeekday,
           dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
@@ -339,16 +361,18 @@ const _orderAmount = Number(_t.amount) || 0;
           orderAmount: _orderAmount,
         });
         dueDateInput.value = localDateInput(suggestion.timestamp);
+        dueDateInput.dispatchEvent(new Event('change', { bubbles: true }));   /* يحفظ المسودة */
         suggestedPlan = { amount: _orderAmount, dueTs: suggestion.timestamp, plan: suggestion.workPlan || [] };
-        toast.success('💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp));
+        const lines = ['💡 ' + suggestion.reason + ': ' + formatDate(suggestion.timestamp)];
         if (suggestion.daysUsed > 1) {
-          toast.warning((suggestion.overLimit ? '⚠️ الطلب أكبر من الحد اليومي — ' : 'ℹ️ السعة المتبقية موزّعة — ') +
+          lines.push((suggestion.overLimit ? '⚠️ الطلب أكبر من الحد اليومي — ' : 'ℹ️ السعة المتبقية موزّعة — ') +
             'يُنفَّذ على ' + suggestion.daysUsed + ' أيام عمل: يبدأ ' + formatDate(suggestion.startTimestamp) +
             ' وينتهي ' + formatDate(suggestion.timestamp));
         }
-      } catch (e) { toast.danger('فشل الاقتراح'); }
+        setHint(lines, suggestion.overLimit);
+      } catch (e) { setHint(['تعذّر اقتراح موعد — اختر التاريخ يدوياً'], true); }
     },
-  }, '✨');
+  }, '✨ اقتراح أقرب موعد متاح');
 
   /* --- الصورة المرجعية --- */
   const imagePicker = createOrderImagePicker({
@@ -373,8 +397,11 @@ const _orderAmount = Number(_t.amount) || 0;
   initialItems.forEach((it) => addItemRow(it));
 
   const addItemBtn = el('button', {
-    className: 'btn btn--sm btn--secondary', type: 'button',
-    onClick: () => { addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc(); },
+    className: 'btn btn--sm btn--secondary btn--block', type: 'button',
+    onClick: () => {
+      addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc();
+      itemsContainer.lastElementChild?.querySelector('input')?.focus();   /* جاهز للكتابة فوراً */
+    },
   }, '➕ إضافة بند');
 
   /* --- الخصم --- */
@@ -470,33 +497,47 @@ const _orderAmount = Number(_t.amount) || 0;
     }
   }
 
-  /* --- body --- */
-  const body = el('div', {}, [
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العميل *'), customerSelect]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الحالة'), statusSelect]),
-    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
-      el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'استلام القماش'), receivedDateInput]),
-      el('div', { className: 'field' }, [
-        el('label', { className: 'field__label' }, 'تاريخ التسليم'),
-        el('div', { style: { display: 'flex', gap: '6px' } }, [dueDateInput, suggestBtn]),
-      ]),
+  /* --- body: الأساسيات أولاً، والباقي في «خيارات إضافية» (مطوي) --- */
+  const fieldOf = (label, ...nodes) => el('div', { className: 'field' }, [el('label', { className: 'field__label' }, label), ...nodes]);
+
+  const statusField = fieldOf('الحالة', statusSelect);
+
+  /* القسم الإضافي يُفتح تلقائياً إن كان فيه بيانات (تعديل طلب موجود) */
+  const hasExtras = isEdit && (
+    (existing.discountType && existing.discountType !== 'none' && Number(existing.discountValue) > 0) ||
+    (Array.isArray(existing.extraFees) && existing.extraFees.length > 0) ||
+    Number(existing.cost) > 0 || !!existing.notes || !!existing.referenceImage || !!existing.receivedDate
+  );
+  const extras = el('details', { className: 'order-extras' }, [
+    el('summary', { className: 'order-extras__summary' }, [
+      el('span', {}, '⚙️ خيارات إضافية'),
+      el('span', { className: 'order-extras__hint' }, 'خصم · رسوم · تكلفة · ملاحظات · صورة'),
     ]),
+    el('div', { className: 'order-extras__body' }, [
+      ...(isEdit ? [] : [statusField]),
+      fieldOf('📥 تاريخ استلام القماش', receivedDateInput),
+      fieldOf('🎁 خصم', discountTypeSelect, discountValueInput),
+      fieldOf('➕ رسوم إضافية', feesContainer, addFeeBtn),
+      fieldOf('🧵 التكلفة (لحساب الربح)', costInput),
+      fieldOf('📝 ملاحظات', notesInput),
+      imagePicker.node,
+    ]),
+  ]);
+  if (hasExtras) extras.open = true;
+
+  const body = el('div', { className: 'order-form' }, [
+    fieldOf('العميل *', customerSelect),
+    ...(isEdit ? [statusField] : []),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📦 بنود الطلب'),
       itemsContainer, addItemBtn,
     ]),
     el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, '🎁 خصم'),
-      discountTypeSelect, discountValueInput,
+      el('label', { className: 'field__label' }, '📅 تاريخ التسليم'),
+      dueDateInput, suggestBtn, dueHint,
     ]),
-    el('div', { className: 'field' }, [
-      el('label', { className: 'field__label' }, '➕ رسوم إضافية'),
-      feesContainer, addFeeBtn,
-    ]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '💰 المقدم'), depositInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '🧵 التكلفة (لحساب الربح)'), costInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '📝 ملاحظات'), notesInput]),
-    imagePicker.node,
+    fieldOf('💰 المقدم (ج.م)', depositInput),
+    extras,
     totalsSummary,
   ]);
 
@@ -587,6 +628,7 @@ const _orderAmount = Number(_t.amount) || 0;
           try {
             if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }
             else { await orders.create(data); toast.success('تم إضافة الطلب'); }
+            draftDone = true;
             draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
@@ -630,6 +672,10 @@ const _orderAmount = Number(_t.amount) || 0;
           savedDraft.fees.forEach((f) => addFeeRow(f));
         }
 
+        if (savedDraft.receivedDate || (savedDraft.discountType && savedDraft.discountType !== 'none') ||
+            (savedDraft.fees && savedDraft.fees.length) || savedDraft.cost || savedDraft.notes || savedDraft.image) {
+          extras.open = true;
+        }
         recalc();
         toast.info('📝 تم استرجاع مسودة سابقة');
       } catch (e) {
@@ -642,6 +688,7 @@ const _orderAmount = Number(_t.amount) || 0;
     const scheduleSave = () => {
       if (_saveTimer) clearTimeout(_saveTimer);
       _saveTimer = setTimeout(() => {
+        if (draftDone) return;
         try {
           const itemsData = Array.from(itemsContainer.children).map((r) => r._getValues());
           const feesData = Array.from(feesContainer.children).map((r) => r._getValues());
@@ -676,7 +723,7 @@ const _orderAmount = Number(_t.amount) || 0;
     /* حفظ عند إغلاق النافذة */
     const origHandleClose = handle.close;
     handle.close = function () {
-      try { scheduleSave(); } catch { /* ignore */ }
+      try { if (!draftDone) scheduleSave(); } catch { /* ignore */ }
       return origHandleClose.apply(this, arguments);
     };
   }
