@@ -560,7 +560,7 @@ async function exportAllData() {
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
       'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes',
     ];
-    const data = { version: 9, exportedAt: Date.now(), stores: {} };
+    const data = { version: 10, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

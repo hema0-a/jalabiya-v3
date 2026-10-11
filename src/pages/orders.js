@@ -28,6 +28,8 @@ import {
 } from '../services/order-timing.js';
 import * as draft from '../services/draft-manager.js';
 import { orderProfit, summarizeProfit } from '../services/order-profit.js';
+import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
+import { clusterBySize } from '../services/size-clusters.js';
 
 /* --- مفاتيح المسودات --- */
 const DRAFT_KEY = 'order-form';
@@ -40,6 +42,9 @@ let state = {
   activeFilter: 'all',
   activeView: 'list',
   scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
+  grouping: { enabled: false, sameTypeOnly: true, tolerance: 2 },
+  pickupDays: 2,
+  jalabiyaTypes: [],
   container: null,
   _timerInterval: null,
 };
@@ -125,14 +130,15 @@ function orderType(order) {
   return String(order.garmentType || order.notes || 'بدون نوع').trim();
 }
 
-export function groupOrders(list) {
+export function groupOrders(list, opts = {}) {
+  const sameTypeOnly = opts.sameTypeOnly !== false;
   const groups = new Map();
   list.forEach((o) => {
     const cid = o.customerId || 'unknown';
-    const type = orderType(o).toLowerCase();
+    const type = sameTypeOnly ? orderType(o).toLowerCase() : '*';
     const key = cid + '::' + type;
     if (!groups.has(key)) {
-      groups.set(key, { key, customerId: cid, type: orderType(o), orders: [], totalAmount: 0 });
+      groups.set(key, { key, customerId: cid, type: sameTypeOnly ? orderType(o) : 'متنوعة', orders: [], totalAmount: 0 });
     }
     const g = groups.get(key);
     g.orders.push(o);
@@ -159,6 +165,14 @@ async function loadData() {
   state.customerMap = {};
   customersList.forEach((c) => { state.customerMap[c.id] = c; });
 
+  /* إعدادات التجميع واستلام القماش (v3.3.32: كانت تُحفظ ولا تُقرأ) */
+  state.grouping = groupingOptions(s);
+  state.pickupDays = fabricPickupDays(s);
+  /* أنواع الجلابيب من الإعدادات: اقتراح اسم + تعبئة السعر تلقائياً في بنود الطلب (v3.3.32) */
+  state.jalabiyaTypes = (Array.isArray(s && s.jalabiyaTypes) ? s.jalabiyaTypes : []).filter((t) => t && t.name);
+  syncTypesDatalist();
+  if (!state.grouping.enabled && state.activeView === 'grouping') state.activeView = 'list';
+
   if (s && s.dailyLimit) {
     state.scheduleConfig = {
       dayOffWeekday: Number(s.dailyLimit.dayOffWeekday ?? 0),
@@ -170,6 +184,21 @@ async function loadData() {
 /* ==========================================================================
    4. النموذج
    ========================================================================== */
+
+const TYPES_DL_ID = 'jalabiya-types-dl';
+
+function syncTypesDatalist() {
+  try {
+    let dl = document.getElementById(TYPES_DL_ID);
+    if (!dl) { dl = document.createElement('datalist'); dl.id = TYPES_DL_ID; document.body.appendChild(dl); }
+    dl.replaceChildren(...state.jalabiyaTypes.map((t) => {
+      const o = document.createElement('option');
+      o.value = t.name;
+      if (t.price) o.label = t.name + ' — ' + t.price + ' ج.م';
+      return o;
+    }));
+  } catch (e) { /* اختياري */ }
+}
 
 function buildItemRow(item, onRemove) {
   const nameIn = el('input', {
@@ -183,6 +212,16 @@ function buildItemRow(item, onRemove) {
   const qtyIn = el('input', {
     className: 'input', type: 'number', min: '1', step: '1', placeholder: 'الكمية',
     value: item.quantity || 1, style: { width: '70px' },
+  });
+
+  /* اختيار نوع من الإعدادات يملأ السعر إن كان فارغاً (لا يكتب فوق سعر أدخله المستخدم) */
+  nameIn.setAttribute('list', TYPES_DL_ID);
+  nameIn.addEventListener('change', () => {
+    const t = state.jalabiyaTypes.find((x) => x.name === nameIn.value.trim());
+    if (t && Number(t.price) > 0 && !(Number(priceIn.value) > 0)) {
+      priceIn.value = String(t.price);
+      priceIn.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
 
   const row = el('div', {
@@ -840,7 +879,7 @@ function buildUrgentAlerts() {
 
   const needPickup = state.orders.filter((o) =>
     !o.receivedDate && o.dueDate &&
-    o.dueDate >= todayMs && o.dueDate <= todayMs + 3 * DAY_MS &&
+    o.dueDate >= todayMs && o.dueDate <= todayMs + state.pickupDays * DAY_MS &&
     o.status !== 'delivered' && o.status !== 'cancelled'
   );
 
@@ -870,7 +909,7 @@ function buildUrgentAlerts() {
     items.push({
       icon: '🧵', color: '#F57C00', bg: '#FFF3E0',
       label: needPickup.length + ' طلب يحتاج استلام قماش',
-      sub: 'التسليم خلال 3 أيام',
+      sub: 'التسليم خلال ' + state.pickupDays + ' أيام',
     });
   }
 
@@ -1152,15 +1191,53 @@ function renderKanban() {
   wrap.appendChild(board);
 }
 
+function groupOrderRow(o, c) {
+  const sInfo = STATUS_MAP[o.status] || STATUS_MAP.pending;
+  return el('div', {
+    style: { padding: '8px 10px', background: '#F9F6EF', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer' },
+    onClick: () => previewOrder(o, c, () => openOrderForm(o)),
+  }, [
+    el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' } }, [
+      el('span', { style: { fontSize: '12px', fontWeight: '500', color: '#123C2F' } },
+        '#' + String(o.id).slice(-6) + (c ? ' · ' + c.name : '')),
+      el('span', { className: 'badge ' + sInfo.badge }, sInfo.label),
+    ]),
+    el('div', { style: { fontSize: '11px', color: '#666', display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [
+      o.amount ? el('span', {}, formatEGP(o.amount)) : null,
+      o.dueDate ? el('span', {}, '📅 ' + formatDate(o.dueDate)) : null,
+    ].filter(Boolean)),
+  ]);
+}
+
+function groupCard(title, subtitle, total, orderRows, accent) {
+  const card = el('div', { className: 'card', style: { marginBottom: '12px', borderRight: '4px solid ' + accent } });
+  card.appendChild(el('div', {
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+      marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #E5DDD0' },
+  }, [
+    el('div', { style: { flex: '1' } }, [
+      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, title),
+      el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } }, subtitle),
+    ]),
+    el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#2E7D32' } }, formatEGP(total)),
+  ]));
+  orderRows.forEach((r) => card.appendChild(r));
+  return card;
+}
+
 function renderGrouping() {
   const wrap = state.container?.querySelector('#orders-list');
   if (!wrap) return;
   clear(wrap);
 
   const active = state.orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
-  const groups = groupOrders(active);
+  const opts = state.grouping;
+  const groups = groupOrders(active, { sameTypeOnly: opts.sameTypeOnly });
+  const clusters = opts.tolerance > 0
+    ? clusterBySize(active, state.customerMap, opts.tolerance, orderType, opts.sameTypeOnly)
+    : [];
 
-  if (groups.length === 0) {
+  if (groups.length === 0 && clusters.length === 0) {
     wrap.appendChild(el('div', { className: 'empty-state' }, [
       el('div', { className: 'empty-state__icon' }, '🎯'),
       el('h2', { className: 'empty-state__title' }, 'لا توجد مجموعات'),
@@ -1171,50 +1248,20 @@ function renderGrouping() {
 
   groups.forEach((g) => {
     const c = state.customerMap[g.customerId];
-    const customerName = c ? c.name : 'عميل محذوف';
-
-    const card = el('div', {
-      className: 'card', style: { marginBottom: '12px', borderRight: '4px solid #1F6D57' },
-    });
-
-    card.appendChild(el('div', {
-      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        gap: '8px', marginBottom: '10px', paddingBottom: '8px',
-        borderBottom: '1px solid #E5DDD0' },
-    }, [
-      el('div', { style: { flex: '1' } }, [
-        el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, '👤 ' + customerName),
-        el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } },
-          '📦 ' + g.type + ' — ' + g.orders.length + ' طلب'),
-      ]),
-      el('div', { style: { textAlign: 'left' } }, [
-        el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#2E7D32' } }, formatEGP(g.totalAmount)),
-      ]),
-    ]));
-
-    g.orders.forEach((o) => {
-      const sInfo = STATUS_MAP[o.status] || STATUS_MAP.pending;
-      card.appendChild(el('div', {
-        style: { padding: '8px 10px', background: '#F9F6EF',
-          borderRadius: '8px', marginBottom: '6px', cursor: 'pointer' },
-        onClick: () => previewOrder(o, c, () => openOrderForm(o)),
-      }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between',
-          gap: '8px', marginBottom: '4px' } }, [
-          el('span', { style: { fontSize: '12px', fontWeight: '500', color: '#123C2F' } },
-            '#' + String(o.id).slice(-6)),
-          el('span', { className: 'badge ' + sInfo.badge }, sInfo.label),
-        ]),
-        el('div', { style: { fontSize: '11px', color: '#666', display: 'flex',
-          gap: '8px', flexWrap: 'wrap' } }, [
-          o.amount ? el('span', {}, formatEGP(o.amount)) : null,
-          o.dueDate ? el('span', {}, '📅 ' + formatDate(o.dueDate)) : null,
-        ].filter(Boolean)),
-      ]));
-    });
-
-    wrap.appendChild(card);
+    wrap.appendChild(groupCard('👤 ' + (c ? c.name : 'عميل محذوف'),
+      '📦 ' + g.type + ' — ' + g.orders.length + ' طلب', g.totalAmount,
+      g.orders.map((o) => groupOrderRow(o, null)), '#1F6D57'));
   });
+
+  if (clusters.length > 0) {
+    wrap.appendChild(el('div', { style: { fontSize: '13px', fontWeight: '700', color: '#123C2F', margin: '12px 0 8px' } },
+      '📏 قياسات متقاربة (±' + opts.tolerance + ' سم) — لدفعة قص واحدة'));
+    clusters.forEach((cl) => {
+      wrap.appendChild(groupCard('📦 ' + cl.type,
+        cl.orders.length + ' طلب لـ ' + cl.customers.length + ' عملاء', cl.totalAmount,
+        cl.orders.map((o) => groupOrderRow(o, state.customerMap[o.customerId])), '#B8863B'));
+    });
+  }
 }
 
 /* ==========================================================================
@@ -1288,7 +1335,7 @@ function buildViewToggle() {
   const views = [
     { id: 'list',     icon: '📋', label: 'قائمة' },
     { id: 'kanban',   icon: '🗂️', label: 'كانبان' },
-    { id: 'grouping', icon: '🎯', label: 'تجميع' },
+    ...(state.grouping.enabled ? [{ id: 'grouping', icon: '🎯', label: 'تجميع' }] : []),
   ];
 
   views.forEach((v) => {
@@ -1440,6 +1487,9 @@ export const ordersPage = {
       orders: [], customers: [], customerMap: {},
       activeFilter: 'all', activeView: 'list',
       scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
+      grouping: { enabled: false, sameTypeOnly: true, tolerance: 2 },
+      pickupDays: 2,
+      jalabiyaTypes: [],
       container: null, _timerInterval: null,
     };
   },

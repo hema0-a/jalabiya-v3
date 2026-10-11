@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.31 — إصلاح إعدادات المظهر والعرض
+   الإصدار: v3.3.32 — إصلاح الإعدادات التي لا يقرؤها الكود
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.31';
+const CACHE_VERSION = 'v3.3.32';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -140,6 +140,8 @@ const PRECACHE_URLS = [
   './src/core/day-math.js',
   './src/services/order-timing.js',
   './src/services/order-profit.js',
+  './src/services/alert-rules.js',
+  './src/services/size-clusters.js',
   './src/services/payments-view.js',
   './src/services/auto-messages.js',
   './src/services/calendar-events.js',

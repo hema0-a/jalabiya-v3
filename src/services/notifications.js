@@ -10,6 +10,8 @@
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { DEFAULT_SETTINGS } from '../core/config.js';
+import { settings as settingsRepo } from '../data/repos/settings.js';
+import { filterLowStockForAlerts } from './alert-rules.js';
 import { isPastDue } from './order-timing.js';
 
 /* --- مفتاح تتبّع الإشعارات المُرسلة (localStorage) --- */
@@ -240,7 +242,8 @@ export async function checkAndNotify() {
 
   /* --- 4. نواقص المخزون --- */
   try {
-    const low = await inventoryRepo.getLowStock();
+    const s = await settingsRepo.get().catch(() => ({}));
+    const low = filterLowStockForAlerts(await inventoryRepo.getLowStock(), s);
     if (low.length > 0 && !wasSentToday('low-stock')) {
       const ok = notify({
         title: '📦 نقص مخزون',
