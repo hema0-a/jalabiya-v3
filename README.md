@@ -14,6 +14,18 @@ https://hema0-a.github.io/jalabiya-v3/
 
 ---
 
+## 🧰 بيئة التطوير
+
+```bash
+npm run setup      # مرة واحدة
+npm run dev        # خادم محلي http://localhost:8080
+npm run check      # فحص ثابت + اختبارات المتصفح (قبل كل commit)
+```
+
+التفاصيل الكاملة في [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md).
+
+---
+
 ## ✨ الميزات
 
 ### 📊 لوحة المعلومات
