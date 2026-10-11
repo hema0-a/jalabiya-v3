@@ -11,6 +11,7 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { portfolio } from '../data/repos/portfolio.js';
+import { trash } from '../data/repos/trash.js';
 import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
@@ -262,11 +263,12 @@ function openDetail(item) {
       onClick: async () => {
         const ok = await modal.confirm({
           title: 'حذف صورة',
-          message: 'حذف "' + item.title + '" نهائياً؟',
+          message: 'حذف "' + item.title + '"؟ يمكنك استرجاعه من سلة المحذوفات.',
           confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
         });
         if (!ok) return;
         try {
+          await trash.addToTrash('portfolio', item);
           await portfolio.remove(item.id);
           toast.success('تم الحذف');
           handle.close();
@@ -393,7 +395,7 @@ function buildCard(item) {
     className: 'card',
     style: { padding: '0', overflow: 'hidden', cursor: 'pointer', marginBottom: '0' },
     'data-id': item.id,
-    onClick: () => previewPortfolio(item, () => openEditForm(item)),
+    onClick: () => previewPortfolio(item, () => openEditForm(item), () => openDetail(item)),
   });
 
   card.appendChild(el('img', {

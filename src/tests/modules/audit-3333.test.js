@@ -29,3 +29,29 @@ register('audit v3.3.33 quotes integrity', async (t) => {
   await t.test('3. العرض السليم لا يُبلَّغ عنه', r.total === 2);
   await t.test('4. غياب quotes لا يُسقط الفحص', scanIntegrity({ customers: [], orders: [] }).total === 0);
 });
+
+register('audit v3.3.33 portfolio details reachable', async (t) => {
+  const { portfolio } = await import('../../data/repos/portfolio.js');
+  const { portfolioPage } = await import('../../pages/portfolio.js');
+  const item = await portfolio.create({ title: 'اختبار-3333', category: 'men', image: 'data:image/png;base64,AAAA', note: 'ن' });
+  const box = document.createElement('div');
+  document.body.appendChild(box);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btnByText = (txt) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(txt));
+  let ok = false;
+  try {
+    await portfolioPage.render(box);
+    await sleep(30);
+    const card = box.querySelector('[data-id="' + item.id + '"]');
+    card.click(); await sleep(30);
+    const full = btnByText('التفاصيل الكاملة');
+    full.click(); await sleep(60);
+    ok = !!btnByText('🗑️ حذف') && !!btnByText('⬇️ حفظ الصورة');
+  } finally {
+    try { portfolioPage.destroy && portfolioPage.destroy(); } catch (e) { /* ignore */ }
+    await portfolio.remove(item.id);
+    document.querySelectorAll('.modal, .modal-backdrop, .overlay').forEach((x) => x.remove());
+    box.remove();
+  }
+  await t.test('1. من بطاقة المعرض يمكن الوصول لحذف الصورة وحفظها (التفاصيل الكاملة)', ok);
+});

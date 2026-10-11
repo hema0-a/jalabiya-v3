@@ -460,9 +460,10 @@ export async function previewGoal(idOrObj, onEdit) {
  * معاينة سريعة لعمل في المعرض.
  * @param {string|Object} idOrObj
  * @param {Function} [onEdit]
+ * @param {Function} [onDetails] — لو مُمرَّرة يفتح «التفاصيل الكاملة» بها بدل الانتقال للصفحة (v3.3.33)
  * @returns {Promise<void>}
  */
-export async function previewPortfolio(idOrObj, onEdit) {
+export async function previewPortfolio(idOrObj, onEdit, onDetails) {
   const p = (typeof idOrObj === 'string') ? await portfolioRepo.find(idOrObj) : idOrObj;
   if (!p) return;
 
@@ -490,7 +491,7 @@ export async function previewPortfolio(idOrObj, onEdit) {
         window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
       } },
     { text: 'التفاصيل الكاملة', variant: 'secondary',
-      onClick: () => { modal.close(); location.hash = '#/portfolio'; } },
+      onClick: () => { modal.close(); if (typeof onDetails === 'function') onDetails(); else location.hash = '#/portfolio'; } },
     onEdit ? { text: '✏️ تعديل', variant: 'secondary',
       onClick: () => { modal.close(); onEdit(); } } : null,
     _closeAction(),
