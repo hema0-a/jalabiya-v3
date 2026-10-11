@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createServer, listen, ROOT } = require('./lib/static-server.cjs');
+const { scanNarrow } = require('./lib/narrow-scan.cjs');
 
 function loadPlaywright() {
   try { return require('playwright'); } catch (e) { /* ثبّته محلياً: npm run setup */ }
@@ -19,7 +20,7 @@ const SHOTS = path.join(ROOT, 'test-results');
 const ROUTES = 'dashboard customers orders appointments payments debts inventory workers expenses reports settings calendar pricing-calculator financial-center kpis portfolio commitments house-expenses loans referrals occasions activity-log trash cloud-sync pickups quotes season-compare data-care'.split(' ');
 const IGNORE = /ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|Failed to load resource|fonts\.googleapis/;
 const HEADED = process.argv.includes('--headed');
-const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7); /* --only=tests | --only=pages */
+const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7); /* --only=tests | --only=pages | --only=narrow */
 
 (async () => {
   const server = createServer();
@@ -38,7 +39,7 @@ const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
   const shot = (name) => page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true }).catch(() => {});
 
   /* 1) الاختبارات */
-  if (ONLY !== 'pages') {
+  if (!ONLY || ONLY === 'tests') {
   await page.goto(base + '#/tests', { waitUntil: 'load' });
   await page.waitForSelector('text=تشغيل الاختبارات');
   await page.click('text=تشغيل الاختبارات');
@@ -52,7 +53,7 @@ const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
   }
 
   /* 2) كل الصفحات */
-  if (ONLY !== 'tests') {
+  if (!ONLY || ONLY === 'pages') {
   await page.goto(base, { waitUntil: 'load' });
   await page.waitForTimeout(1200);
   for (const r of ROUTES) {
@@ -63,6 +64,13 @@ const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
     if (errs.length || len < 100) { failed++; console.log('PAGE FAIL', r, len, errs.join(' | ')); await shot('page-' + r); }
   }
   console.log(failed ? `FAILED (${failed})` : `pages: ${ROUTES.length} ok`);
+  }
+
+  /* 3) شاشات ضيقة (320 و360): لا تجاوز لحدود الصفحة أو النوافذ */
+  if (!ONLY || ONLY === 'narrow') {
+    const probs = await scanNarrow(browser, base, [320, 360], ROUTES, async (n, pg) => { await pg.screenshot({ path: path.join(SHOTS, n + '.png') }).catch(() => {}); });
+    if (probs.length) { failed += probs.length; console.log('NARROW FAIL\n' + probs.join('\n')); }
+    else console.log('narrow: 320/360px ok');
   }
 
   await browser.close(); server.close();

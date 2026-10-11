@@ -920,3 +920,6 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 .order-extras__body { padding: var(--space-m) var(--space-m) 0; }
 .order-extras__summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .order-extras[open] .order-extras__hint { display: none; }
+
+/* عمودان يتحوّلان لعمود واحد تلقائياً حين تضيق النافذة (تاريخ + وقت، إلخ) */
+.form-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-s); }

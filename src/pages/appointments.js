@@ -169,7 +169,7 @@ function openAppointmentForm(existing = null) {
       el('label', { className: 'field__label' }, 'العميل *'),
       customerSelect,
     ]),
-    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
+    el('div', { className: 'form-grid-2' }, [
       el('div', { className: 'field' }, [
         el('label', { className: 'field__label' }, 'التاريخ *'),
         dateInput,

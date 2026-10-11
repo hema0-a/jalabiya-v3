@@ -33,12 +33,16 @@ const custName = (id) => { const c = state.customers.find((x) => x.id === id); r
 
 /* ---------- نموذج إنشاء/تعديل ---------- */
 function itemRow(item, onRemove) {
-  const nameIn = el('input', { className: 'input', type: 'text', placeholder: 'البند', value: item.name || '', style: { flex: '2', minWidth: '0' } });
-  const priceIn = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', placeholder: 'السعر', value: item.price || '', style: { flex: '1', minWidth: '0' } });
-  const qtyIn = el('input', { className: 'input', type: 'number', min: '1', step: '1', placeholder: 'الكمية', value: item.quantity || 1, style: { width: '64px' } });
-  const row = el('div', { style: { display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' } }, [
-    nameIn, priceIn, qtyIn,
-    el('button', { className: 'btn btn--sm btn--danger', type: 'button', onClick: () => onRemove(row) }, '✕'),
+  const nameIn = el('input', { className: 'input', type: 'text', placeholder: 'اسم البند (مثال: جلابية سادة)', 'aria-label': 'اسم البند', value: item.name || '' });
+  const priceIn = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', inputmode: 'decimal', placeholder: '0', 'aria-label': 'السعر', value: item.price || '' });
+  const qtyIn = el('input', { className: 'input', type: 'number', min: '1', step: '1', inputmode: 'numeric', 'aria-label': 'الكمية', value: item.quantity || 1 });
+  const labeled = (txt, input) => el('label', { className: 'order-item__f' }, [el('span', { className: 'order-item__lbl' }, txt), input]);
+  /* نفس تصميم بند الطلب: الاسم بعرض كامل ثم السعر والكمية — لا حقول ضيقة على الجوال */
+  const row = el('div', { className: 'order-item' }, [
+    el('div', { className: 'order-item__name' }, [nameIn]),
+    labeled('السعر (ج.م)', priceIn),
+    labeled('الكمية', qtyIn),
+    el('button', { className: 'btn btn--sm btn--danger order-item__remove', type: 'button', 'aria-label': 'حذف البند', title: 'حذف البند', onClick: () => onRemove(row) }, '✕'),
   ]);
   row._values = () => ({ id: item.id || uid(), name: nameIn.value.trim() || 'بند', price: toNonNegative(priceIn.value), quantity: toNonNegative(qtyIn.value) || 1 });
   [priceIn, qtyIn].forEach((i) => i.addEventListener('input', () => row.dispatchEvent(new Event('qchange', { bubbles: true }))));

@@ -15,11 +15,11 @@ npm run setup        # يثبّت playwright + Chromium
 | `npm run dev` | خادم محلي على http://localhost:8080 بدون كاش (`-- 3000` لتغيير المنفذ، `--log` لعرض الطلبات) |
 | `npm run dev:mobile` | نفس الخادم لكن متاح على الشبكة؛ افتح العنوان المطبوع من جوالك على نفس الـ Wi-Fi |
 | `npm run check:static` | سريع (ثوانٍ، بلا متصفح): صياغة كل ملفات JS + فحص الاتساق |
-| `npm run test:browser` | الاختبارات (537+) في Chromium + فتح كل الصفحات الـ28 والتأكد من خلوّها من الأخطاء |
+| `npm run test:browser` | الاختبارات في Chromium + فتح كل الصفحات الـ28 + فحص الشاشات الضيقة (320/360px) لتجاوز الحدود |
 | `npm run check` | الاثنان معاً — شغّله قبل كل commit |
 | `npm run bump -- patch` | يرفع الإصدار في كل الأماكن (أو `3.4.0` / `minor` / `major`) |
 
-خيارات `test:browser`: `-- --only=tests` أو `-- --only=pages` أو `-- --headed` (تشاهد المتصفح). عند الفشل تجد لقطات الشاشة ومخرجات الاختبارات في `test-results/`.
+خيارات `test:browser`: `-- --only=tests` أو `-- --only=pages` أو `-- --only=narrow` أو `-- --headed` (تشاهد المتصفح). عند الفشل تجد لقطات الشاشة ومخرجات الاختبارات في `test-results/`.
 
 ## ما الذي يفحصه `check:consistency`؟
 
