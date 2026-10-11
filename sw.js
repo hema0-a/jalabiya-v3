@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.30 — 7 ميزات جديدة
+   الإصدار: v3.3.31 — إصلاح إعدادات المظهر والعرض
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.30';
+const CACHE_VERSION = 'v3.3.31';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -80,6 +80,7 @@ const PRECACHE_URLS = [
 
   /* --- UI components --- */
   './src/ui/client-mode.js',
+  './src/ui/display-settings.js',
   './src/ui/collapsible.js',
   './src/ui/controls.js',
   './src/ui/fab.js',

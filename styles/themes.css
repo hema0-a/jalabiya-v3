@@ -107,10 +107,64 @@ html[data-font] body {
    4. أحجام الخطوط (4) — عبر data-size
    ========================================================================== */
 
-html[data-size="small"]  { font-size: 14px; }
-html[data-size="normal"] { font-size: 16px; }
-html[data-size="large"]  { font-size: 18px; }
-html[data-size="xlarge"] { font-size: 20px; }
+/* التطبيق مبني بالبكسل (لا rem)، فتغيير font-size للجذر لا يؤثر. zoom يكبّر/يصغّر الواجهة كلها
+   كما يفعل المتصفح، وتتكيّف الشاشة مع العرض الجديد دون تمرير أفقي. */
+html[data-size="small"]  { zoom: 0.9; }
+html[data-size="normal"] { zoom: 1; }
+html[data-size="large"]  { zoom: 1.12; }
+html[data-size="xlarge"] { zoom: 1.25; }
+
+/* ==========================================================================
+   4ب. التباين العالي — body.high-contrast (v3.3.31)
+   ========================================================================== */
+
+body.high-contrast {
+  --color-text: #000000;
+  --color-border: #000000;
+  color: #000000;
+}
+body.high-contrast.dark-mode {
+  --color-text: #FFFFFF;
+  --color-border: #FFFFFF;
+  color: #FFFFFF;
+}
+body.high-contrast .card,
+body.high-contrast .input,
+body.high-contrast .select,
+body.high-contrast .textarea,
+body.high-contrast .btn--secondary,
+body.high-contrast .modal {
+  border: 2px solid var(--color-border) !important;
+}
+body.high-contrast a { text-decoration: underline; }
+body.high-contrast :focus-visible { outline: 3px solid var(--color-text); outline-offset: 2px; }
+/* النصوص الرمادية المكتوبة inline (#555/#666/#888/#999) تصير بلون النص الكامل */
+body.high-contrast [style*="color: rgb(85, 85, 85)"],
+body.high-contrast [style*="color: rgb(102, 102, 102)"],
+body.high-contrast [style*="color: rgb(136, 136, 136)"],
+body.high-contrast [style*="color: rgb(153, 153, 153)"] {
+  color: var(--color-text) !important;
+}
+
+/* ==========================================================================
+   4ج. الوضع المضغوط — body.compact-mode (v3.3.31)
+   ========================================================================== */
+
+body.compact-mode {
+  --space-s: 4px;
+  --space-m: 8px;
+  --space-l: 12px;
+  --space-xl: 16px;
+  line-height: 1.4;
+}
+body.compact-mode .card { padding: 8px 10px !important; margin-bottom: 6px !important; }
+body.compact-mode .btn { padding-top: 4px !important; padding-bottom: 4px !important; }
+body.compact-mode .input,
+body.compact-mode .select,
+body.compact-mode .textarea { padding-top: 4px !important; padding-bottom: 4px !important; }
+body.compact-mode .settings-row { padding-top: 6px !important; padding-bottom: 6px !important; }
+body.compact-mode .modal__body { padding: 10px !important; }
+body.compact-mode h2 { margin-bottom: 8px !important; }
 
 /* ==========================================================================
    5. الوضع الليلي (أساسي — للـ backgrounds)

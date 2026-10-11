@@ -355,6 +355,15 @@ try {
   console.warn('[Theme] فشل التطبيق:', err);
 }
 
+/* 🎨 تطبيق إعدادات المظهر والعرض المحفوظة (ألوان، خلفية، خط، حجم، تباين، مضغوط) */
+try {
+  const { settings: settingsRepo } = await import('./data/repos/settings.js');
+  const { applyAllSettings } = await import('./ui/display-settings.js');
+  applyAllSettings(await settingsRepo.get());
+} catch (err) {
+  console.warn('[Display] فشل تطبيق إعدادات المظهر:', err);
+}
+
 /* ⚡ FAB — إجراءات سريعة على كل الصفحات عدا #/tests */
 try {
   if (typeof mountFab === 'function') {

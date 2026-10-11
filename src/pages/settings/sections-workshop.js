@@ -10,6 +10,9 @@
    - استخدم `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
+import { applyAppearance, applyFont, applyFontSize, ensureAllFonts } from '../../ui/display-settings.js';
+import { isDarkMode, setDarkMode } from '../../ui/theme.js';
+import { isClientMode, setClientMode } from '../../ui/client-mode.js';
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
@@ -195,9 +198,8 @@ const appearanceSection = {
         onClick: () => {
           const def = DEFAULT_SETTINGS.appearance;
           saveFn({ appearance: def });
-          document.documentElement.style.setProperty('--color-primary', def.primaryColor);
-          document.documentElement.style.setProperty('--color-accent', def.accentColor);
-          toast.info('تمت الاستعادة — أعد فتح الصفحة');
+          applyAppearance(def);
+          toast.info('تمت استعادة المظهر الافتراضي');
         },
       }, '↩️ استعادة الافتراضي'),
     ]));
@@ -340,6 +342,8 @@ const fontsSection = {
   async render(body, currentSettings, saveFn) {
     const dp = currentSettings.display || {};
 
+    ensureAllFonts();   /* لمعاينة الخطوط */
+
     /* --- اختيار الخط --- */
     const fontGrid = el('div', {
       style: { display: 'flex', flexDirection: 'column', gap: '6px' },
@@ -358,7 +362,7 @@ const fontsSection = {
         onClick: () => {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontFamily: f.id } });
-          document.documentElement.setAttribute('data-font', f.id);
+          applyFont(f.id);
           const parent = fontGrid.parentNode;
           parent.innerHTML = '';
           fontsSection.render(parent, {
@@ -393,7 +397,7 @@ const fontsSection = {
         onClick: () => {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontSize: sz.id } });
-          document.documentElement.setAttribute('data-size', sz.id);
+          applyFontSize(sz.id);
           const parent = sizeGrid.parentNode;
           parent.innerHTML = '';
           fontsSection.render(parent, {
@@ -426,11 +430,27 @@ const displaySection = {
   async render(body, currentSettings, saveFn) {
     const dp = currentSettings.display || {};
 
+    /* الليلي ووضع العميل: حالة كل جهاز (تبقى متزامنة مع زر الشريط العلوي) */
+    const current = {
+      darkMode: isDarkMode(),
+      clientMode: isClientMode(),
+      highContrast: !!dp.highContrast,
+      compactMode: !!dp.compactMode,
+    };
+    const APPLY = {
+      darkMode: (v) => setDarkMode(v),
+      clientMode: (v) => setClientMode(v),
+      highContrast: (v) => document.body.classList.toggle('high-contrast', v),
+      compactMode: (v) => document.body.classList.toggle('compact-mode', v),
+    };
+
     function toggleRow(label, key, hint = '') {
       const t = createToggle({
         label,
-        checked: !!dp[key],
+        checked: current[key],
         onChange: (v) => {
+          current[key] = v;
+          try { APPLY[key](v); } catch (e) { console.warn('[display] apply', key, e); }
           /* ⚠️ حقل واحد */
           saveFn({ display: { [key]: v } });
         },
@@ -444,9 +464,9 @@ const displaySection = {
       ]);
     }
 
-    body.appendChild(toggleRow('الوضع الليلي 🌙', 'darkMode', 'يُطبَّق فوراً بعد إعادة الفتح'));
-    body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast'));
-    body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل'));
+    body.appendChild(toggleRow('الوضع الليلي 🌙', 'darkMode', 'يُطبَّق فوراً'));
+    body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast', 'نصوص أغمق وحدود أوضح'));
+    body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل لعرض بيانات أكثر'));
     body.appendChild(toggleRow('وضع العميل 👁️', 'clientMode', 'إخفاء الأرقام والإحصائيات'));
   },
 };

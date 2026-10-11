@@ -7,6 +7,7 @@
    - تحديث URL عبر history.replaceState (بدون hashchange → لا إعادة بناء).
    ========================================================================== */
 
+import { applyAllSettings } from '../../ui/display-settings.js';
 import { el, clear } from '../../core/dom.js';
 import { settings } from '../../data/repos/settings.js';
 import { toast } from '../../ui/toast.js';
@@ -32,29 +33,7 @@ let state = {
 
 /* --- تطبيق الإعدادات المحفوظة على الواجهة --- */
 function applySettings(s) {
-  if (s.appearance) {
-    if (s.appearance.primaryColor) {
-      document.documentElement.style.setProperty('--color-primary', s.appearance.primaryColor);
-    }
-    if (s.appearance.accentColor) {
-      document.documentElement.style.setProperty('--color-accent', s.appearance.accentColor);
-    }
-    if (s.appearance.backgroundColor) {
-      document.documentElement.style.setProperty('--color-bg', s.appearance.backgroundColor);
-    }
-    document.body.classList.remove('bg-fabric', 'bg-sewing', 'bg-geometric', 'bg-paper');
-    if (s.appearance.backgroundPattern && s.appearance.backgroundPattern !== 'none') {
-      document.body.classList.add('bg-' + s.appearance.backgroundPattern);
-    }
-    document.body.classList.remove('icons-colored-badges', 'icons-line');
-    if (s.appearance.iconStyle === 'colored-badges') document.body.classList.add('icons-colored-badges');
-    if (s.appearance.iconStyle === 'line') document.body.classList.add('icons-line');
-  }
-
-  if (s.display) {
-    document.documentElement.setAttribute('data-font', s.display.fontFamily || 'ibm-plex');
-    document.documentElement.setAttribute('data-size', s.display.fontSize || 'normal');
-  }
+  applyAllSettings(s);
 }
 
 /* --- الحفظ --- */
