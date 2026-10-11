@@ -982,3 +982,9 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 }
 .toast__action:active { background: rgba(255, 255, 255, 0.35); }
 @media (pointer: coarse) { .toast__action { min-height: 40px; } }
+
+/* وضع الإدخال السريع لنموذج الطلب (v3.3.42) */
+.order-mode { display: flex; gap: var(--space-xs); padding: 3px; margin-bottom: var(--space-m); background: var(--color-bg-alt, #F6F1E6); border: 1px solid var(--color-border); border-radius: var(--radius-m); }
+.order-mode__btn { flex: 1 1 0; min-height: 40px; background: transparent; border: none; color: var(--color-primary-dark); font-family: inherit; font-weight: var(--font-weight-medium); border-radius: var(--radius-s, 6px); cursor: pointer; }
+.order-mode__btn--on { background: var(--color-primary); color: #fff; font-weight: var(--font-weight-bold); }
+.order-form--quick [data-full] { display: none; }

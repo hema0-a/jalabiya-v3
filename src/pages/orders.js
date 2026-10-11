@@ -114,6 +114,30 @@ export function computeTotals(items, discountType, discountValue, extraFees) {
   };
 }
 
+/* --- حدّ الخصم (v3.3.42): خصم يتجاوز النسبة يطلب تأكيداً لتفادي أخطاء الإدخال (مثل 500 بدل 50) --- */
+export const MAX_DISCOUNT_PERCENT = 20;
+
+/** نسبة الخصم من المجموع الفرعي (0 عند عدم وجود خصم). */
+export function discountPercentOf(totals) {
+  const sub = Number(totals && totals.subtotal) || 0;
+  const d = Number(totals && totals.discountAmount) || 0;
+  return sub > 0 ? Math.round((d / sub) * 1000) / 10 : 0;
+}
+
+/** هل الخصم أعلى من الحد المسموح بلا تأكيد؟ */
+export function isDiscountExcessive(totals, limit = MAX_DISCOUNT_PERCENT) {
+  return discountPercentOf(totals) > limit;
+}
+
+/* --- وضع الإدخال السريع (v3.3.42) --- */
+const FORM_MODE_KEY = 'jalabiya_v3_order_form_mode';
+function readFormMode() {
+  try { return localStorage.getItem(FORM_MODE_KEY) === 'quick' ? 'quick' : 'full'; } catch { return 'full'; }
+}
+function writeFormMode(m) {
+  try { localStorage.setItem(FORM_MODE_KEY, m); } catch { /* ignore */ }
+}
+
 function itemsFromOrder(order) {
   if (Array.isArray(order.items) && order.items.length > 0) {
     return order.items.map((it) => ({
@@ -398,7 +422,7 @@ function openOrderForm(existing = null) {
   initialItems.forEach((it) => addItemRow(it));
 
   const addItemBtn = el('button', {
-    className: 'btn btn--sm btn--secondary btn--block', type: 'button',
+    className: 'btn btn--sm btn--secondary btn--block', type: 'button', 'data-full': '1',
     onClick: () => {
       addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc();
       itemsContainer.lastElementChild?.querySelector('input')?.focus();   /* جاهز للكتابة فوراً */
@@ -481,7 +505,11 @@ function openOrderForm(existing = null) {
     }, [el('span', {}, lbl), el('span', { style: { fontWeight: '600' } }, val)]);
 
     totalsSummary.appendChild(row('المجموع الفرعي:', formatEGP(t.subtotal)));
-    if (t.discountAmount > 0) totalsSummary.appendChild(row('الخصم:', '− ' + formatEGP(t.discountAmount), '#C62828'));
+    if (t.discountAmount > 0) totalsSummary.appendChild(row('الخصم:', '− ' + formatEGP(t.discountAmount) + ' (' + discountPercentOf(t) + '%)', '#C62828'));
+    if (isDiscountExcessive(t)) {
+      totalsSummary.appendChild(el('div', { className: 'order-hint order-hint--warn', role: 'alert' },
+        '⚠️ الخصم أعلى من ' + MAX_DISCOUNT_PERCENT + '% من المجموع — تأكد من الرقم'));
+    }
     if (t.extraFeesTotal > 0) totalsSummary.appendChild(row('الرسوم الإضافية:', '+ ' + formatEGP(t.extraFeesTotal), '#F57C00'));
     totalsSummary.appendChild(row('الإجمالي:', formatEGP(t.amount)));
     if (deposit > 0) totalsSummary.appendChild(row('المقدم:', '− ' + formatEGP(deposit), '#2E7D32'));
@@ -526,7 +554,21 @@ function openOrderForm(existing = null) {
   ]);
   if (hasExtras) extras.open = true;
 
+  const depositField = fieldOf('💰 المقدم (ج.م)', depositInput);
+  depositField.setAttribute('data-full', '1');
+  extras.setAttribute('data-full', '1');
+
+  /* مبدّل الوضع: «سريع» = العميل + البند + التاريخ فقط (للزحام)، «كامل» = كل الحقول. للطلب الجديد فقط */
+  const modeBtn = (key, label) => el('button', {
+    type: 'button', className: 'btn btn--sm order-mode__btn', 'data-mode': key,
+    onClick: () => setMode(key),
+  }, label);
+  const quickBtn = modeBtn('quick', '⚡ سريع');
+  const fullBtn = modeBtn('full', '📋 كامل');
+  const modeBar = el('div', { className: 'order-mode', role: 'group', 'aria-label': 'وضع النموذج' }, [quickBtn, fullBtn]);
+
   const body = el('div', { className: 'order-form' }, [
+    ...(isEdit ? [] : [modeBar]),
     fieldOf('العميل *', customerSelect),
     ...(isEdit ? [statusField] : []),
     el('div', { className: 'field' }, [
@@ -537,10 +579,21 @@ function openOrderForm(existing = null) {
       el('label', { className: 'field__label' }, '📅 تاريخ التسليم'),
       dueDateInput, suggestBtn, dueHint,
     ]),
-    fieldOf('💰 المقدم (ج.م)', depositInput),
+    depositField,
     extras,
     totalsSummary,
   ]);
+
+  function setMode(m, persist = true) {
+    const quick = !isEdit && m === 'quick';
+    body.classList.toggle('order-form--quick', quick);
+    quickBtn.setAttribute('aria-pressed', String(quick));
+    fullBtn.setAttribute('aria-pressed', String(!quick));
+    quickBtn.classList.toggle('order-mode__btn--on', quick);
+    fullBtn.classList.toggle('order-mode__btn--on', !quick);
+    if (persist && !isEdit) writeFormMode(quick ? 'quick' : 'full');
+  }
+  setMode(readFormMode(), false);
 
   itemsContainer.addEventListener('input', recalc);
   recalc();
@@ -572,6 +625,16 @@ function openOrderForm(existing = null) {
           if (deposit > totals.amount) {
             toast.warning('المقدم (' + formatEGP(deposit) + ') أكبر من إجمالي الطلب (' + formatEGP(totals.amount) + ')');
             return;
+          }
+
+          if (isDiscountExcessive(totals)) {
+            const okDisc = await modal.confirm({
+              title: 'خصم كبير',
+              message: 'الخصم ' + discountPercentOf(totals) + '% (' + formatEGP(totals.discountAmount) + ') من مجموع ' +
+                formatEGP(totals.subtotal) + ' — أعلى من ' + MAX_DISCOUNT_PERCENT + '%.\nهل الرقم صحيح؟',
+              confirmText: 'نعم، احفظ', cancelText: 'تعديل الخصم',
+            });
+            if (!okDisc) { extras.open = true; setMode('full', false); discountValueInput.focus(); return; }
           }
 
           const data = {
@@ -678,6 +741,7 @@ function openOrderForm(existing = null) {
           extras.open = true;
         }
         recalc();
+        if (extras.open || itemsContainer.children.length > 1 || Number(savedDraft.deposit) > 0) setMode('full', false);
         toast.info('📝 تم استرجاع مسودة سابقة');
       } catch (e) {
         console.warn('[OrderForm] draft restore failed:', e);
