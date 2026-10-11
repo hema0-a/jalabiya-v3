@@ -13,6 +13,7 @@
 import { withDepositPayments, withWorkerExpenses } from '../services/payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
+import { startOfDayPlus } from '../core/day-math.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -53,7 +54,6 @@ function startOfMonth() {
  */
 function computeSalesLast7Days(paymentsList) {
   const days = [];
-  const DAY_MS = 86400000;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayMs = today.getTime();
@@ -62,8 +62,8 @@ function computeSalesLast7Days(paymentsList) {
   const DAY_NAMES = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
 
   for (let i = 6; i >= 0; i--) {
-    const dayStart = todayMs - i * DAY_MS;
-    const dayEnd = dayStart + DAY_MS;
+    const dayStart = startOfDayPlus(todayMs, -i);
+    const dayEnd = startOfDayPlus(todayMs, -i + 1);
 
     const total = paymentsList
       .filter((p) => {

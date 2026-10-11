@@ -30,11 +30,18 @@ import * as draft from '../services/draft-manager.js';
 import { orderProfit, summarizeProfit } from '../services/order-profit.js';
 import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
 import { clusterBySize } from '../services/size-clusters.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 
 /* --- مفاتيح المسودات --- */
 const DRAFT_KEY = 'order-form';
 
 /* --- الحالة --- */
+/* القائمة التدريجية: رسم 30 طلباً ثم المزيد عند التمرير (كانت ترسم الكل: 70 ألف عنصر DOM عند 4000 طلب) */
+let ordersList = null;
+function disposeOrdersList() {
+  if (ordersList) { try { ordersList.destroy(); } catch (e) { /* ignore */ } ordersList = null; }
+}
+
 let state = {
   orders: [],
   customers: [],
@@ -1148,6 +1155,7 @@ function buildMiniCard(o, opts = {}) {
 function renderKanban() {
   const wrap = state.container?.querySelector('#orders-list');
   if (!wrap) return;
+  disposeOrdersList();
   clear(wrap);
 
   const board = el('div', {
@@ -1228,6 +1236,7 @@ function groupCard(title, subtitle, total, orderRows, accent) {
 function renderGrouping() {
   const wrap = state.container?.querySelector('#orders-list');
   if (!wrap) return;
+  disposeOrdersList();
   clear(wrap);
 
   const active = state.orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
@@ -1385,6 +1394,7 @@ function renderFilters() {
 function renderList() {
   const listContainer = state.container?.querySelector('#orders-list');
   if (!listContainer) return;
+  disposeOrdersList();
   clear(listContainer);
 
   const filtered = filterOrders(state.orders, state.activeFilter);
@@ -1398,7 +1408,12 @@ function renderList() {
     return;
   }
 
-  filtered.forEach((o) => listContainer.appendChild(buildOrderCard(o)));
+  ordersList = createProgressiveList({
+    items: filtered,
+    pageSize: 30,
+    render: (o) => buildOrderCard(o),
+  });
+  listContainer.appendChild(ordersList.node);
 }
 
 function renderView() {
@@ -1483,6 +1498,7 @@ export const ordersPage = {
 
     destroy() {
     stopLiveTimer();
+    disposeOrdersList();
     state = {
       orders: [], customers: [], customerMap: {},
       activeFilter: 'all', activeView: 'list',

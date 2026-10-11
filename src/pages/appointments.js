@@ -14,6 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { formatDate, formatTime, localDateInput } from '../core/utils.js';
+import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -40,10 +41,8 @@ const STATUS_MAP = {
  * @returns {{start:number, end:number}}
  */
 export function getTodayRange() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const startMs = start.getTime();
-  return { start: startMs, end: startMs + 24 * 60 * 60 * 1000 };
+  const startMs = startOfDay(Date.now());
+  return { start: startMs, end: startOfNextDay(startMs) };
 }
 
 /**

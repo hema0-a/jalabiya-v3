@@ -18,6 +18,7 @@ import {
   LIMITS,
 } from '../core/config.js';
 import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
+import { dayDiff } from '../core/day-math.js';
 
 /* --- الحالة --- */
 let state = {
@@ -66,14 +67,12 @@ function getDaysInPeriod(period, filtered) {
   if (period === 'month') return now.getDate();
   if (period === 'year') {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
-    return Math.floor((now - startOfYear) / 86400000) + 1;
+    return dayDiff(startOfYear, now) + 1; /* بالتقويم لا بالساعات (التوقيت الصيفي) */
   }
   if (filtered.length === 0) return 1;
-  const dates = filtered.map((e) => e.date).filter(Boolean).sort();
+  const dates = filtered.map((e) => e.date).filter(Boolean).sort((a, b) => a - b); /* رقمياً لا نصياً */
   if (dates.length === 0) return 1;
-  const first = new Date(dates[0]).setHours(0, 0, 0, 0);
-  const last = new Date(dates[dates.length - 1]).setHours(0, 0, 0, 0);
-  return Math.max(1, Math.round((last - first) / 86400000) + 1);
+  return Math.max(1, dayDiff(dates[0], dates[dates.length - 1]) + 1);
 }
 
 /* ==========================================================================

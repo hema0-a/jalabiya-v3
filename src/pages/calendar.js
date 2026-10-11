@@ -13,6 +13,7 @@ import { getCalendarEvents, getOverdueOrdersCount } from '../services/calendar-e
 import { DAY_NAMES_SHORT, MONTH_NAMES, DEFAULT_SETTINGS } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { isPastDue } from '../services/order-timing.js';
+import { startOfNextDay } from '../core/day-math.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -138,7 +139,7 @@ function renderFilters() {
 function renderStats() {
   const now = Date.now();
   const todayStart = startOfDayMs(now);
-  const todayEnd = todayStart + 86400000;
+  const todayEnd = startOfNextDay(todayStart);
 
   const monthOrders = state.events.filter((e) => e.type === 'order').length;
   const todayOrders = state.events.filter((e) =>

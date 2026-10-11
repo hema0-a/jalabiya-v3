@@ -16,11 +16,18 @@ import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 import { withDepositPayments } from '../services/payments-view.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 
 /* --- مفتاح المسودة --- */
 const DRAFT_KEY = 'payment-form';
 
 /* --- الحالة --- */
+/* قائمة تدريجية: 30 دفعة ثم المزيد عند التمرير (كانت ترسم الكل: 72 ألف عنصر DOM عند 6000 دفعة) */
+let paymentsList = null;
+function disposePaymentsList() {
+  if (paymentsList) { try { paymentsList.destroy(); } catch (e) { /* ignore */ } paymentsList = null; }
+}
+
 let state = {
   payments: [],
   customers: [],
@@ -470,6 +477,7 @@ function applyFilters() {
 function renderList() {
   const lc = state.container?.querySelector('#payments-list');
   if (!lc) return;
+  disposePaymentsList();
   clear(lc);
 
   const filtered = applyFilters();
@@ -488,7 +496,12 @@ function renderList() {
     return;
   }
 
-  filtered.forEach((p) => lc.appendChild(buildPaymentCard(p)));
+  paymentsList = createProgressiveList({
+    items: filtered,
+    pageSize: 30,
+    render: (p) => buildPaymentCard(p),
+  });
+  lc.appendChild(paymentsList.node);
 }
 
 async function refreshAll() {
@@ -544,6 +557,7 @@ export const paymentsPage = {
   },
 
   destroy() {
+    disposePaymentsList();
     state = {
       payments: [], customers: [], orders: [],
       customerMap: {}, orderMap: {},

@@ -239,3 +239,23 @@
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   5. تحسينات الجوال (v3.3.35)
+   - 100vh أطول من الشاشة المرئية في متصفحات الجوال (شريط العنوان) فيختفي آخر عنصر
+     في القائمة الجانبية؛ dvh يتبع المساحة المرئية فعلاً (والمتصفحات القديمة تبقى على vh).
+   - وضع التطبيق المثبّت: منع «اسحب للتحديث» العرضي الذي يعيد تحميل التطبيق أثناء الكتابة.
+   ========================================================================== */
+@supports (height: 100dvh) {
+  body, .app-shell { min-height: 100dvh; }
+  @media (max-width: 767px) {
+    .sidebar { height: 100dvh; }
+  }
+  @media (min-width: 768px) {
+    .sidebar { height: 100dvh; }
+  }
+}
+.sidebar__nav { padding-bottom: calc(var(--space-m, 16px) + env(safe-area-inset-bottom, 0px)); }
+@media (display-mode: standalone) {
+  html, body { overscroll-behavior-y: none; }
+}

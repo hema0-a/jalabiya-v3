@@ -40,25 +40,50 @@ let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
 let APP_CONFIG;
 try {
-  ({ APP_CONFIG } = await import('./core/config.js'));
-  ({ el } = await import('./core/dom.js'));
-  ({ toast } = await import('./ui/toast.js'));
-  ({ createLayout } = await import('./ui/layout.js'));
-  ({ events } = await import('./core/events.js'));
-  ({ openUniversalSearch } = await import('./ui/universal-search.js'));
-  ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
-  ({ registerServiceWorker } = await import('./pwa.js'));
-  ({ maybeStartOnboarding } = await import('./ui/onboarding.js'));
-  ({ toggleClientMode, isClientMode, applyClientMode } = await import('./ui/client-mode.js'));
-  ({ startAutoCheck: startNotificationCheck } = await import('./services/notifications.js'));
-  ({ install: installErrorHandler } = await import('./core/error-handler.js'));
-  ({ mount: mountFab } = await import('./ui/fab.js'));
-  ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
-  ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
-  ({ start: startAutoSync } = await import('./sync/auto-sync.js'));
-  ({ mount: mountSyncIndicator } = await import('./ui/sync-indicator.js'));
-  ({ mount: mountNotifications, open: openNotifications } = await import('./ui/notifications-center.js'));
-  ({ ensureUnlocked, installAutoLock } = await import('./ui/lock-screen.js'));
+  /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
+  const [
+    cfg, dom, toastMod, layoutMod, eventsMod, searchMod, backupMod, pwaMod, onboardingMod,
+    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod,
+  ] = await Promise.all([
+    import('./core/config.js'),
+    import('./core/dom.js'),
+    import('./ui/toast.js'),
+    import('./ui/layout.js'),
+    import('./core/events.js'),
+    import('./ui/universal-search.js'),
+    import('./services/auto-backup.js'),
+    import('./pwa.js'),
+    import('./ui/onboarding.js'),
+    import('./ui/client-mode.js'),
+    import('./services/notifications.js'),
+    import('./core/error-handler.js'),
+    import('./ui/fab.js'),
+    import('./ui/theme.js'),
+    import('./ui/offline-indicator.js'),
+    import('./sync/auto-sync.js'),
+    import('./ui/sync-indicator.js'),
+    import('./ui/notifications-center.js'),
+    import('./ui/lock-screen.js'),
+  ]);
+  ({ APP_CONFIG } = cfg);
+  ({ el } = dom);
+  ({ toast } = toastMod);
+  ({ createLayout } = layoutMod);
+  ({ events } = eventsMod);
+  ({ openUniversalSearch } = searchMod);
+  ({ runAutoBackupIfDue } = backupMod);
+  ({ registerServiceWorker } = pwaMod);
+  ({ maybeStartOnboarding } = onboardingMod);
+  ({ toggleClientMode, isClientMode, applyClientMode } = clientMod);
+  ({ startAutoCheck: startNotificationCheck } = notifMod);
+  ({ install: installErrorHandler } = errMod);
+  ({ mount: mountFab } = fabMod);
+  ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = themeMod);
+  ({ mount: mountOffline } = offlineMod);
+  ({ start: startAutoSync } = autoSyncMod);
+  ({ mount: mountSyncIndicator } = syncIndMod);
+  ({ mount: mountNotifications, open: openNotifications } = notifCenterMod);
+  ({ ensureUnlocked, installAutoLock } = lockMod);
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;

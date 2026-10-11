@@ -34,6 +34,26 @@ export function startOfDay(v) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
+/**
+ * بداية اليوم المحلي بعد n يوماً (n سالب = قبل) من اليوم الذي يقع فيه v.
+ * بديل آمن لـ «startOfDay + n*24h» التي تُخطئ بساعة في يومَي تغيير التوقيت الصيفي
+ * (مصر: اليوم 25 ساعة في الخريف و23 ساعة في الربيع).
+ * @param {*} v
+ * @param {number} n
+ * @returns {number} NaN إن كانت القيمة غير صالحة
+ */
+export function startOfDayPlus(v, n) {
+  const t = toTimestamp(v);
+  if (Number.isNaN(t)) return NaN;
+  const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime();
+}
+
+/** بداية اليوم التالي (نهاية اليوم الحصرية) — بديل «start + 24h». */
+export function startOfNextDay(v) {
+  return startOfDayPlus(v, 1);
+}
+
 /** نهاية اليوم المحلي (23:59:59.999). */
 export function endOfDay(v) {
   const t = toTimestamp(v);
