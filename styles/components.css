@@ -923,3 +923,43 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 
 /* عمودان يتحوّلان لعمود واحد تلقائياً حين تضيق النافذة (تاريخ + وقت، إلخ) */
 .form-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-s); }
+
+/* ==========================================================================
+   لوحة التحكم (v3.3.39) — إجراءات سريعة + «يحتاج إجراءك»
+   ========================================================================== */
+.card__header { gap: var(--space-s); }
+.dash-link { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-primary); text-decoration: none; padding: var(--space-xs) var(--space-s); min-height: 40px; display: inline-flex; align-items: center; }
+.dash-note { font-size: var(--font-size-sm); color: var(--color-primary-light); }
+
+/* أزرار سريعة */
+.dash-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-s); margin-bottom: var(--space-m); }
+.dash-quick__btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 68px; padding: var(--space-s) var(--space-xs);
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  color: #fff; border: none; border-radius: var(--radius-l); box-shadow: var(--shadow-s);
+  font-family: inherit; font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
+  cursor: pointer; transition: transform var(--duration-fast) var(--ease-out);
+}
+.dash-quick__btn:active { transform: scale(0.96); }
+.dash-quick__icon { font-size: 22px; line-height: 1; }
+@media (max-width: 340px) { .dash-quick { grid-template-columns: repeat(2, 1fr); } }
+
+/* بطاقات KPI قابلة للنقر */
+.stat--link { text-decoration: none; color: inherit; cursor: pointer; transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
+.stat--link:active { transform: scale(0.98); }
+.stat--link:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* صفوف الإجراء */
+.dash-group { margin-bottom: var(--space-m); }
+.dash-group:last-child { margin-bottom: 0; }
+.dash-group__head { display: flex; align-items: center; justify-content: space-between; font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-primary-dark); padding-bottom: var(--space-xs); border-bottom: 1px solid var(--color-border); }
+.dash-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-s); padding: var(--space-s) 0; border-bottom: 1px solid var(--color-border); }
+.dash-row:last-child { border-bottom: none; }
+.dash-row__main { flex: 1 1 140px; min-width: 0; cursor: pointer; }
+.dash-row__title { font-size: var(--font-size-md); font-weight: var(--font-weight-medium); color: var(--color-primary-dark); overflow-wrap: anywhere; }
+.dash-row__sub { font-size: var(--font-size-xs); color: var(--color-primary-light); margin-top: 2px; line-height: 1.5; }
+.dash-row__actions { display: flex; gap: var(--space-xs); flex-wrap: wrap; justify-content: flex-end; }
+.dash-act { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; min-width: 40px; }
+.dash-more { display: block; text-align: center; font-size: var(--font-size-sm); color: var(--color-primary); text-decoration: none; padding: var(--space-s) 0 0; min-height: 40px; }
+.dash-row__main:focus-visible, .dash-link:focus-visible, .dash-more:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

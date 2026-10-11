@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { payments } from '../data/repos/payments.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -516,7 +517,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const paymentsPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activeFilter = 'all';
@@ -554,6 +555,7 @@ export const paymentsPage = {
     container.appendChild(el('div', { id: 'payments-list' }));
 
     await refreshAll();
+    consumeNew(sub, 'payments', () => openPaymentForm());
   },
 
   destroy() {

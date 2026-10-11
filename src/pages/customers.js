@@ -10,6 +10,7 @@
 import { withDepositPayments } from '../services/payments-view.js';
 import { loadVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -709,7 +710,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const customersPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.searchQuery = '';
@@ -751,6 +752,7 @@ export const customersPage = {
     await refreshAll();
     renderFilterBar();
     renderSortBar();
+    consumeNew(sub, 'customers', () => openCustomerForm());
   },
 
   destroy() {

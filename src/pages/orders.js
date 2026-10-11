@@ -8,6 +8,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { uid, formatEGP, formatDate, parseDateInput, localDateInput, toNonNegative } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
@@ -1514,7 +1515,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const ordersPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activeFilter = 'all';
@@ -1544,6 +1545,7 @@ export const ordersPage = {
     container.appendChild(el('div', { id: 'orders-list' }));
 
     await refreshAll();
+    consumeNew(sub, 'orders', () => openOrderForm());
   },
 
     destroy() {

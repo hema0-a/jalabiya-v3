@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.38 — إصلاح تجاوز الحدود في المواعيد وعروض الأسعار
+   الإصدار: v3.3.39 — لوحة تحكم تنفّذ الإجراءات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.38';
+const CACHE_VERSION = 'v3.3.39';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -41,6 +41,7 @@ const PRECACHE_URLS = [
   /* --- Core modules --- */
   './src/core/config.js',
   './src/core/dom.js',
+  './src/core/deeplink.js',
   './src/core/events.js',
   './src/core/sanitize.js',
   './src/core/utils.js',

@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { expenses } from '../data/repos/expenses.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
@@ -247,7 +248,7 @@ async function refreshAll() {
 }
 
 export const expensesPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activePeriod = 'month';
@@ -266,6 +267,7 @@ export const expensesPage = {
     }));
     container.appendChild(el('div', { id: 'expenses-list' }));
     await refreshAll();
+    consumeNew(sub, 'expenses', () => openExpenseForm());
   },
   destroy() { state = { expenses: [], activePeriod: 'month', container: null }; },
 };

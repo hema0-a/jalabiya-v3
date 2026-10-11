@@ -1,16 +1,26 @@
 /* ==========================================================================
-   dashboard.js — لوحة المعلومات (KPIs + رسوم بيانية + ترحيب باسم الورشة)
+   dashboard.js — لوحة التحكم (إجراءات سريعة + «يحتاج إجراءك» + KPIs + رسوم بيانية)
    ==========================================================================
    API:
      dashboardPage.render(container)  → Promise<void>
      dashboardPage.destroy()          → void
+
+   v3.3.39: لوحة تحكم فعلية لا عرض فقط:
+   - أزرار سريعة تفتح نماذج (طلب/دفعة/عميل/موعد) مباشرة، وبطاقات KPI تفتح صفحاتها.
+   - «يحتاج إجراءك»: طلبات جاهزة لم تُستلم، طلبات متأخرة، مستحقات — اتصال/واتساب/تسليم/تقدّم حالة/تسجيل دفعة من اللوحة نفسها.
+   - المواعيد: «تم» واتصال. أحدث العملاء: اتصال وواتساب.
 
    ⚠️ v3.3.2:
    - يقرأ settings.workshop.name للترحيب + settings.workshop.logo للشعار.
    - يعرض 3 رسوم بيانية: مبيعات 7 أيام، توزيع الطلبات، ملخص مالي.
    ========================================================================== */
 
-import { withDepositPayments, withWorkerExpenses } from '../services/payments-view.js';
+import { withDepositPayments, withWorkerExpenses, orderPaidBreakdown } from '../services/payments-view.js';
+import { computePickups, buildPickupText } from '../services/pickup-reminders.js';
+import { computeReceivables, buildReminderText } from '../services/receivables.js';
+import { sendWhatsApp } from '../services/auto-messages.js';
+import { modal } from '../ui/modal.js';
+import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
 import { startOfDayPlus } from '../core/day-math.js';
@@ -179,7 +189,36 @@ async function loadKPIs() {
   const ordersByStatus = computeOrdersByStatus(ordersList);
   const finance = computeFinance(paymentsList, expensesList);
 
+  /* --- لوحة التحكم: ما يحتاج إجراءً --- */
+  const custMap = new Map(customersList.map((c) => [c.id, c]));
+  const paysByOrder = new Map();
+  rawPayments.forEach((p) => {
+    if (!p || !p.orderId) return;
+    if (!paysByOrder.has(p.orderId)) paysByOrder.set(p.orderId, []);
+    paysByOrder.get(p.orderId).push(p);
+  });
+  const remainingOf = (o) => Math.max(0, Math.round(((Number(o.amount) || 0) - orderPaidBreakdown(o, paysByOrder.get(o.id) || []).paid) * 100) / 100);
+  const withCust = (o) => {
+    const c = custMap.get(o.customerId) || null;
+    return { order: o, name: c ? c.name : 'عميل غير معروف', phone: c ? (c.phone || '') : '', customerId: o.customerId, remaining: remainingOf(o) };
+  };
+  const todayStart = startOfDayPlus(Date.now(), 0);
+  const pickups = computePickups(ordersList, rawPayments, customersList);
+  const overdueOrders = ordersList
+    .filter((o) => (o.status === 'pending' || o.status === 'in_progress') && o.dueDate && o.dueDate < todayStart)
+    .sort((a, b) => a.dueDate - b.dueDate)
+    .map(withCust);
+  const receivables = computeReceivables(ordersList, rawPayments, customersList);
+  const debtors = receivables.customers.filter((c) => c.overdue > 0.009);
+  const orderById = new Map(ordersList.map((o) => [o.id, o]));
+
   return {
+    custMap, orderById, pickups, overdueOrders, debtors, workshopNameRaw: workshopName,
+    dueSoonRows: dueSoonOrders.map(withCust),
+    todayApptsRows: todayAppts.map((a) => {
+      const c = a.customerId ? custMap.get(a.customerId) : null;
+      return { appt: a, name: c ? c.name : '', phone: c ? (c.phone || '') : '' };
+    }),
     totalCustomers: customersList.length,
     activeOrders: activeOrders.length,
     monthRevenue,
@@ -193,6 +232,122 @@ async function loadKPIs() {
     ordersByStatus,
     finance,
   };
+}
+
+/* ==========================================================================
+   إجراءات اللوحة (تنفَّذ من اللوحة نفسها ثم تُحدَّث)
+   ========================================================================== */
+
+const NEXT_STATUS = {
+  pending:     { to: 'in_progress', label: '▶ ابدأ التنفيذ' },
+  in_progress: { to: 'ready',       label: '✅ جاهز' },
+  ready:       { to: 'delivered',   label: '📦 تسليم' },
+};
+const STATUS_LABEL = { pending: 'قيد الانتظار', in_progress: 'قيد التنفيذ', ready: 'جاهز', delivered: 'تم التسليم', cancelled: 'ملغي' };
+
+/** إعادة رسم اللوحة مع الإبقاء على موضع التمرير. */
+async function refresh() {
+  const c = state.container;
+  if (!c) return;
+  const y = window.scrollY;
+  await dashboardPage.render(c);
+  window.scrollTo(0, y);
+}
+
+function go(hash) {
+  if (location.hash === hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
+  else location.hash = hash;
+}
+
+/** نقل الطلب للحالة التالية؛ التسليم مع متبقٍّ يطلب تأكيداً. */
+async function advanceOrder(order, remaining) {
+  const next = NEXT_STATUS[order.status];
+  if (!next) return;
+  if (next.to === 'delivered' && remaining > 0.009) {
+    const ok = await modal.confirm({
+      title: 'تسليم مع مبلغ متبقٍّ',
+      message: 'المتبقي على الطلب ' + formatEGP(remaining) + '. هل تسلّمه الآن؟ (يبقى دَيناً على العميل)',
+      confirmText: 'سلّم', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+  }
+  try {
+    const patch = { status: next.to };
+    if (next.to === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
+    await orders.update(order.id, patch);
+    toast.success('الحالة: ' + STATUS_LABEL[next.to]);
+    await refresh();
+  } catch (e) { toast.danger('تعذّر التحديث: ' + e.message); }
+}
+
+/** تسجيل دفعة سريعة على طلب (المبلغ الافتراضي = المتبقي). */
+function quickPay({ customerId, orderId, name, remaining }) {
+  const amountIn = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', inputmode: 'decimal', value: remaining > 0 ? String(remaining) : '', 'aria-label': 'المبلغ' });
+  const methodSel = el('select', { className: 'select', 'aria-label': 'طريقة الدفع' });
+  [['cash', 'نقدي'], ['instapay', 'InstaPay'], ['vodafone', 'Vodafone Cash'], ['other', 'أخرى']]
+    .forEach(([v, l]) => methodSel.appendChild(el('option', { value: v }, l)));
+  const body = el('div', {}, [
+    el('p', { className: 'dash-note' }, 'دفعة من ' + name + (remaining > 0 ? ' — المتبقي ' + formatEGP(remaining) : '')),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ (ج.م)'), amountIn]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'طريقة الدفع'), methodSel]),
+  ]);
+  const handle = modal.open({
+    title: '💰 تسجيل دفعة', body, closable: true,
+    actions: [
+      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
+      { text: 'حفظ الدفعة', variant: 'primary', action: 'save', onClick: async () => {
+        const amount = Number(amountIn.value);
+        if (!amount || !Number.isFinite(amount) || amount <= 0) { toast.warning('أدخل مبلغاً صحيحاً'); return; }
+        if (remaining > 0 && amount > remaining + 0.009) { toast.warning('المبلغ أكبر من المتبقي (' + formatEGP(remaining) + ')'); return; }
+        try {
+          await payments.create({ customerId, orderId: orderId || null, amount, method: methodSel.value, notes: '', isDeposit: false });
+          handle.close();
+          toast.success('تم تسجيل الدفعة');
+          await refresh();
+        } catch (e) { toast.danger('تعذّر الحفظ: ' + e.message); }
+      } },
+    ],
+  });
+  setTimeout(() => { try { amountIn.focus(); amountIn.select(); } catch { /* ignore */ } }, 80);
+}
+
+async function markApptDone(a) {
+  try { await appointments.update(a.id, { status: 'done' }); toast.success('تم تسجيل الموعد كمنتهٍ'); await refresh(); }
+  catch (e) { toast.danger('تعذّر التحديث: ' + e.message); }
+}
+
+/* ==========================================================================
+   مكوّنات صغيرة
+   ========================================================================== */
+
+const callBtn = (phone) => (phone
+  ? el('a', { className: 'btn btn--sm btn--ghost dash-act', href: 'tel:' + String(phone).replace(/[^\d+]/g, ''), 'aria-label': 'اتصال', title: 'اتصال' }, '📞')
+  : null);
+const waBtn = (phone, textFn) => (phone
+  ? el('button', { className: 'btn btn--sm btn--ghost dash-act', type: 'button', 'aria-label': 'واتساب', title: 'واتساب',
+      onClick: () => { if (!sendWhatsApp(phone, textFn())) toast.warning('رقم الهاتف غير صالح'); } }, '💬')
+  : null);
+const actBtn = (label, onClick, primary = true) => el('button', {
+  className: 'btn btn--sm dash-act ' + (primary ? 'btn--primary' : 'btn--secondary'), type: 'button', onClick,
+}, label);
+
+function dashRow(title, sub, actions, onOpen) {
+  const main = el('div', { className: 'dash-row__main' }, [
+    el('div', { className: 'dash-row__title' }, title),
+    sub ? el('div', { className: 'dash-row__sub' }, sub) : null,
+  ]);
+  if (onOpen) { main.setAttribute('role', 'button'); main.tabIndex = 0; main.addEventListener('click', onOpen); main.addEventListener('keydown', (e) => { if (e.key === 'Enter') onOpen(); }); }
+  return el('div', { className: 'dash-row' }, [main, el('div', { className: 'dash-row__actions' }, actions.filter(Boolean))]);
+}
+
+function dashGroup(title, count, rows, moreHash) {
+  const head = el('div', { className: 'dash-group__head' }, [
+    el('span', {}, title),
+    el('span', { className: 'badge badge--warning' }, String(count)),
+  ]);
+  const g = el('div', { className: 'dash-group' }, [head, ...rows]);
+  if (count > rows.length) g.appendChild(el('a', { className: 'dash-more', href: moreHash }, 'عرض الكل (' + count + ') ‹'));
+  return g;
 }
 
 /* ==========================================================================
@@ -241,136 +396,161 @@ function buildHeader(data) {
   }, [logoEl, textWrap]);
 }
 
+
+function buildQuickActions() {
+  const items = [
+    { icon: '📋', label: 'طلب جديد', hash: '#/orders/new' },
+    { icon: '💰', label: 'دفعة', hash: '#/payments/new' },
+    { icon: '👤', label: 'عميل جديد', hash: '#/customers/new' },
+    { icon: '📅', label: 'موعد', hash: '#/appointments/new' },
+  ];
+  return el('div', { className: 'dash-quick', role: 'group', 'aria-label': 'إجراءات سريعة' },
+    items.map((it) => el('button', { className: 'dash-quick__btn', type: 'button', onClick: () => go(it.hash) }, [
+      el('span', { className: 'dash-quick__icon', 'aria-hidden': 'true' }, it.icon),
+      el('span', {}, it.label),
+    ])));
+}
+
 function buildKPICards(data) {
   const grid = el('div', {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(2, 1fr)',
-      gap: '8px',
-      marginBottom: '16px',
-    },
+    style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
   });
-
   const items = [
-    { icon: '👥', value: String(data.totalCustomers), label: 'عملاء' },
-    { icon: '📦', value: String(data.activeOrders), label: 'طلبات نشطة' },
-    { icon: '💰', value: formatEGP(data.monthRevenue), label: 'إيرادات الشهر' },
-    { icon: '📅', value: String(data.todayAppointments), label: 'مواعيد اليوم' },
+    { icon: '👥', value: String(data.totalCustomers), label: 'عملاء', hash: '#/customers' },
+    { icon: '📦', value: String(data.activeOrders), label: 'طلبات نشطة', hash: '#/orders' },
+    { icon: '💰', value: formatEGP(data.monthRevenue), label: 'إيرادات الشهر', hash: '#/payments' },
+    { icon: '📅', value: String(data.todayAppointments), label: 'مواعيد اليوم', hash: '#/appointments' },
   ];
-
   items.forEach((it) => {
-    grid.appendChild(el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, it.icon),
+    grid.appendChild(el('a', { className: 'stat stat--link', href: it.hash, 'aria-label': it.label + ': ' + it.value }, [
+      el('span', { className: 'stat__icon', 'aria-hidden': 'true' }, it.icon),
       el('span', { className: 'stat__value' }, it.value),
       el('span', { className: 'stat__label' }, it.label),
     ]));
   });
-
   return grid;
 }
 
-function buildDueSoonSection(list) {
+/** «يحتاج إجراءك»: ما ينتظر قراراً الآن، وتنفيذه من مكانه. */
+function buildAttention(data) {
+  const wn = data.workshopNameRaw || '';
+  const groups = [];
+
+  /* 1) جاهز ولم يُستلم */
+  const pk = data.pickups.items;
+  if (pk.length) {
+    const rows = pk.slice(0, 4).map((it) => {
+      const order = data.orderById.get(it.orderId);
+      return dashRow(
+        (it.late ? '🔴 ' : '🟢 ') + it.name,
+        'جاهز منذ ' + it.ageDays + ' يوم' + (it.remaining > 0 ? ' · متبقي ' + formatEGP(it.remaining) : ' · مدفوع بالكامل'),
+        [callBtn(it.phone), waBtn(it.phone, () => buildPickupText(it, wn)),
+          order ? actBtn('📦 تسليم', () => advanceOrder(order, it.remaining)) : null],
+        () => go('#/pickups'));
+    });
+    groups.push(dashGroup('📦 جاهز ولم يُستلم', pk.length, rows, '#/pickups'));
+  }
+
+  /* 2) متأخر عن موعد التسليم */
+  const od = data.overdueOrders;
+  if (od.length) {
+    const rows = od.slice(0, 4).map((r) => {
+      const next = NEXT_STATUS[r.order.status];
+      const days = Math.max(1, Math.round((startOfDayPlus(Date.now(), 0) - r.order.dueDate) / 86400000));
+      return dashRow('⏰ ' + r.name,
+        'متأخر ' + days + ' يوم · ' + STATUS_LABEL[r.order.status] + (r.order.amount ? ' · ' + formatEGP(r.order.amount) : ''),
+        [callBtn(r.phone), next ? actBtn(next.label, () => advanceOrder(r.order, r.remaining)) : null],
+        () => go('#/orders'));
+    });
+    groups.push(dashGroup('⏰ متأخر عن موعد التسليم', od.length, rows, '#/orders'));
+  }
+
+  /* 3) مستحقات على عملاء (سُلِّم الطلب وعليه متبقٍّ) */
+  const db = data.debtors;
+  if (db.length) {
+    const rows = db.slice(0, 3).map((c) => {
+      const o = c.orders.find((x) => x.delivered) || null;
+      return dashRow('💸 ' + c.name,
+        'عليه ' + formatEGP(c.overdue) + ' منذ ' + c.oldestDays + ' يوم',
+        [callBtn(c.phone),
+          waBtn(c.phone, () => buildReminderText(c.name, formatEGP(c.overdue), wn)),
+          o ? actBtn('💰 دفعة', () => quickPay({ customerId: c.customerId, orderId: o.id, name: c.name, remaining: o.remaining })) : null],
+        () => go('#/debts'));
+    });
+    groups.push(dashGroup('💸 مستحقات متأخرة', db.length, rows, '#/debts'));
+  }
+
+  const card = el('div', { className: 'card dash-attention', style: { marginBottom: '16px' } });
+  card.appendChild(el('div', { className: 'card__header' }, [el('h3', { className: 'card__title' }, '🔔 يحتاج إجراءك')]));
+  if (!groups.length) {
+    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, '✅ لا شيء يحتاج إجراءً الآن — لا طلبات متأخرة ولا مستحقات.'));
+    return card;
+  }
+  groups.forEach((g) => card.appendChild(g));
+  return card;
+}
+
+function buildDueSoonSection(rows) {
   const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
   card.appendChild(el('div', { className: 'card__header' }, [
     el('h3', { className: 'card__title' }, '⏰ طلبات مستحقة قريباً'),
   ]));
-
-  if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا توجد طلبات مستحقة خلال 7 أيام.'));
+  if (rows.length === 0) {
+    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا توجد طلبات مستحقة خلال 7 أيام.'));
     return card;
   }
-
-  list.forEach((o) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', {}, [
-        el('div', { style: { fontWeight: '500', fontSize: '14px', color: '#123C2F' } },
-          o.status === 'ready' ? '✅ جاهز للتسليم' : '⏳ ' + (o.status === 'pending' ? 'قيد الانتظار' : 'قيد التنفيذ')),
-        o.dueDate ? el('div', { style: { fontSize: '11px', color: '#2E8B6F' } },
-          '📅 ' + formatDate(o.dueDate)) : null,
-      ]),
-      el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#B8863B' } },
-        o.amount ? formatEGP(o.amount) : ''),
-    ]));
+  rows.forEach((r) => {
+    const o = r.order;
+    const next = NEXT_STATUS[o.status];
+    card.appendChild(dashRow(
+      r.name,
+      (o.status === 'ready' ? '✅ جاهز للتسليم' : '⏳ ' + (o.status === 'pending' ? 'قيد الانتظار' : 'قيد التنفيذ')) +
+        (o.dueDate ? ' · 📅 ' + formatDate(o.dueDate) : '') + (o.amount ? ' · ' + formatEGP(o.amount) : ''),
+      [callBtn(r.phone), next ? actBtn(next.label, () => advanceOrder(o, r.remaining), false) : null],
+      () => go('#/orders')));
   });
-
   return card;
 }
 
-function buildTodayAppointmentsSection(list) {
+function buildTodayAppointmentsSection(rows) {
   const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
   card.appendChild(el('div', { className: 'card__header' }, [
     el('h3', { className: 'card__title' }, '📅 مواعيد اليوم'),
+    el('a', { className: 'dash-link', href: '#/appointments/new' }, '＋ موعد'),
   ]));
-
-  if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا توجد مواعيد اليوم.'));
+  if (rows.length === 0) {
+    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا توجد مواعيد اليوم.'));
     return card;
   }
-
-  list.forEach((a) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', { style: { fontSize: '13px', color: '#123C2F' } },
-        a.title || 'موعد'),
-      el('div', { style: { fontSize: '12px', color: '#2E8B6F' } },
-        '🕐 ' + formatTime(a.date)),
-    ]));
+  rows.forEach((r) => {
+    const a = r.appt;
+    const done = a.status === 'done';
+    card.appendChild(dashRow(
+      (done ? '✔ ' : '🕐 ') + formatTime(a.date) + ' — ' + (a.title || 'موعد'),
+      r.name || null,
+      [callBtn(r.phone), done ? null : actBtn('✔ تم', () => markApptDone(a), false)],
+      () => go('#/appointments')));
   });
-
   return card;
 }
 
-function buildRecentCustomersSection(list) {
+function buildRecentCustomersSection(list, wn) {
   const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
   card.appendChild(el('div', { className: 'card__header' }, [
     el('h3', { className: 'card__title' }, '👥 أحدث العملاء'),
+    el('a', { className: 'dash-link', href: '#/customers/new' }, '＋ عميل'),
   ]));
-
   if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا يوجد عملاء بعد.'));
+    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا يوجد عملاء بعد.'));
     return card;
   }
-
   list.forEach((c) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', {}, [
-        el('div', { style: { fontWeight: '500', fontSize: '14px', color: '#123C2F' } },
-          c.name || 'بدون اسم'),
-        c.phone ? el('div', { style: { fontSize: '11px', color: '#2E8B6F' } }, c.phone) : null,
-      ]),
-      c.vip ? el('span', { className: 'badge badge--accent' }, '⭐ VIP') : null,
-    ]));
+    card.appendChild(dashRow(
+      (c.name || 'بدون اسم') + (c.vip ? '  ⭐ VIP' : ''),
+      c.phone || null,
+      [callBtn(c.phone), waBtn(c.phone, () => 'السلام عليكم ' + (c.name || '') + '،' + (wn ? ' معكم ' + wn + '.' : ''))],
+      () => go('#/customers')));
   });
-
   return card;
 }
 
@@ -389,7 +569,15 @@ export const dashboardPage = {
 
     /* بناء */
     container.appendChild(buildHeader(data));
+    container.appendChild(buildQuickActions());
     container.appendChild(buildKPICards(data));
+    container.appendChild(buildAttention(data));
+
+    /* 📅 مواعيد اليوم */
+    container.appendChild(buildTodayAppointmentsSection(data.todayApptsRows));
+
+    /* ⏰ طلبات مستحقة */
+    container.appendChild(buildDueSoonSection(data.dueSoonRows));
 
     /* 📊 رسم المبيعات — آخر 7 أيام */
     try {
@@ -397,12 +585,6 @@ export const dashboardPage = {
     } catch (e) {
       console.warn('[Dashboard] sales chart failed:', e);
     }
-
-    /* 📅 مواعيد اليوم */
-    container.appendChild(buildTodayAppointmentsSection(data.todayApptsList));
-
-    /* ⏰ طلبات مستحقة */
-    container.appendChild(buildDueSoonSection(data.dueSoonOrders));
 
     /* 💰 الملخص المالي — آخر 30 يومًا */
     try {
@@ -419,7 +601,7 @@ export const dashboardPage = {
     }
 
     /* 👥 أحدث العملاء */
-    container.appendChild(buildRecentCustomersSection(data.recentCustomers));
+    container.appendChild(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
   },
 
   destroy() {

@@ -8,6 +8,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { appointments } from '../data/repos/appointments.js';
 import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
@@ -424,7 +425,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const appointmentsPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activeFilter = 'upcoming';
@@ -453,6 +454,7 @@ export const appointmentsPage = {
     container.appendChild(el('div', { id: 'appointments-list' }));
 
     await refreshAll();
+    consumeNew(sub, 'appointments', () => openAppointmentForm());
   },
 
   destroy() {
