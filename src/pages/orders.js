@@ -22,6 +22,7 @@ import { openSignaturePad } from '../ui/signature-pad.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
+import { orderPaidBreakdown } from '../services/payments-view.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
@@ -902,7 +903,15 @@ function showReferenceImage(dataUrl, title = 'الصورة المرجعية') {
 async function openMessageMenu(order) {
   const customer = state.customerMap[order.customerId];
   if (!customer || !customer.phone) { toast.warning('لا يوجد هاتف مسجَّل للعميل'); return; }
-  const options = await getOrderMessageOptions(order, customer);
+  /* المتبقي الحقيقي (دفعات + مقدم) واسم الورشة من الإعدادات — كانا يُهملان فيظهر «متبقي» = الإجمالي */
+  let paid = Number(order.deposit) || 0;
+  let workshop = {};
+  try {
+    const linked = await paymentsRepoForDelete.findByOrder(order.id);
+    paid = orderPaidBreakdown(order, linked).paid;
+  } catch (e) { /* نكتفي بالمقدم */ }
+  try { workshop = (await settings.get()).workshop || {}; } catch (e) { /* افتراضي */ }
+  const options = await getOrderMessageOptions(order, customer, workshop, { paid });
   if (options.length === 0) { toast.warning('لا توجد قوالب مفعَّلة'); return; }
 
   const body = el('div', {});

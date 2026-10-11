@@ -2,7 +2,10 @@
    auto-messages.js — الرسائل التلقائية (WhatsApp)
    ==========================================================================
    - 5 قوالب افتراضية: طلب جديد، بدء تنفيذ، جاهز، شكر، تذكير دفع.
-   - المتغيرات: {customer}, {amount}, {phone}, {orderId}, {date}, {workshop}
+   - المتغيرات (VARIABLES): {customer} {amount} {paid} {remaining} {phone}
+     {orderId} {date} {workshop}
+   - ⚠️ v3.3.43: formatEGP تُلحق «ج.م» بنفسها — لا تكتب «ج.م» بعد المتغيرات
+     المالية في القوالب (كان يظهر «ج.م ج.م»؛ يُنظَّف الآن تلقائياً أيضاً).
    - يقرأ التخصيصات من settings.autoMessages.templates (تتجاوز الافتراضية).
    - Static imports فقط.
    ========================================================================== */
@@ -17,7 +20,7 @@ export const DEFAULT_TEMPLATES = [
     name: 'طلب جديد',
     icon: '📥',
     enabled: true,
-    text: 'شكراً لك {customer}، تم استلام طلبك رقم {orderId} بقيمة {amount} ج.م. سنبدأ التنفيذ فوراً 🌹',
+    text: 'شكراً لك {customer}، تم استلام طلبك رقم {orderId} بقيمة {amount}. سنبدأ التنفيذ فوراً 🌹',
   },
   {
     id: 'start_work',
@@ -45,9 +48,24 @@ export const DEFAULT_TEMPLATES = [
     name: 'تذكير بالدفع',
     icon: '💰',
     enabled: true,
-    text: 'تذكير ودّي يا {customer}: متبقي على طلبك رقم {orderId} مبلغ {amount} ج.م. نتشرف بالسداد في أي وقت 🌸',
+    text: 'تذكير ودّي يا {customer}: متبقي على طلبك رقم {orderId} مبلغ {remaining}. نتشرف بالسداد في أي وقت 🌸',
   },
 ];
+
+/* --- المتغيرات المدعومة (مصدر واحد للواجهة والخدمة) --- */
+export const VARIABLES = [
+  { key: 'customer',  label: 'اسم العميل',      sample: 'أحمد محمد' },
+  { key: 'orderId',   label: 'رقم الطلب',       sample: '#104821' },
+  { key: 'amount',    label: 'إجمالي الطلب',    sample: '1,200 ج.م' },
+  { key: 'paid',      label: 'المدفوع',         sample: '500 ج.م' },
+  { key: 'remaining', label: 'المتبقي',         sample: '700 ج.م' },
+  { key: 'date',      label: 'تاريخ التسليم',   sample: '15 أكتوبر 2026' },
+  { key: 'phone',     label: 'هاتف العميل',     sample: '01012345678' },
+  { key: 'workshop',  label: 'اسم الورشة',      sample: 'ورشة الجلابيب' },
+];
+
+/** أقصى طول لنص القالب (رسائل واتساب الطويلة جداً تُقطع/تُزعج العميل) */
+export const MAX_TEMPLATE_LENGTH = 600;
 
 /* ==========================================================================
    1. جلب القوالب
@@ -65,12 +83,12 @@ export async function getTemplates() {
 
     return DEFAULT_TEMPLATES.map((tpl) => {
       const override = custom[tpl.id] || {};
+      const hasText = typeof override.text === 'string' && !!override.text.trim();
       return {
         ...tpl,
         enabled: override.enabled !== false && tpl.enabled !== false,
-        text: (typeof override.text === 'string' && override.text.trim())
-          ? override.text
-          : tpl.text,
+        text: hasText ? override.text : tpl.text,
+        isCustom: hasText && override.text.trim() !== tpl.text,
       };
     });
   } catch {
@@ -110,21 +128,30 @@ export async function isEnabled() {
  * @param {Object} order
  * @param {Object} customer
  * @param {Object} [workshop]
+ * @param {{paid?:number}} [extra] — المدفوع الفعلي (دفعات + مقدم) لحساب المتبقي
  * @returns {Object}
  */
-export function buildVars(order, customer, workshop = {}) {
+export function buildVars(order, customer, workshop = {}, extra = {}) {
+  const total = order ? (Number(order.amount) || 0) : 0;
+  const hasPaid = extra && extra.paid != null && isFinite(Number(extra.paid));
+  const paid = hasPaid ? Number(extra.paid) : (order ? (Number(order.deposit) || 0) : 0);
+  const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
   return {
     customer: (customer && customer.name) || 'عميلنا',
     phone: (customer && customer.phone) || '',
-    amount: formatEGP(order ? (order.amount || 0) : 0),
+    amount: formatEGP(total),
+    paid: formatEGP(paid),
+    remaining: formatEGP(remaining),
     orderId: order ? '#' + String(order.id).slice(-6) : '',
     date: order && order.dueDate ? formatDate(order.dueDate) : formatDate(Date.now()),
-    workshop: workshop.name || 'ورشة الجلابيب',
+    workshop: (workshop && workshop.name) || 'ورشة الجلابيب',
   };
 }
 
 /**
  * استبدال المتغيرات في نص القالب.
+ * - دالة استبدال (لا نص) حتى لا تُفسَّر `$&` و`$1` داخل اسم العميل.
+ * - يُنظَّف تكرار «ج.م ج.م» الناتج عن قوالب قديمة كتبت «ج.م» بعد المبلغ.
  * @param {string} text
  * @param {Object} vars
  * @returns {string}
@@ -133,8 +160,31 @@ export function interpolate(text, vars) {
   let out = String(text || '');
   Object.keys(vars || {}).forEach((k) => {
     const re = new RegExp('\\{' + k + '\\}', 'g');
-    out = out.replace(re, String(vars[k] ?? ''));
+    const val = String(vars[k] ?? '');
+    out = out.replace(re, () => val);
   });
+  return out.replace(/(ج\.م)(\s*ج\.م\.?)+/g, '$1');
+}
+
+/**
+ * متغيرات غير معروفة داخل نص (خطأ إملائي مثل {customr}) — تُرسَل للعميل كما هي!
+ * @param {string} text
+ * @returns {string[]} أسماء فريدة بلا أقواس
+ */
+export function findUnknownVariables(text) {
+  const known = new Set(VARIABLES.map((v) => v.key));
+  const found = new Set();
+  String(text || '').replace(/\{([^{}\s]+)\}/g, (m, name) => {
+    if (!known.has(name)) found.add(name);
+    return m;
+  });
+  return [...found];
+}
+
+/** متغيرات عيّنة لمعاينة القالب في الإعدادات. */
+export function sampleVars() {
+  const out = {};
+  VARIABLES.forEach((v) => { out[v.key] = v.sample; });
   return out;
 }
 
@@ -167,16 +217,17 @@ export function sendWhatsApp(phone, text) {
  * @param {Object} order
  * @param {Object} customer
  * @param {Object} [workshop]
+ * @param {{paid?:number}} [extra]
  * @returns {Promise<Array<{id:string, name:string, icon:string, text:string, send:Function}>>}
  */
-export async function getOrderMessageOptions(order, customer, workshop = {}) {
+export async function getOrderMessageOptions(order, customer, workshop = {}, extra = {}) {
   if (!order) return [];
 
   const enabled = await isEnabled();
   if (!enabled) return [];
 
   const templates = await getTemplates();
-  const vars = buildVars(order, customer, workshop);
+  const vars = buildVars(order, customer, workshop, extra);
   const phone = (customer && customer.phone) || '';
 
   return templates
@@ -195,4 +246,4 @@ export async function getOrderMessageOptions(order, customer, workshop = {}) {
    5. تصدير للاختبار
    ========================================================================== */
 
-export const _internal = { DEFAULT_TEMPLATES };
+export const _internal = { DEFAULT_TEMPLATES, VARIABLES };

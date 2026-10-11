@@ -24,6 +24,10 @@ import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
 import * as autoSync from '../../sync/auto-sync.js';
 import { seedDemoData, clearDemoData, countDemoData } from '../../services/demo-data.js';
 import {
+  DEFAULT_TEMPLATES, VARIABLES, MAX_TEMPLATE_LENGTH,
+  interpolate, findUnknownVariables, sampleVars,
+} from '../../services/auto-messages.js';
+import {
   createBackup, listBackups, restoreBackup, deleteBackup,
   clearAllBackups, exportBackupToFile,
 } from '../../services/auto-backup.js';
@@ -221,13 +225,17 @@ function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
    3. الرسائل التلقائية
    ========================================================================== */
 
-const AUTO_MESSAGES = [
-  { id: 'new_order', name: 'طلب جديد', text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
-  { id: 'start_work', name: 'بدء التنفيذ', text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك.' },
-  { id: 'ready', name: 'جاهز للتسليم', text: 'طلبك جاهز للتسليم يا {customer}!' },
-  { id: 'thanks', name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}!' },
-  { id: 'payment_due', name: 'تذكير بالدفع', text: 'تذكير ودّي: متبقي عليك {amount} ج.م.' },
-];
+/* ⚠️ v3.3.43: القوالب من الخدمة (مصدر واحد). كانت هنا نسخة مكرّرة بنصوص مختلفة
+   عمّا يُرسَل فعلاً، فيرى المستخدم نصاً ويُرسَل غيره. */
+
+/** يبني خريطة التخصيصات المحفوظة: يحفظ فقط ما يختلف عن الافتراضي. */
+function buildOverride(tpl, state) {
+  const o = {};
+  if (state.enabled === false) o.enabled = false;
+  const txt = (state.text || '').trim();
+  if (txt && txt !== tpl.text) o.text = txt;
+  return Object.keys(o).length ? o : null;
+}
 
 const autoMessagesSection = {
   id: 'auto-messages',
@@ -236,100 +244,198 @@ const autoMessagesSection = {
   async render(body, currentSettings, saveFn) {
     const am = currentSettings.autoMessages || { enabled: true, templates: {} };
 
+    /* حالة محلية حيّة: كل حفظ يرسل الخريطة كاملة (settings.update يدمج عمقاً مستوى واحداً فقط،
+       فإرسال نسخة قديمة كان يمحو تعديل القالب السابق). */
+    const live = {};
+    DEFAULT_TEMPLATES.forEach((tpl) => {
+      const o = (am.templates || {})[tpl.id] || {};
+      live[tpl.id] = {
+        enabled: o.enabled !== false,
+        text: (typeof o.text === 'string' && o.text.trim()) ? o.text : tpl.text,
+      };
+    });
+    let masterOn = am.enabled !== false;
+
+    function persistTemplates() {
+      const map = {};
+      DEFAULT_TEMPLATES.forEach((tpl) => {
+        const o = buildOverride(tpl, live[tpl.id]);
+        if (o) map[tpl.id] = o;
+      });
+      saveFn({ autoMessages: { templates: map } });
+    }
+
+    const vars = sampleVars();
+    const cards = el('div', {});
+
+    function applyMasterState() {
+      cards.style.opacity = masterOn ? '1' : '0.5';
+      cards.style.pointerEvents = masterOn ? '' : 'none';
+    }
+
+    /* --- المفتاح الرئيسي --- */
     const mainToggle = createToggle({
-      label: 'تفعيل الرسائل التلقائية',
-      checked: am.enabled !== false,
+      label: '',
+      checked: masterOn,
       onChange: (v) => {
+        masterOn = v;
+        applyMasterState();
         saveFn({ autoMessages: { enabled: v } });
       },
     });
     body.appendChild(el('div', { className: 'settings-row' }, [
-      el('div', { className: 'settings-row__label' }, 'تفعيل الرسائل التلقائية'),
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'تفعيل الرسائل التلقائية'),
+        el('div', { className: 'settings-row__hint' },
+          'تظهر في زر 📱 بصفحة الطلبات — تفتح واتساب برسالة جاهزة ولا تُرسَل وحدها'),
+      ]),
       mainToggle,
     ]));
 
-    const templates = am.templates || {};
+    body.appendChild(cards);
 
-    AUTO_MESSAGES.forEach((tpl) => {
-      const current = templates[tpl.id] || { enabled: true, text: tpl.text };
+    /* --- بطاقة قالب --- */
+    DEFAULT_TEMPLATES.forEach((tpl) => {
+      const st = live[tpl.id];
 
-      const t = createToggle({
-        label: '', checked: current.enabled !== false,
-        onChange: (v) => {
-          saveFn({
-            autoMessages: {
-              templates: {
-                ...templates,
-                [tpl.id]: { ...current, enabled: v },
-              },
-            },
-          });
+      const previewEl = el('div', {
+        style: {
+          fontSize: '12px', color: '#555', padding: '8px',
+          background: '#F6F1E6', borderRadius: '6px', marginTop: '6px',
+          lineHeight: '1.6', whiteSpace: 'pre-wrap',
         },
       });
+      const badge = el('span', {
+        className: 'badge badge--info',
+        style: { marginInlineStart: '6px', fontSize: '10px' },
+      }, 'مخصّص');
 
-      const preview = el('div', {
-        style: {
-          fontSize: '12px', color: '#666', padding: '8px',
-          background: '#F6F1E6', borderRadius: '6px', marginTop: '6px',
-          lineHeight: '1.5', whiteSpace: 'pre-wrap',
-        },
-      }, current.text);
+      function refresh() {
+        previewEl.textContent = interpolate(st.text, vars);
+        badge.style.display = st.text.trim() !== tpl.text ? '' : 'none';
+        previewEl.style.opacity = st.enabled ? '1' : '0.5';
+      }
+
+      const t = createToggle({
+        label: '', checked: st.enabled,
+        onChange: (v) => { st.enabled = v; refresh(); persistTemplates(); },
+      });
 
       const editBtn = el('button', {
         className: 'btn btn--sm btn--ghost', type: 'button',
-        onClick: () => openTemplateEditor(tpl, current, (newText) => {
-          saveFn({
-            autoMessages: {
-              templates: {
-                ...templates,
-                [tpl.id]: { ...current, text: newText },
-              },
-            },
-          });
-          preview.textContent = newText;
+        onClick: () => openTemplateEditor(tpl, st.text, (newText) => {
+          st.text = newText;
+          refresh();
+          persistTemplates();
         }),
       }, '✏️ تعديل');
 
-      body.appendChild(el('div', {
+      cards.appendChild(el('div', {
         style: {
           padding: '12px', background: '#FFF',
-          border: '1px solid #E5DDD0', borderRadius: '8px',
-          marginBottom: '8px',
+          border: '1px solid #E5DDD0', borderRadius: '8px', marginBottom: '8px',
         },
       }, [
         el('div', {
           style: {
             display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginBottom: '4px',
+            alignItems: 'center', marginBottom: '4px', gap: '8px',
           },
         }, [
-          el('span', { style: { fontWeight: '500', fontSize: '14px' } }, tpl.name),
+          el('span', { style: { fontWeight: '500', fontSize: '14px' } }, [
+            (tpl.icon || '') + ' ' + tpl.name, badge,
+          ]),
           el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [t, editBtn]),
         ]),
-        preview,
+        previewEl,
       ]));
+      refresh();
     });
 
+    applyMasterState();
+
+    /* --- دليل المتغيرات --- */
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.9',
       },
-    }, '💡 المتغيرات: {customer} {amount} {phone}'));
+    }, [
+      el('div', { style: { fontWeight: '600', marginBottom: '2px' } }, '💡 المتغيرات المتاحة'),
+      ...VARIABLES.map((v) => el('div', {}, '{' + v.key + '} — ' + v.label)),
+      el('div', { style: { marginTop: '4px', color: '#666' } },
+        'المعاينة أعلاه ببيانات تجريبية. المبالغ تتضمّن «ج.م» تلقائياً.'),
+    ]));
   },
 };
 
-function openTemplateEditor(tpl, current, onSave) {
+function openTemplateEditor(tpl, currentText, onSave) {
   const textarea = el('textarea', { className: 'textarea' });
-  textarea.value = current.text;
+  textarea.value = currentText;
   textarea.style.minHeight = '120px';
+  textarea.maxLength = MAX_TEMPLATE_LENGTH + 200; /* هامش؛ التحقق الفعلي عند الحفظ */
+
+  const counter = el('div', { style: { fontSize: '11px', color: '#888', textAlign: 'left' } });
+  const warn = el('div', {
+    style: { fontSize: '12px', color: '#C62828', marginTop: '4px', display: 'none' },
+  });
+  const preview = el('div', {
+    style: {
+      fontSize: '12px', color: '#555', padding: '8px', background: '#F6F1E6',
+      borderRadius: '6px', lineHeight: '1.6', whiteSpace: 'pre-wrap', marginTop: '6px',
+    },
+  });
+
+  function update() {
+    const txt = textarea.value;
+    counter.textContent = txt.length + ' / ' + MAX_TEMPLATE_LENGTH;
+    counter.style.color = txt.length > MAX_TEMPLATE_LENGTH ? '#C62828' : '#888';
+    preview.textContent = interpolate(txt, sampleVars());
+    const unknown = findUnknownVariables(txt);
+    if (unknown.length) {
+      warn.style.display = '';
+      warn.textContent = '⚠️ متغير غير معروف سيُرسَل كما هو: ' +
+        unknown.map((u) => '{' + u + '}').join(' ');
+    } else {
+      warn.style.display = 'none';
+    }
+  }
+  textarea.addEventListener('input', update);
+
+  /* شرائح إدراج المتغير عند المؤشر */
+  function insertVar(key) {
+    const token = '{' + key + '}';
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    textarea.value = textarea.value.slice(0, start) + token + textarea.value.slice(end);
+    const pos = start + token.length;
+    textarea.focus();
+    try { textarea.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+    update();
+  }
+  const chips = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0' } },
+    VARIABLES.map((v) => el('button', {
+      type: 'button', className: 'btn btn--sm btn--ghost',
+      title: v.label, onClick: () => insertVar(v.key),
+    }, v.label)));
+
+  const resetBtn = el('button', {
+    type: 'button', className: 'btn btn--sm btn--ghost',
+    onClick: () => { textarea.value = tpl.text; update(); },
+  }, '↺ استعادة النص الافتراضي');
 
   const body = el('div', {}, [
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, 'نص القالب'),
-      textarea,
+      textarea, counter, warn,
     ]),
+    el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, 'اضغط لإدراج متغير:'),
+    chips,
+    el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, 'معاينة:'),
+    preview,
+    el('div', { style: { marginTop: '8px' } }, [resetBtn]),
   ]);
+  update();
 
   const handle = modal.open({
     title: 'تعديل: ' + tpl.name,
@@ -341,9 +447,11 @@ function openTemplateEditor(tpl, current, onSave) {
         onClick: () => {
           const txt = textarea.value.trim();
           if (!txt) return toast.warning('النص مطلوب');
+          if (txt.length > MAX_TEMPLATE_LENGTH) {
+            return toast.warning('النص أطول من ' + MAX_TEMPLATE_LENGTH + ' حرفاً');
+          }
           onSave(txt);
           handle.close();
-          toast.success('تم الحفظ');
         },
       },
     ],

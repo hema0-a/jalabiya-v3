@@ -47,5 +47,6 @@ import './modules/audit-3339.test.js';
 import './modules/audit-3340.test.js';
 import './modules/audit-3341.test.js';
 import './modules/audit-3342.test.js';
+import './modules/audit-3343.test.js';
 
 export { runAll, register } from './registry.js';
