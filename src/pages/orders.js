@@ -1389,6 +1389,8 @@ function renderFilters() {
       },
     }, it.label + ' (' + it.count + ')'));
   });
+  /* الشريحة النشطة تظهر دائماً داخل الصف القابل للتمرير */
+  wrap.querySelector('.btn--primary')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
 }
 
 function renderList() {
@@ -1488,7 +1490,8 @@ export const ordersPage = {
     container.appendChild(el('div', { id: 'orders-view-toggle' }));
     container.appendChild(el('div', {
       id: 'orders-filters',
-      style: { display: 'flex', flexWrap: 'wrap', marginBottom: '12px' },
+      className: 'scroll-row',
+      style: { marginBottom: '12px' },
     }));
 
     container.appendChild(el('div', { id: 'orders-list' }));

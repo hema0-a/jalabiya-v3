@@ -826,3 +826,49 @@ body.dark-mode .offline-banner {
   flex-shrink: 0; background: transparent; border: 0; color: inherit;
   font-size: 16px; line-height: 1; padding: 4px 8px; cursor: pointer;
 }
+
+/* ==========================================================================
+   UX polish (v3.3.36) — لمس مريح، مساحة أوفر، لا يغطي الزر العائم المحتوى
+   ========================================================================== */
+
+/* إزالة تأخير اللمس/تكبير النقر المزدوج على كل العناصر التفاعلية */
+button, a, [role="button"], input, select, textarea, label, summary { touch-action: manipulation; }
+
+/* مساحة أسفل المحتوى كي لا يغطي الزر العائم ⚡ آخر عنصر في أي قائمة */
+.app-shell__content { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+/* أهداف لمس لا تقل عن 40px على الشاشات اللمسية (كانت 32px) */
+@media (pointer: coarse) {
+  .btn--sm { min-height: 40px; padding-inline: var(--space-m); }
+  .btn--icon.btn--sm { width: 40px; min-width: 40px; min-height: 40px; }
+  .sync-alert__close { min-width: 40px; min-height: 40px; }
+}
+
+/* بطاقات الإحصاء على الجوال: الأيقونة بجانب القيمة بدل فوقها (ارتفاع ~الثلثين) */
+@media (max-width: 480px) {
+  .stat {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "icon value" "icon label";
+    column-gap: var(--space-s);
+    row-gap: 0;
+    align-items: center;
+    padding: var(--space-s) var(--space-m);
+  }
+  .stat__icon  { grid-area: icon; font-size: 26px; }
+  .stat__value { grid-area: value; font-size: var(--font-size-xl); }
+  .stat__label { grid-area: label; }
+
+  /* الإشعارات أعلى الزر العائم بدل أن تتراكب معه */
+  .toast-container { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* صف قابل للتمرير أفقياً (شرائح الفلترة) بدل الالتفاف على أسطر */
+.scroll-row {
+  display: flex; flex-wrap: nowrap; gap: var(--space-xs);
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.scroll-row::-webkit-scrollbar { display: none; }
+.scroll-row > * { flex: 0 0 auto; scroll-snap-align: start; }
