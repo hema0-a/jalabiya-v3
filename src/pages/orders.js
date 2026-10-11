@@ -766,7 +766,12 @@ async function advanceStatus(order) {
     const patch = { status: next };
     if (next === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
     await orders.update(order.id, patch);
-    toast.success('الحالة: ' + STATUS_MAP[next].label);
+    const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null };
+    toast.undo('الحالة: ' + STATUS_MAP[next].label, async () => {
+      await orders.update(order.id, prev);
+      toast.info('تم التراجع: ' + STATUS_MAP[prev.status].label);
+      await refreshAll();
+    });
     await refreshAll();
   } catch (err) { toast.danger('فشل التحديث: ' + err.message); }
 }

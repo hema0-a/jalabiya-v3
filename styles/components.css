@@ -972,3 +972,13 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
   font-size: var(--font-size-sm); line-height: 1.6;
 }
 .dash-demo span { flex: 1 1 200px; }
+
+/* زر «تراجع» داخل الإشعار (v3.3.41) */
+.toast__action {
+  flex-shrink: 0; min-height: 36px; padding: 0 var(--space-m);
+  background: rgba(255, 255, 255, 0.2); color: #fff; border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-m); font-family: inherit; font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+.toast__action:active { background: rgba(255, 255, 255, 0.35); }
+@media (pointer: coarse) { .toast__action { min-height: 40px; } }

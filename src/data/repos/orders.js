@@ -23,7 +23,8 @@ export const orders = {
     let p = patch;
     if (p && p.status === 'ready') {
       const existing = await base.find(id);
-      if (existing && existing.status !== 'ready') p = { ...p, readyAt: Date.now() };
+      /* readyAt صريح (مثل التراجع عن «تسليم») يُحفظ كما هو بدل إعادة ضبط عمر الجاهزية */
+      if (existing && existing.status !== 'ready' && !('readyAt' in p)) p = { ...p, readyAt: Date.now() };
     }
     return base.update(id, p);
   },

@@ -277,7 +277,13 @@ async function advanceOrder(order, remaining) {
     const patch = { status: next.to };
     if (next.to === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
     await orders.update(order.id, patch);
-    toast.success('الحالة: ' + STATUS_LABEL[next.to]);
+    /* التراجع يعيد الحالة وتواريخها كما كانت (بما فيها عمر «جاهز») */
+    const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null };
+    toast.undo('الحالة: ' + STATUS_LABEL[next.to], async () => {
+      await orders.update(order.id, prev);
+      toast.info('تم التراجع: ' + STATUS_LABEL[prev.status]);
+      await refresh();
+    });
     await refresh();
   } catch (e) { toast.danger('تعذّر التحديث: ' + e.message); }
 }
@@ -302,9 +308,13 @@ function quickPay({ customerId, orderId, name, remaining }) {
         if (!amount || !Number.isFinite(amount) || amount <= 0) { toast.warning('أدخل مبلغاً صحيحاً'); return; }
         if (remaining > 0 && amount > remaining + 0.009) { toast.warning('المبلغ أكبر من المتبقي (' + formatEGP(remaining) + ')'); return; }
         try {
-          await payments.create({ customerId, orderId: orderId || null, amount, method: methodSel.value, notes: '', isDeposit: false });
+          const created = await payments.create({ customerId, orderId: orderId || null, amount, method: methodSel.value, notes: '', isDeposit: false });
           handle.close();
-          toast.success('تم تسجيل الدفعة');
+          toast.undo('تم تسجيل دفعة ' + formatEGP(amount), async () => {
+            await payments.remove(created.id);
+            toast.info('تم التراجع: أُلغيت الدفعة');
+            await refresh();
+          });
           await refresh();
         } catch (e) { toast.danger('تعذّر الحفظ: ' + e.message); }
       } },
@@ -314,7 +324,16 @@ function quickPay({ customerId, orderId, name, remaining }) {
 }
 
 async function markApptDone(a) {
-  try { await appointments.update(a.id, { status: 'done' }); toast.success('تم تسجيل الموعد كمنتهٍ'); await refresh(); }
+  try {
+    const prevStatus = a.status || 'scheduled';
+    await appointments.update(a.id, { status: 'done' });
+    toast.undo('تم تسجيل الموعد كمنتهٍ', async () => {
+      await appointments.update(a.id, { status: prevStatus });
+      toast.info('تم التراجع');
+      await refresh();
+    });
+    await refresh();
+  }
   catch (e) { toast.danger('تعذّر التحديث: ' + e.message); }
 }
 

@@ -6,7 +6,8 @@
      toast.warning('رسالة')   → إشعار برتقالي
      toast.danger('رسالة')    → إشعار أحمر
      toast.info('رسالة')      → إشعار أزرق
-     toast.show('رسالة', {type, duration, closable})
+     toast.show('رسالة', {type, duration, closable, action:{label,onClick}})
+     toast.undo('تم التسليم', async () => {...})  → إشعار بزر «تراجع» (7 ثوانٍ)
      toast.clear()            → إزالة كل الإشعارات
    ========================================================================== */
 
@@ -51,6 +52,7 @@ function show(message, options = {}) {
     type = 'default',
     duration = DEFAULT_DURATION,
     closable = true,
+    action = null,
   } = options;
 
   const container = getContainer();
@@ -87,6 +89,14 @@ function show(message, options = {}) {
     events.emit('toast:closed', { message, type });
   }
 
+  /* زر إجراء داخل الإشعار (مثل «تراجع»): يُغلق الإشعار ثم ينفّذ */
+  if (action && typeof action.onClick === 'function') {
+    node.appendChild(el('button', {
+      className: 'toast__action', type: 'button',
+      onClick: () => { close(); try { action.onClick(); } catch (e) { console.warn('[toast] action failed:', e); } },
+    }, String(action.label || 'تراجع')));
+  }
+
   if (closable) {
     const closeBtn = el('button', {
       className: 'toast__close',
@@ -114,6 +124,19 @@ export const toast = {
   danger:  (msg, opts = {}) => show(msg, { ...opts, type: 'danger'  }),
   info:    (msg, opts = {}) => show(msg, { ...opts, type: 'info'    }),
   error:   (msg, opts = {}) => show(msg, { ...opts, type: 'danger'  }),
+  /** نجاح مع زر «تراجع» لمدة 7 ثوانٍ: onUndo يعيد الحال، وأي فشل فيه يظهر للمستخدم. */
+  undo(msg, onUndo, opts = {}) {
+    return show(msg, {
+      type: 'success', duration: 7000, ...opts,
+      action: {
+        label: 'تراجع',
+        onClick: async () => {
+          try { await onUndo(); }
+          catch (e) { show('تعذّر التراجع: ' + (e && e.message ? e.message : e), { type: 'danger' }); }
+        },
+      },
+    });
+  },
   clear() {
     const c = document.getElementById(CONTAINER_ID);
     if (!c) return;
