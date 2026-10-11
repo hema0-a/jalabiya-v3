@@ -25,6 +25,7 @@ const STORE_MAP = {
   'workers':          { label: 'العمال',           icon: '👷' },
   'expenses':         { label: 'مصروفات الورشة',  icon: '💸' },
   'appointments':     { label: 'المواعيد',         icon: '📅' },
+  'quotes':           { label: 'عروض الأسعار',     icon: '📝' },
   'portfolio':        { label: 'معرض الأعمال',     icon: '📸' },
   'commitments':      { label: 'الالتزامات',       icon: '💳' },
   'house-expenses':   { label: 'مصاريف البيت',    icon: '🏠' },
@@ -70,6 +71,7 @@ function daysLeft(deletedAt) {
  */
 function itemTitle(item) {
   const d = item.data || {};
+  if (item.originalStore === 'quotes') return 'عرض سعر #' + String(d.id || '').slice(-6);
   return String(d.name || d.title || d.personName || d.id || 'بدون اسم');
 }
 

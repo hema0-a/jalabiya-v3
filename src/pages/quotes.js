@@ -11,6 +11,7 @@ import { uid, formatEGP, formatDate, toNonNegative } from '../core/utils.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { quotes } from '../data/repos/quotes.js';
+import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -119,9 +120,9 @@ async function convert(q) {
 }
 
 async function remove(q) {
-  const ok = await modal.confirm({ title: 'حذف عرض', message: 'حذف هذا العرض نهائياً؟', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+  const ok = await modal.confirm({ title: 'حذف عرض', message: 'حذف هذا العرض؟ يمكنك استرجاعه من سلة المحذوفات.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
   if (!ok) return;
-  try { await quotes.remove(q.id); toast.success('تم الحذف'); await loadData(); draw(); }
+  try { await trash.addToTrash('quotes', q); await quotes.remove(q.id); toast.success('تم الحذف'); await loadData(); draw(); }
   catch (err) { toast.error('تعذّر الحذف'); }
 }
 

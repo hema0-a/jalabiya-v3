@@ -70,4 +70,4 @@ export function mergeFields(primary, dups) {
 }
 
 /** المخازن التي تحمل customerId وتُعاد نسبتها للسجل الباقي */
-export const CUSTOMER_LINKED_STORES = ['orders', 'payments', 'appointments', 'portfolio'];
+export const CUSTOMER_LINKED_STORES = ['orders', 'payments', 'appointments', 'portfolio', 'quotes'];

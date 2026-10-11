@@ -13,6 +13,7 @@ import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
+import { quotes } from '../data/repos/quotes.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
@@ -373,13 +374,14 @@ async function deleteCustomer(customer) {
   /* تنبيه بالسجلات المرتبطة: تبقى في التطبيق بلا اسم عميل حتى يُسترجع من السلة */
   let linkedNote = '';
   try {
-    const [co, cp] = await Promise.all([
+    const [co, cp, cq] = await Promise.all([
       orders.findByCustomer(customer.id),
       payments.findByCustomer(customer.id),
+      quotes.findByIndex('by_customerId', customer.id),
     ]);
-    if (co.length > 0 || cp.length > 0) {
+    if (co.length > 0 || cp.length > 0 || cq.length > 0) {
       linkedNote = '\n\n⚠️ له ' + co.length + ' طلب و' + cp.length +
-        ' دفعة ستبقى في التطبيق دون اسم عميل. يمكنك استرجاعه من سلة المحذوفات لإعادة الربط.';
+        ' دفعة' + (cq.length ? ' و' + cq.length + ' عرض سعر' : '') + ' ستبقى في التطبيق دون اسم عميل. يمكنك استرجاعه من سلة المحذوفات لإعادة الربط.';
     }
   } catch (e) { /* نكمل بدون التنبيه */ }
   const ok = await modal.confirm({

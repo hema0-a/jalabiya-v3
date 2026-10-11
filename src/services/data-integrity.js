@@ -11,11 +11,12 @@ const ids = (list) => new Set((Array.isArray(list) ? list : []).filter(Boolean).
  * @returns {{issues:Array, counts:Object, total:number}}
  *   issue = {type, severity:'error'|'warn'|'info', message, store, id, fix?:{store,id,patch}}
  */
-export function scanIntegrity({ customers, orders, payments, appointments } = {}) {
+export function scanIntegrity({ customers, orders, payments, appointments, quotes } = {}) {
   const cs = Array.isArray(customers) ? customers : [];
   const os = Array.isArray(orders) ? orders : [];
   const ps = Array.isArray(payments) ? payments : [];
   const as = Array.isArray(appointments) ? appointments : [];
+  const qs = Array.isArray(quotes) ? quotes : [];
   const cid = ids(cs);
   const oMap = new Map(os.filter(Boolean).map((o) => [o.id, o]));
   const issues = [];
@@ -64,6 +65,17 @@ export function scanIntegrity({ customers, orders, payments, appointments } = {}
         fix: { store: 'appointments', id: a.id, patch: { orderId: null }, label: 'فكّ الربط' } });
     }
   }
+  for (const q of qs) {
+    if (!q) continue;
+    if (q.customerId && !cid.has(q.customerId)) {
+      add({ type: 'quote_missing_customer', severity: 'warn', store: 'quotes', id: q.id, message: 'عرض سعر لعميل محذوف' });
+    }
+    if (q.orderId && !oMap.has(q.orderId)) {
+      add({ type: 'quote_orphan_order', severity: 'warn', store: 'quotes', id: q.id,
+        message: 'عرض مربوط بطلب غير موجود',
+        fix: { store: 'quotes', id: q.id, patch: { orderId: null }, label: 'فكّ الربط' } });
+    }
+  }
   const counts = {};
   issues.forEach((i) => { counts[i.type] = (counts[i.type] || 0) + 1; });
   return { issues, counts, total: issues.length };
@@ -79,4 +91,6 @@ export const ISSUE_LABELS = {
   order_deposit_over: 'مقدم أكبر من إجمالي الطلب',
   appointment_missing_customer: 'مواعيد لعميل محذوف',
   appointment_orphan_order: 'مواعيد مربوطة بطلب محذوف',
+  quote_missing_customer: 'عروض أسعار لعميل محذوف',
+  quote_orphan_order: 'عروض مربوطة بطلب محذوف',
 };

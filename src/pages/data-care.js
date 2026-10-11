@@ -14,19 +14,20 @@ import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { appointments } from '../data/repos/appointments.js';
 import { portfolio } from '../data/repos/portfolio.js';
+import { quotes } from '../data/repos/quotes.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { scanIntegrity, ISSUE_LABELS } from '../services/data-integrity.js';
-import { findDuplicateGroups, pickPrimary, mergeFields } from '../services/customer-merge.js';
+import { findDuplicateGroups, pickPrimary, mergeFields, CUSTOMER_LINKED_STORES } from '../services/customer-merge.js';
 import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vip-rules.js';
 
-const REPOS = { orders, payments, appointments, portfolio, customers };
+const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
 let state = { container: null, data: null, scan: null };
 
 async function loadData() {
-  const [cus, ord, pay, apt] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list()]);
-  state.data = { customers: cus, orders: ord, payments: pay, appointments: apt };
+  const [cus, ord, pay, apt, qts] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
+  state.data = { customers: cus, orders: ord, payments: pay, appointments: apt, quotes: qts };
 }
 
 const section = (title, children) => el('div', { className: 'card', style: { padding: '14px', marginBottom: '14px' } },
@@ -107,7 +108,7 @@ async function mergeGroup(primary, dups) {
   const patch = mergeFields(primary, dups);
   if (Object.keys(patch).length) await customers.update(primary.id, patch);
   for (const d of dups) {
-    for (const name of ['orders', 'payments', 'appointments', 'portfolio']) {
+    for (const name of CUSTOMER_LINKED_STORES) {
       const rows = await REPOS[name].findByIndex('by_customerId', d.id);
       for (const r of rows) await REPOS[name].update(r.id, { customerId: primary.id });
     }
@@ -137,7 +138,7 @@ function groupCard(g) {
       const dups = g.customers.filter((c) => c.id !== chosen);
       const ok = await modal.confirm({
         title: 'دمج العملاء',
-        message: 'ستُنقل كل طلبات ودفعات ومواعيد (' + dups.map((d) => d.name).join('، ') + ') إلى «' + primary.name + '»، ويُنقل المكرر لسلة المحذوفات.',
+        message: 'ستُنقل كل طلبات ودفعات ومواعيد وعروض أسعار (' + dups.map((d) => d.name).join('، ') + ') إلى «' + primary.name + '»، ويُنقل المكرر لسلة المحذوفات.',
         confirmText: 'ادمج', cancelText: 'إلغاء', danger: true,
       });
       if (!ok) return;
