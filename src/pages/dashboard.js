@@ -19,6 +19,7 @@ import { withDepositPayments, withWorkerExpenses, orderPaidBreakdown } from '../
 import { computePickups, buildPickupText } from '../services/pickup-reminders.js';
 import { computeReceivables, buildReminderText } from '../services/receivables.js';
 import { sendWhatsApp } from '../services/auto-messages.js';
+import { isDemoRecord, clearDemoData } from '../services/demo-data.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
@@ -213,6 +214,7 @@ async function loadKPIs() {
   const orderById = new Map(ordersList.map((o) => [o.id, o]));
 
   return {
+    hasDemo: customersList.some(isDemoRecord) || ordersList.some(isDemoRecord),
     custMap, orderById, pickups, overdueOrders, debtors, workshopNameRaw: workshopName,
     dueSoonRows: dueSoonOrders.map(withCust),
     todayApptsRows: todayAppts.map((a) => {
@@ -397,6 +399,26 @@ function buildHeader(data) {
 }
 
 
+/** شريط تنبيه: توجد بيانات تجريبية (تدخل في الأرقام والتقارير حتى تُحذف). */
+function buildDemoBanner() {
+  return el('div', { className: 'dash-demo', role: 'status' }, [
+    el('span', {}, '🧪 تعرض بيانات تجريبية — تدخل في الأرقام والتقارير حتى تحذفها'),
+    el('button', {
+      className: 'btn btn--sm btn--secondary', type: 'button',
+      onClick: async () => {
+        const ok = await modal.confirm({
+          title: 'حذف البيانات التجريبية',
+          message: 'سيُحذف التجريبي فقط (المُعلَّم 🧪). بياناتك الحقيقية لن تُمسّ.',
+          confirmText: 'احذف التجريبي', cancelText: 'إلغاء', danger: true,
+        });
+        if (!ok) return;
+        try { const n = await clearDemoData(); toast.success('تم حذف ' + n + ' سجلاً تجريبياً'); await refresh(); }
+        catch (e) { toast.danger('تعذّر الحذف: ' + e.message); }
+      },
+    }, 'حذفها'),
+  ]);
+}
+
 function buildQuickActions() {
   const items = [
     { icon: '📋', label: 'طلب جديد', hash: '#/orders/new' },
@@ -569,6 +591,7 @@ export const dashboardPage = {
 
     /* بناء */
     container.appendChild(buildHeader(data));
+    if (data.hasDemo) container.appendChild(buildDemoBanner());
     container.appendChild(buildQuickActions());
     container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data));

@@ -963,3 +963,12 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 .dash-act { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; min-width: 40px; }
 .dash-more { display: block; text-align: center; font-size: var(--font-size-sm); color: var(--color-primary); text-decoration: none; padding: var(--space-s) 0 0; min-height: 40px; }
 .dash-row__main:focus-visible, .dash-link:focus-visible, .dash-more:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* شريط «بيانات تجريبية» أعلى اللوحة (v3.3.40) */
+.dash-demo {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-s);
+  padding: var(--space-s) var(--space-m); margin-bottom: var(--space-m);
+  background: #FFF3E0; color: #7A4A00; border: 1px dashed #E0A44A; border-radius: var(--radius-m);
+  font-size: var(--font-size-sm); line-height: 1.6;
+}
+.dash-demo span { flex: 1 1 200px; }

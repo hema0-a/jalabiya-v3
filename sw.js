@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.39 — لوحة تحكم تنفّذ الإجراءات
+   الإصدار: v3.3.40 — بيانات تجريبية للتجربة السريعة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.39';
+const CACHE_VERSION = 'v3.3.40';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -120,6 +120,7 @@ const PRECACHE_URLS = [
   './src/services/pickup-reminders.js',
   './src/services/quotes.js',
   './src/services/data-integrity.js',
+  './src/services/demo-data.js',
   './src/services/customer-merge.js',
   './src/services/vip-rules.js',
   './src/services/season-compare.js',
