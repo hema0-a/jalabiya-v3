@@ -20,6 +20,7 @@ import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
 import { STORE_NAMES } from '../data/schema.js';
 import * as idb from '../data/idb.js';
 import { toLatinDigits } from '../core/utils.js';
+import * as biometric from '../security/biometric.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -84,7 +85,7 @@ export async function wipeAllLocalData() {
   auth.reset();
 }
 
-function buildOverlay(cfg, onSubmit) {
+function buildOverlay(cfg, onSubmit, onBio) {
   const ws = cfg.workshop || {};
   const ls = cfg.lockScreen || DEFAULT_SETTINGS.lockScreen;
 
@@ -128,6 +129,19 @@ function buildOverlay(cfg, onSubmit) {
   if (ws.name) children.push(el('div', { style: { fontSize: '22px', fontWeight: '700' } }, String(ws.name)));
   children.push(el('div', { style: { fontSize: '15px', opacity: '0.9' } }, String(ls.message || DEFAULT_SETTINGS.lockScreen.message)));
   children.push(input, status, button);
+
+  /* --- فتح بالبصمة (اختياري، يظهر فقط إن فُعِّل من الإعدادات) --- */
+  let bioBtn = null;
+  if (typeof onBio === 'function' && biometric.isEnabled()) {
+    bioBtn = el('button', {
+      type: 'button',
+      style: {
+        padding: '10px 24px', borderRadius: '12px', border: '2px solid #ffffff99', cursor: 'pointer',
+        fontSize: '15px', fontWeight: '700', background: 'transparent', color: '#fff', fontFamily: 'inherit',
+      },
+    }, '🔐 فتح بالبصمة');
+    children.push(bioBtn);
+  }
 
   /* --- نسيت الرقم السري --- */
   const forgotLink = el('button', {
@@ -224,6 +238,18 @@ function buildOverlay(cfg, onSubmit) {
     }
   });
 
+  let bioBusy = false;
+  const tryBio = async () => {
+    if (bioBusy) return;
+    bioBusy = true;
+    try {
+      const ok = await biometric.verify();
+      if (ok) await onBio();
+      else status.textContent = 'لم تنجح البصمة — استخدم الرقم السري';
+    } finally { bioBusy = false; }
+  };
+  if (bioBtn) bioBtn.addEventListener('click', tryBio);
+
   button.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   input.addEventListener('input', () => {
@@ -232,7 +258,7 @@ function buildOverlay(cfg, onSubmit) {
   });
 
   refreshLockState();
-  return { node: box, focus: () => input.focus(), dispose: stopCountdown };
+  return { node: box, focus: () => input.focus(), dispose: stopCountdown, tryBio: bioBtn ? tryBio : null };
 }
 
 /* ==========================================================================
@@ -251,18 +277,21 @@ export function showLock() {
     setAppHidden(true);
 
     await new Promise((resolve) => {
+      const finish = () => {
+        const hours = Number(cfg.security && cfg.security.sessionDurationHours)
+          || DEFAULT_SETTINGS.security.sessionDurationHours;
+        auth.setSession(hours);
+        logAttempt(true, cfg);
+        ui.dispose();
+        if (_overlay) { _overlay.remove(); _overlay = null; }
+        setAppHidden(false);
+        _lastActivity = Date.now();
+        resolve();
+      };
       const ui = buildOverlay(cfg, async (pin) => {
         const res = await auth.unlock(pin);
         if (res.success) {
-          const hours = Number(cfg.security && cfg.security.sessionDurationHours)
-            || DEFAULT_SETTINGS.security.sessionDurationHours;
-          auth.setSession(hours);
-          logAttempt(true, cfg);
-          ui.dispose();
-          if (_overlay) { _overlay.remove(); _overlay = null; }
-          setAppHidden(false);
-          _lastActivity = Date.now();
-          resolve();
+          finish();
         } else if (res.reason === 'wrong-pin') {
           logAttempt(false, cfg);
         } else if (res.reason === 'no-pin') {
@@ -273,10 +302,15 @@ export function showLock() {
           resolve();
         }
         return res;
+      }, async () => {
+        /* نجحت البصمة (تحقّق نظام الجوال): نصفّر عدّاد المحاولات الفاشلة ونفتح */
+        try { auth._resetAttempts(); } catch (e) { /* اختياري */ }
+        finish();
       });
       _overlay = ui.node;
       document.body.appendChild(ui.node);
       ui.focus();
+      if (ui.tryBio) ui.tryBio();   /* اعرض مطالبة البصمة تلقائياً مرة واحدة */
     });
   })().finally(() => { _lockedPromise = null; });
 

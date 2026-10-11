@@ -108,6 +108,10 @@ async function loadPageModule(pageId) {
       case 'appointments':       return await import('./pages/appointments.js');
       case 'payments':           return await import('./pages/payments.js');
       case 'debts':              return await import('./pages/debts.js');
+      case 'pickups':            return await import('./pages/pickups.js');
+      case 'quotes':             return await import('./pages/quotes.js');
+      case 'season-compare':     return await import('./pages/season-compare.js');
+      case 'data-care':          return await import('./pages/data-care.js');
       case 'inventory':          return await import('./pages/inventory.js');
       case 'workers':            return await import('./pages/workers.js');
       case 'expenses':           return await import('./pages/expenses.js');
@@ -161,6 +165,8 @@ const SIDEBAR_SECTIONS = [
     { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
     { id: 'payments',  icon: '💰', label: 'الدفعات' },
     { id: 'debts',     icon: '🧾', label: 'مستحقات العملاء' },
+    { id: 'pickups',   icon: '📦', label: 'جاهز للاستلام' },
+    { id: 'quotes',    icon: '📝', label: 'عروض الأسعار' },
   ]},
   { title: 'إدارة الورشة', items: [
     { id: 'inventory',          icon: '📦', label: 'المخزون' },
@@ -179,10 +185,12 @@ const SIDEBAR_SECTIONS = [
   ]},
   { title: 'المواسم والمناسبات', items: [
     { id: 'occasions', icon: '🎉', label: 'المواسم والأعياد' },
+    { id: 'season-compare', icon: '📊', label: 'مقارنة المواسم' },
   ]},
   { title: 'النظام', items: [
     { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },
     { id: 'trash',        icon: '🗑️', label: 'سلة المحذوفات' },
+    { id: 'data-care',    icon: '🧰', label: 'صيانة البيانات' },
   ]},
   { title: 'التحليل والتقارير', items: [
     { id: 'financial-center', icon: '💰', label: 'المركز المالي' },
@@ -204,6 +212,10 @@ const MODULE_EXPORT_MAP = {
   appointments:         'appointmentsPage',
   payments:             'paymentsPage',
   debts:                'debtsPage',
+  pickups:              'pickupsPage',
+  quotes:               'quotesPage',
+  'season-compare':     'seasonComparePage',
+  'data-care':          'dataCarePage',
   inventory:            'inventoryPage',
   workers:              'workersPage',
   expenses:             'expensesPage',

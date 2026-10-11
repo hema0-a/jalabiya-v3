@@ -16,6 +16,7 @@ import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS } from '../../core/config.js';
 import { auth } from '../../security/auth.js';
 import { toLatinDigits } from '../../core/utils.js';
+import * as biometric from '../../security/biometric.js';
 
 /* ==========================================================================
    1. الأمان
@@ -39,6 +40,27 @@ const securitySection = {
         className: 'btn btn--primary btn--block', type: 'button',
         onClick: () => openSetPinModal(),
       }, '🔑 تعيين PIN'));
+    }
+
+    /* --- فتح بالبصمة (v3.3.30) — يظهر فقط إن كان الجهاز يدعمها ويوجد PIN --- */
+    if (auth.hasPin() && await biometric.isSupported()) {
+      const bioRow = el('div', { className: 'settings-row' });
+      const drawBio = () => {
+        bioRow.replaceChildren(
+          el('div', { className: 'settings-row__label' }, '🔐 فتح بالبصمة (الرقم السري يبقى احتياطاً)'),
+          el('button', {
+            className: 'btn btn--' + (biometric.isEnabled() ? 'secondary' : 'primary'), type: 'button',
+            onClick: async () => {
+              if (biometric.isEnabled()) { biometric.disable(); toast.success('تم إيقاف البصمة'); drawBio(); return; }
+              try { await biometric.enable(); toast.success('تم تفعيل البصمة'); }
+              catch (err) { toast.error('تعذّر التفعيل: ' + (err && err.name === 'NotAllowedError' ? 'أُلغي الطلب' : (err && err.message || err))); }
+              drawBio();
+            },
+          }, biometric.isEnabled() ? 'إيقاف' : 'تفعيل'),
+        );
+      };
+      drawBio();
+      body.appendChild(bioRow);
     }
 
     /* --- القفل التلقائي --- */

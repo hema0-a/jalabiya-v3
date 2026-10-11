@@ -8,6 +8,7 @@
    ========================================================================== */
 
 import { withDepositPayments } from '../services/payments-view.js';
+import { loadVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { el, clear } from '../core/dom.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -91,6 +92,20 @@ async function loadCustomers() {
     if (!cid) return;
     ordersCount[cid] = (ordersCount[cid] || 0) + 1;
   });
+
+  /* ترقية VIP تلقائية (ترقية فقط — لا يُنزَّل أي VIP يدوي). v3.3.30 */
+  try {
+    const rules = loadVipRules();
+    if (rules.enabled) {
+      const promos = computeVipPromotions(list, ordersList, rules);
+      for (const p of promos) {
+        await customers.update(p.id, { vip: true });
+        const c = list.find((x) => x.id === p.id);
+        if (c) c.vip = true;
+      }
+      if (promos.length) toast.success('⭐ تمت ترقية ' + promos.length + ' عميل إلى VIP تلقائياً');
+    }
+  } catch (e) { console.warn('[customers] auto VIP:', e); }
 
   list.forEach((c) => {
     c._totalPaid = totals[c.id] || 0;

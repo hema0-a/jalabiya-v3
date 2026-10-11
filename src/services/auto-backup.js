@@ -33,6 +33,7 @@ const BACKUP_STORES = [
   STORES.LOAN_PAYMENTS,
   STORES.REFERRALS,
   STORES.WORKER_PAYMENTS,
+  STORES.QUOTES,
 ];
 
 /* ==========================================================================

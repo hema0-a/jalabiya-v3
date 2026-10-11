@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 8777;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
-const ROUTES = 'dashboard customers orders appointments payments debts inventory workers expenses reports settings calendar pricing-calculator financial-center kpis portfolio commitments house-expenses loans referrals occasions activity-log trash cloud-sync'.split(' ');
+const ROUTES = 'dashboard customers orders appointments payments debts inventory workers expenses reports settings calendar pricing-calculator financial-center kpis portfolio commitments house-expenses loans referrals occasions activity-log trash cloud-sync pickups quotes season-compare data-care'.split(' ');
 const IGNORE = /ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|Failed to load resource|fonts\.googleapis/;
 
 const server = http.createServer((req, res) => {

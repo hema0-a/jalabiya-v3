@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.29 — تحسينات الأداء والبنية
+   الإصدار: v3.3.30 — 7 ميزات جديدة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.29';
+const CACHE_VERSION = 'v3.3.30';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -76,6 +76,7 @@ const PRECACHE_URLS = [
   /* --- Security --- */
   './src/security/auth.js',
   './src/security/pin-crypto.js',
+  './src/security/biometric.js',
 
   /* --- UI components --- */
   './src/ui/client-mode.js',
@@ -109,6 +110,17 @@ const PRECACHE_URLS = [
   './src/sync/offline-queue.js',
   './src/sync/sync-flow.js',
   './src/pages/debts.js',
+  './src/pages/pickups.js',
+  './src/pages/quotes.js',
+  './src/pages/season-compare.js',
+  './src/pages/data-care.js',
+  './src/data/repos/quotes.js',
+  './src/services/pickup-reminders.js',
+  './src/services/quotes.js',
+  './src/services/data-integrity.js',
+  './src/services/customer-merge.js',
+  './src/services/vip-rules.js',
+  './src/services/season-compare.js',
   './src/services/receivables.js',
   './src/sync/dirty-state.js',
   './src/sync/tombstones.js',

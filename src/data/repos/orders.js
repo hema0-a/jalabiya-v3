@@ -12,6 +12,22 @@ const base = createRepository(STORES.ORDERS);
 export const orders = {
   ...base,
 
+  /* يُسجَّل readyAt لحظة دخول الطلب حالة «جاهز» (لتذكير الاستلام v3.3.30) */
+  async create(data) {
+    const d = { ...(data || {}) };
+    if (d.status === 'ready' && !d.readyAt) d.readyAt = Date.now();
+    return base.create(d);
+  },
+
+  async update(id, patch) {
+    let p = patch;
+    if (p && p.status === 'ready') {
+      const existing = await base.find(id);
+      if (existing && existing.status !== 'ready') p = { ...p, readyAt: Date.now() };
+    }
+    return base.update(id, p);
+  },
+
   /**
    * طلبات عميل معيّن.
    * @param {string} customerId

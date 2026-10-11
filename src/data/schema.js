@@ -1,6 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
+   v10: إضافة مخزن quotes (عروض الأسعار).
    v9: إضافة مخزن backups (النسخ الاحتياطية التلقائية).
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
@@ -146,6 +147,14 @@ export const SCHEMA = {
     ],
   },
   /* --- جديد v8 --- */
+  [STORES.QUOTES]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_customerId', 'customerId'),
+      idx('by_status', 'status'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
   [STORES.WORKER_PAYMENTS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
