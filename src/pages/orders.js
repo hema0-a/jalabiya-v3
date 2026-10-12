@@ -24,6 +24,7 @@ import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { orderPaidBreakdown } from '../services/payments-view.js';
 import { statusNotifyAction, newOrderNotifyAction } from '../services/status-notify.js';
+import { depositGuard } from '../ui/deposit-guard.js';
 import { sinceText } from '../services/message-log.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import {
@@ -833,6 +834,7 @@ async function advanceStatus(order) {
   const idx = STATUS_ORDER.indexOf(order.status);
   if (idx < 0 || idx >= STATUS_ORDER.length - 1) { toast.info('لا يمكن تغيير الحالة'); return; }
   const next = STATUS_ORDER[idx + 1];
+  if (!(await depositGuard(order, next))) return;   /* تحذير العربون قبل بدء التنفيذ */
   try {
     const patch = { status: next };
     if (next === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();

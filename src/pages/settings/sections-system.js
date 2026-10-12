@@ -240,7 +240,7 @@ function buildOverride(tpl, state) {
 const MSG_GROUPS = [
   { title: '📋 رسائل الطلب', hint: 'تظهر في زر 📱 بصفحة الطلبات، وبعد تغيير الحالة', scopes: ['order'] },
   { title: '🔔 رسائل الصفحات', hint: 'أزرار واتساب في: جاهز للاستلام · المستحقات · عروض الأسعار · لوحة التحكم', scopes: ['pickup', 'debt', 'quote'] },
-  { title: '🎉 العملاء والمناسبات', hint: 'تهاني المناسبات القريبة وحملات «📣 رسائل اليوم»', scopes: ['customer'] },
+  { title: '🎉 العملاء والمناسبات', hint: 'تهاني المناسبات وحملات «📣 رسائل اليوم» + شكر مكافأة الإحالة', scopes: ['customer', 'referral'] },
 ];
 
 const autoMessagesSection = {

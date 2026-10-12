@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sections-data.js — أقسام البيانات (6)
+   sections-data.js — أقسام البيانات (7)
    ==========================================================================
    ⚠️ إصلاح حرج (v3.3.1):
    - لا spread للمفاتيح القديمة (`...inv`, `...dl`, `...gr`, `...pc`).
@@ -574,12 +574,55 @@ const pricingCalculatorSection = {
   },
 };
 
+/* ==========================================================================
+   4ب. سياسة العربون (v3.3.45)
+   ========================================================================== */
+
+const depositPolicySection = {
+  id: 'deposit-policy',
+  icon: '💵',
+  title: 'سياسة العربون',
+  async render(body, currentSettings, saveFn) {
+    const dp = currentSettings.depositPolicy || DEFAULT_SETTINGS.depositPolicy;
+
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'تحذير العربون قبل بدء التنفيذ'),
+        el('div', { className: 'settings-row__hint' },
+          'عند تحويل طلب إلى «قيد التنفيذ» والمدفوع (مقدم + دفعات) أقل من النسبة: تظهر نافذة تحذير. لا تمنع شيئاً — «ابدأ على أي حال» متاحة'),
+      ]),
+      createToggle({
+        label: '', checked: dp.enabled !== false,
+        onChange: (v) => { saveFn({ depositPolicy: { enabled: v } }); },
+      }),
+    ]));
+
+    body.appendChild(numberField({
+      label: 'الحد الأدنى للعربون (% من إجمالي الطلب)',
+      hint: 'مثال: 30 ⇒ طلب بـ 1000 ج.م يحتاج 300 ج.م على الأقل',
+      value: dp.minPercent || 30,
+      path: 'depositPolicy',
+      field: 'minPercent',
+      saveFn,
+      attrs: { min: 1, max: 100 },
+    }));
+
+    body.appendChild(el('div', {
+      style: {
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
+      },
+    }, '💡 النافذة تعرض زر «📱 اطلب العربون» برسالة جاهزة (قالب «طلب عربون» في الرسائل التلقائية). قيمة خارج 1–100 تُعاد تلقائياً إلى 30.'));
+  },
+};
+
 /* --- تصدير --- */
 export const DATA_SECTIONS = [
   measurementFieldsSection,
   jalabiyaTypesSection,
   inventoryLimitsSection,
   dailyLimitSection,
+  depositPolicySection,
   groupingSection,
   pricingCalculatorSection,
 ];

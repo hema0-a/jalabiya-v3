@@ -66,7 +66,8 @@ register('audit v3.3.43 auto-messages settings section (UI)', async (t) => {
 
   const flip = (input, v) => { input.checked = v; input.dispatchEvent(new Event('change', { bubbles: true })); };
   flip(toggles[2], false);   /* new_order */
-  flip(toggles[5], false);   /* ready */
+  const readyIdx = 2 + DEFAULT_TEMPLATES.filter((x) => x.toggleable !== false).findIndex((x) => x.id === 'ready');
+  flip(toggles[readyIdx], false);   /* ready (يُحسب موقعه فلا ينكسر بإضافة قوالب) */
   await Promise.all(pending);
 
   const s = await settingsRepo.get();

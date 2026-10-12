@@ -40,11 +40,15 @@ export const VARIABLE_DEFS = {
   validLine:     { label: 'سطر الصلاحية',      sample: 'العرض ساري حتى 20 أكتوبر 2026' },
   notes:         { label: 'ملاحظات العرض',     sample: 'التسليم خلال أسبوع' },
   occasion:      { label: 'المناسبة',          sample: 'عيد الفطر' },
+  depositDue:    { label: 'العربون المطلوب',   sample: '360 ج.م' },
+  referred:      { label: 'اسم العميل المُحال', sample: 'محمود سالم' },
+  reward:        { label: 'قيمة المكافأة',     sample: '100 ج.م' },
+  rewardLine:    { label: 'سطر المكافأة (يختفي إن لم تُحدَّد)', sample: 'مكافأتك: خصم 100 ج.م على طلبك القادم' },
 };
 
 /** المتغيرات المسموحة لكل نوع قالب (بترتيب العرض). */
 export const SCOPE_VARS = {
-  order: ['customer', 'orderId', 'amount', 'paid', 'remaining', 'date', 'phone',
+  order: ['customer', 'orderId', 'amount', 'paid', 'remaining', 'depositDue', 'date', 'phone',
     'workshop', 'workshopPhone', 'address', 'pickupHours'],
   pickup: ['customer', 'orderId', 'amount', 'remaining', 'remainingLine',
     'workshop', 'workshopPhone', 'address', 'pickupHours'],
@@ -52,6 +56,7 @@ export const SCOPE_VARS = {
   quote: ['customer', 'items', 'discountLine', 'total', 'validLine', 'notes',
     'workshop', 'workshopPhone', 'address'],
   customer: ['customer', 'occasion', 'workshop', 'workshopPhone', 'address', 'pickupHours'],
+  referral: ['customer', 'referred', 'reward', 'rewardLine', 'workshop', 'workshopPhone'],
 };
 
 export const SCOPE_LABELS = {
@@ -60,6 +65,7 @@ export const SCOPE_LABELS = {
   debt: 'مستحقات',
   quote: 'عرض سعر',
   customer: 'عملاء ومناسبات',
+  referral: 'مكافأة إحالة',
 };
 
 /**
@@ -98,6 +104,10 @@ export const DEFAULT_TEMPLATES = [
     text: 'عميلنا العزيز {customer}، نرجو التواصل معنا لتحديد موعد بروفة طلبك رقم {orderId} 🧵 {workshop}',
   },
   {
+    id: 'deposit_request', scope: 'order', name: 'طلب عربون', icon: '💵', enabled: true,
+    text: 'عميلنا العزيز {customer}، لبدء تنفيذ طلبك رقم {orderId} نرجو سداد عربون {depositDue}. شكراً لتفهمك 🌹 {workshop}',
+  },
+  {
     id: 'ready', scope: 'order', name: 'جاهز للتسليم', icon: '✅', enabled: true,
     text: 'خبر سعيد يا {customer}! طلبك رقم {orderId} جاهز للتسليم. نتشرف بزيارتك في {workshop} 🎉',
   },
@@ -130,6 +140,10 @@ export const DEFAULT_TEMPLATES = [
     text: 'كل عام وحضرتك بخير يا {customer} 🌹 بمناسبة {occasion}، تتمنى لكم أسرة {workshop} أجمل الأوقات.',
   },
   {
+    id: 'referral_reward', scope: 'referral', name: 'شكر + مكافأة إحالة', icon: '🎁', enabled: true,
+    text: 'السلام عليكم {customer} 🌹\nصديقك {referred} أتمّ أول طلب معه بفضل ترشيحك ونشكر لك ثقتك.\n{rewardLine}\nفي انتظارك دائماً في {workshop} 🎁',
+  },
+  {
     id: 'season_offer', scope: 'customer', name: 'عرض الموسم', icon: '🌟', enabled: true,
     text: 'أهلاً {customer} 🌟 موسم الطلبات بدأ في {workshop}! احجز تفصيل جلابيبك مبكراً لتضمن التسليم في موعده. للحجز: {workshopPhone}',
   },
@@ -141,6 +155,8 @@ export const KIND = {
   DEBT: 'debt_reminder',
   QUOTE: 'quote_share',
   GREETING: 'greeting_occasion',
+  REFERRAL: 'referral_reward',
+  DEPOSIT: 'deposit_request',
 };
 
 /* ==========================================================================
@@ -247,7 +263,10 @@ export function buildVars(order, customer, workshop = {}, extra = {}) {
   const hasPaid = ex.paid != null && isFinite(Number(ex.paid));
   const paid = hasPaid ? Number(ex.paid) : (order ? (Number(order.deposit) || 0) : 0);
   const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+  const pct = Number(ex.depositPercent) > 0 ? Math.min(100, Number(ex.depositPercent)) : 30;
+  const depositDue = Math.max(0, Math.round((total * pct / 100 - paid) * 100) / 100);
   const base = {
+    depositDue: formatEGP(depositDue),
     customer: (customer && customer.name) || 'عميلنا',
     phone: (customer && customer.phone) || '',
     amount: formatEGP(total),
@@ -259,6 +278,7 @@ export function buildVars(order, customer, workshop = {}, extra = {}) {
   };
   const rest = { ...ex };
   delete rest.paid;
+  delete rest.depositPercent;
   return { ...base, ...rest };
 }
 

@@ -32,6 +32,15 @@ async function readCfg() {
   } catch { return {}; }
 }
 
+/** نسبة العربون المطلوبة (للمتغير {depositDue}). */
+async function readDepositPercent() {
+  try {
+    const s = await settings.get();
+    const p = Number(s && s.depositPolicy && s.depositPolicy.minPercent);
+    return p > 0 ? p : 30;
+  } catch { return 30; }
+}
+
 /**
  * كل القوالب (الافتراضية بعد تخصيصها + المخصّصة).
  * @returns {Promise<Array>}
@@ -112,7 +121,7 @@ export async function getOrderMessageOptions(order, customer, workshop = {}, ext
   if (!isEnabledCfg(cfg)) return [];
 
   const templates = listTemplates(cfg).filter((t) => t.scope === 'order' && t.enabled);
-  const vars = buildVars(order, customer, workshop, extra);
+  const vars = buildVars(order, customer, workshop, { depositPercent: await readDepositPercent(), ...extra });
   const phone = (customer && customer.phone) || '';
   const customerId = (customer && customer.id) || order.customerId || null;
 

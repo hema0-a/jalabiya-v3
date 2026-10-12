@@ -14,6 +14,7 @@ import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
+import { referrals } from '../data/repos/referrals.js';
 import { toast } from '../ui/toast.js';
 import { sendLogged } from '../services/auto-messages.js';
 import { listTemplates, isEnabledCfg } from '../services/message-templates.js';
@@ -31,8 +32,8 @@ let state = blank();
    ========================================================================== */
 
 async function loadData() {
-  const [ord, pay, cus, st] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get()]);
-  state.raw = { orders: ord, payments: pay, customers: cus, settings: st };
+  const [ord, pay, cus, st, refs] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get(), referrals.list().catch(() => [])]);
+  state.raw = { orders: ord, payments: pay, customers: cus, settings: st, referrals: refs };
 }
 
 function compute() {
@@ -40,7 +41,7 @@ function compute() {
   const cfg = r.settings.autoMessages || null;
   if (!isEnabledCfg(cfg)) { state.tasks = []; state.template = null; return; }
   const base = {
-    orders: r.orders, payments: r.payments, customers: r.customers, occasions: r.settings.occasions || [],
+    orders: r.orders, payments: r.payments, customers: r.customers, occasions: r.settings.occasions || [], referrals: r.referrals || [],
     cfg, workshop: r.settings.workshop || {}, log: loadLog(), now: Date.now(),
   };
   if (state.tab === 'today') {
@@ -202,15 +203,17 @@ function draw() {
   const get = (k) => (counts[k] || { total: 0, pending: 0 });
 
   if (state.tab === 'today') {
-    c.appendChild(el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' } }, [
+    c.appendChild(el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '12px' } }, [
       statCard('📦 استلام', String(get('pickup').pending), '#1F6D57'),
       statCard('🧾 مستحقات', String(get('debt').pending), '#E65100'),
+      statCard('🎁 مكافآت', String(get('referral').pending), '#B8863B'),
       statCard('🎉 تهاني', String(get('greeting').pending), '#6A1B9A'),
     ]));
     c.appendChild(el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' } }, [
       chip('الكل', state.filter === 'all', () => { state.filter = 'all'; draw(); }),
       chip('📦 استلام', state.filter === 'pickup', () => { state.filter = 'pickup'; draw(); }),
       chip('🧾 مستحقات', state.filter === 'debt', () => { state.filter = 'debt'; draw(); }),
+      chip('🎁 مكافآت', state.filter === 'referral', () => { state.filter = 'referral'; draw(); }),
       chip('🎉 تهاني', state.filter === 'greeting', () => { state.filter = 'greeting'; draw(); }),
     ]));
   } else {

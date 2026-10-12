@@ -23,6 +23,8 @@ import { buildQueue } from '../services/message-queue.js';
 import { isEnabledCfg } from '../services/message-templates.js';
 import { loadLog } from '../services/message-log.js';
 import { statusNotifyAction } from '../services/status-notify.js';
+import { depositGuard } from '../ui/deposit-guard.js';
+import { referrals as referralsRepo } from '../data/repos/referrals.js';
 import { isDemoRecord, clearDemoData } from '../services/demo-data.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -147,7 +149,7 @@ function computeFinance(paymentsList, expensesList) {
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList] = await Promise.all([
+  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList, referralsList] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
@@ -155,6 +157,7 @@ async function loadKPIs() {
     appointments.getToday(),
     settings.get().catch(() => ({})),
     workerPayments.list().catch(() => []),
+    referralsRepo.list().catch(() => []),
   ]);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
   const paymentsList = withDepositPayments(rawPayments, ordersList);
@@ -226,7 +229,7 @@ async function loadKPIs() {
       try {
         if (!isEnabledCfg(s.autoMessages)) return null;
         return buildQueue({ orders: ordersList, payments: rawPayments, customers: customersList,
-          occasions: s.occasions || [], cfg: s.autoMessages || null, workshop: s.workshop || {}, log: loadLog() }).counts;
+          occasions: s.occasions || [], referrals: referralsList, cfg: s.autoMessages || null, workshop: s.workshop || {}, log: loadLog() }).counts;
       } catch (e) { return null; }
     })(),
     dueSoonRows: dueSoonOrders.map(withCust),
@@ -286,6 +289,7 @@ async function advanceOrder(order, remaining) {
     });
     if (!ok) return;
   }
+  if (!(await depositGuard(order, next.to))) return;   /* تحذير العربون قبل بدء التنفيذ */
   try {
     const patch = { status: next.to };
     if (next.to === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
@@ -540,7 +544,7 @@ function buildAttention(data) {
   const mq = data.msgCounts;
   if (mq && mq.pending > 0) {
     const part = (k, label) => ((mq[k] && mq[k].pending) ? label + ' ' + mq[k].pending : null);
-    const sub = [part('pickup', 'استلام'), part('debt', 'مستحقات'), part('greeting', 'تهاني')].filter(Boolean).join(' · ');
+    const sub = [part('pickup', 'استلام'), part('debt', 'مستحقات'), part('referral', 'مكافآت'), part('greeting', 'تهاني')].filter(Boolean).join(' · ');
     groups.push(dashGroup('📣 رسائل بانتظار الإرسال', mq.pending, [
       dashRow('📣 رسائل اليوم', sub, [actBtn('▶ ابدأ المرور', () => go('#/messages'))], () => go('#/messages')),
     ], '#/messages'));

@@ -3,7 +3,8 @@
    ==========================================================================
    حساب نقي (بلا IndexedDB/DOM) لمن يستحق رسالة الآن:
    1) 📦 جاهز للاستلام (المتأخر أولاً)       2) 🧾 مستحقات متأخرة (الأكبر أولاً)
-   3) 🎉 تهنئة مناسبة قريبة للعملاء المميّزين (VIP)
+   3) 🎁 مكافأة إحالة: العميل المُحال أتمّ أول طلب مُسلَّم ← شكر للمُرشِّح
+   4) 🎉 تهنئة مناسبة قريبة للعملاء المميّزين (VIP)
    + حملة (campaign): قالب «عملاء» لجمهور (VIP / الكل) — مثل «عرض الموسم».
 
    كل مهمة تحمل نصها الجاهز وآخر مرة أُرسلت فيها (من message-log) و`recentlySent`
@@ -15,6 +16,7 @@ import { computePickups, pickupVars, DEFAULT_PICKUP_DAYS } from './pickup-remind
 import { computeReceivables, debtVars } from './receivables.js';
 import { renderTemplate, getTemplateSync, workshopVars, KIND } from './message-templates.js';
 import { lastSentIn } from './message-log.js';
+import { computeReferralRewards, referralVars } from './referral-rewards.js';
 import { formatEGP } from '../core/utils.js';
 
 const DAY = 86400000;
@@ -28,6 +30,7 @@ export const TYPE_LABELS = {
   pickup: '📦 استلام',
   debt: '🧾 مستحقات',
   greeting: '🎉 تهاني',
+  referral: '🎁 مكافآت',
   campaign: '📢 حملة',
 };
 
@@ -109,6 +112,7 @@ const byOrder = (a, b) => (a.priority - b.priority) || (a.weight - b.weight) || 
  * @param {Array} p.payments
  * @param {Array} p.customers
  * @param {Array} [p.occasions]
+ * @param {Array} [p.referrals] — سجلات الإحالات
  * @param {Object} [p.cfg] — settings.autoMessages
  * @param {Object} [p.workshop] — settings.workshop
  * @param {Array} [p.log] — سجل الرسائل
@@ -153,7 +157,30 @@ export function buildQueue(p = {}) {
     }));
   }
 
-  /* 3) تهاني المناسبات القريبة — للعملاء المميّزين */
+  /* 3) مكافآت الإحالة: المُرشَّح أتمّ أول طلب مُسلَّم والمكافأة معلقة */
+  const refTpl = getTemplateSync(KIND.REFERRAL, cfg);
+  if (refTpl && refTpl.enabled) {
+    for (const it of computeReferralRewards(p.referrals, customers, p.orders)) {
+      if (it.state !== 'due') continue;
+      const r = it.referral;
+      tasks.push(makeTask({
+        key: 'refrw:' + r.id, type: 'referral', priority: 3.5, weight: -(it.reward || 0),
+        customerId: it.referrer ? it.referrer.id : null,
+        name: (it.referrer && it.referrer.name) || r.referrerName || 'مُرشِّح',
+        phone: it.referrer ? it.referrer.phone : '',
+        kind: KIND.REFERRAL, ref: r.id,
+        text: renderTemplate(KIND.REFERRAL, referralVars(it, ws), cfg),
+        detail: '🎁 ' + (r.referredName || 'عميل مُحال') + ' أتمّ أول طلب' +
+          (it.reward > 0 ? ' · المكافأة ' + formatEGP(it.reward) : '') +
+          (it.referrer ? '' : ' · المُرشِّح غير مربوط بعميل'),
+        badge: 'مكافأة',
+        lastAt: lastSentIn(log, { kinds: [KIND.REFERRAL], ref: r.id }),
+        cooldown: null, now,
+      }));
+    }
+  }
+
+  /* 4) تهاني المناسبات القريبة — للعملاء المميّزين */
   const greetTpl = getTemplateSync(KIND.GREETING, cfg);
   if (greetTpl && greetTpl.enabled) {
     const occs = upcomingGreetings(p.occasions, now);
