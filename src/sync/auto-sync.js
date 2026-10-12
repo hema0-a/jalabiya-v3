@@ -57,6 +57,8 @@ export function onManualSyncDone() {
 /** المستخدم الحالي لهذا الجهاز (تُحدّثه صفحة المزامنة عند تسجيل الدخول). */
 export function setUser(u) {
   user = u || null;
+  /* جلسة مفتوحة (بعد القفل): نربط الجهاز بهذا الحساب ليصلح لاسترجاع الرقم السري */
+  if (user && user.uid) authSync.bindOwner(user.uid);
   emit();
   if (user) schedule(10000);
 }

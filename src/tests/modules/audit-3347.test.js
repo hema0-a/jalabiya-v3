@@ -56,7 +56,10 @@ register('audit v3.3.47 risk / pin recovery / external backup', async (t) => {
   await t.test('14. انقطاع الاتصال لا يُسقط الدالة', !res.success && /offline/.test(res.error) && isPinSet());
   localStorage.setItem(STORAGE_KEYS.V3_FAILED_ATTEMPTS, '7');
   localStorage.setItem(STORAGE_KEYS.V3_LOCK_UNTIL, String(Date.now() + 60000));
-  res = await recoverPinWithCloud(' a@b.com ', 'ok', { login: async (e, p) => ({ ok: e === 'a@b.com' && p === 'ok' }) });
+  res = await recoverPinWithCloud(' a@b.com ', 'ok', {
+    login: async (e, p) => ({ ok: e === 'a@b.com' && p === 'ok', user: { uid: 'owner1' } }),
+    getOwnerUid: () => 'owner1', logout: async () => ({ ok: true }),
+  });
   await t.test('15. حساب صحيح: يُزال الرقم وتُصفَّر المحاولات والقفل',
     res.success && !isPinSet() && auth.getAttempts() === 0 && !auth.isLocked());
 
