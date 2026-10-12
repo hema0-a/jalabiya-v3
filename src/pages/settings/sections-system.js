@@ -29,7 +29,7 @@ import {
 } from '../../services/message-templates.js';
 import {
   createBackup, listBackups, restoreBackup, deleteBackup,
-  clearAllBackups, exportBackupToFile,
+  clearAllBackups, exportBackupToFile, shareLatestBackup, daysSinceExternalBackup,
 } from '../../services/auto-backup.js';
 
 /* ==========================================================================
@@ -657,6 +657,30 @@ const backupSection = {
       },
     }, '💾 إنشاء نسخة الآن');
     body.appendChild(createBtn);
+
+    /* نسخة خارج الجهاز: النسخ المحلية تضيع مع الجهاز نفسه */
+    const extStatus = el('div', { style: { fontSize: '12px', marginTop: '6px', textAlign: 'center' } });
+    const refreshExt = () => {
+      const d = daysSinceExternalBackup();
+      extStatus.textContent = d === null ? '⚠️ لم تحفظ نسخة خارج هذا الجهاز بعد'
+        : d === 0 ? '✅ حفظت نسخة خارج الجهاز اليوم' : 'آخر نسخة خارج الجهاز: منذ ' + d + ' يوماً';
+      extStatus.style.color = (d === null || d >= 7) ? '#B3261E' : '#2E8B6F';
+    };
+    refreshExt();
+    const shareBtn = el('button', {
+      className: 'btn btn--secondary btn--block', type: 'button', style: { marginTop: '8px' },
+      onClick: async () => {
+        shareBtn.disabled = true;
+        try {
+          const res = await shareLatestBackup();
+          if (res.ok) toast.success(res.method === 'share' ? 'تمت المشاركة' : 'تم تنزيل النسخة — احفظها خارج الجهاز');
+          else if (!res.cancelled) toast.danger('فشل: ' + (res.error || 'خطأ'));
+          await renderBackupsList();
+        } finally { shareBtn.disabled = false; refreshExt(); }
+      },
+    }, '📤 مشاركة نسخة خارج الجهاز (واتساب / تيليجرام / درايف)');
+    body.appendChild(shareBtn);
+    body.appendChild(extStatus);
 
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },

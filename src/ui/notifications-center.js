@@ -18,6 +18,8 @@ import { inventory } from '../data/repos/inventory.js';
 import { commitments } from '../data/repos/commitments.js';
 import { settings } from '../data/repos/settings.js';
 import { isPastDue } from '../services/order-timing.js';
+import { assessOrderRisks } from '../services/order-risk.js';
+import { daysSinceExternalBackup } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
 import { alertToggles, filterLowStockForAlerts } from '../services/alert-rules.js';
 import { payments } from '../data/repos/payments.js';
@@ -103,6 +105,25 @@ export async function getNotifications() {
       });
     }
 
+    /* طلبات في موعدها لكن مؤشراتها تقول إنها ستتأخر (v3.3.47) */
+    const risks = assessOrderRisks(allOrders, {
+      dailyOrderLimit: Number(s && s.dailyLimit && s.dailyLimit.dailyOrderLimit) || 0,
+      dayOffWeekday: Number((s && s.dailyLimit && s.dailyLimit.dayOffWeekday) ?? 0),
+    }, now);
+    if (risks.length > 0) {
+      out.push({
+        type: risks.some((r) => r.level === 'danger') ? 'danger' : 'warning',
+        icon: '⚠️',
+        title: risks.length + ' طلب معرَّض للتأخر',
+        subtitle: risks.slice(0, 2).map((r) => {
+          const c = custMap[r.order.customerId];
+          return (c ? c.name : 'عميل') + ' · ' + r.reasons[0].text;
+        }).join(' — '),
+        route: '#/orders',
+        count: risks.length,
+      });
+    }
+
     if (ready.length > 0) {
       out.push({
         type: 'success',
@@ -111,6 +132,19 @@ export async function getNotifications() {
         subtitle: 'في انتظار العميل',
         route: '#/orders',
         count: ready.length,
+      });
+    }
+
+    /* --- نسخة خارج الجهاز: النسخ المحلية تضيع مع الجهاز (v3.3.47) --- */
+    const extDays = daysSinceExternalBackup(now);
+    if (allOrders.length >= 3 && (extDays === null || extDays >= 7)) {
+      out.push({
+        type: 'warning',
+        icon: '💾',
+        title: extDays === null ? 'لم تحفظ نسخة احتياطية خارج هذا الجهاز' : 'آخر نسخة خارج الجهاز منذ ' + extDays + ' يوماً',
+        subtitle: 'شاركها لواتساب أو تيليجرام أو درايف من الإعدادات',
+        route: '#/settings',
+        count: 1,
       });
     }
 

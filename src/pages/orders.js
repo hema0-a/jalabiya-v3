@@ -28,6 +28,7 @@ import { depositGuard } from '../ui/deposit-guard.js';
 import { sinceText } from '../services/message-log.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import { buildItemCatalog, findInCatalog } from '../services/item-catalog.js';
+import { assessOrderRisks } from '../services/order-risk.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
@@ -50,6 +51,7 @@ function disposeOrdersList() {
 
 let state = {
   orders: [],
+  riskMap: new Map(),
   customers: [],
   customerMap: {},
   activeFilter: 'all',
@@ -87,8 +89,14 @@ const DAY_MS = 86400000;
    1. الفلترة
    ========================================================================== */
 
-export function filterOrders(list, filterId) {
+/**
+ * @param {Array} list
+ * @param {string} filterId — all | at_risk | حالة طلب
+ * @param {Map|Set} [riskIds] — لفلتر at_risk: مفاتيح معرّفات الطلبات المعرَّضة للتأخر
+ */
+export function filterOrders(list, filterId, riskIds) {
   if (filterId === 'all') return list;
+  if (filterId === 'at_risk') return list.filter((o) => !!riskIds && riskIds.has(o.id));
   return list.filter((o) => o.status === filterId);
 }
 
@@ -216,6 +224,11 @@ async function loadData() {
       dailyOrderLimit: Number(s.dailyLimit.dailyOrderLimit) || 0,
     };
   }
+
+  /* الطلبات المعرَّضة للتأخر (شارة في البطاقة + فلتر) */
+  try {
+    state.riskMap = new Map(assessOrderRisks(state.orders, state.scheduleConfig).map((r) => [r.order.id, r]));
+  } catch (e) { state.riskMap = new Map(); }
 }
 
 /* ==========================================================================
@@ -1197,6 +1210,15 @@ function buildOrderCard(o) {
       style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
         borderRadius: '10px', color: pickup.color, background: pickup.bg },
     }, pickup.icon + ' ' + pickup.label));
+    const risk = state.riskMap && state.riskMap.get(o.id);
+    if (risk) {
+      const danger = risk.level === 'danger';
+      badgesRow.appendChild(el('span', {
+        title: risk.reasons.map((r) => r.text).join(' — '),
+        style: { fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '10px',
+          color: danger ? '#B3261E' : '#8A5A00', background: danger ? '#FDECEA' : '#FFF3D6' },
+      }, '⚠️ ' + risk.reasons[0].text));
+    }
   }
 
   if (totalMs > 0 || isRunning) {
@@ -1567,8 +1589,11 @@ function renderFilters() {
   STATUS_ORDER.forEach((s) => { counts[s] = 0; });
   state.orders.forEach((o) => { if (counts[o.status] != null) counts[o.status]++; });
 
+  const riskCount = state.riskMap ? state.riskMap.size : 0;
+  if (state.activeFilter === 'at_risk' && riskCount === 0) state.activeFilter = 'all';
   const items = [
     { id: 'all', label: 'الكل', count: counts.all },
+    ...(riskCount > 0 ? [{ id: 'at_risk', label: '⚠️ معرَّض للتأخر', count: riskCount }] : []),
     ...STATUS_ORDER.map((s) => ({ id: s, label: STATUS_MAP[s].label, count: counts[s] })),
   ];
 
@@ -1596,7 +1621,7 @@ function renderList() {
   disposeOrdersList();
   clear(listContainer);
 
-  const filtered = filterOrders(state.orders, state.activeFilter);
+  const filtered = filterOrders(state.orders, state.activeFilter, state.riskMap);
 
   if (filtered.length === 0) {
     listContainer.appendChild(el('div', { className: 'empty-state' }, [

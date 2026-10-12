@@ -360,10 +360,71 @@ export async function exportBackupToFile(id) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 100);
+    markExternalBackup();
     return true;
   } catch {
     return false;
   }
+}
+
+/* ==========================================================================
+   7ب. نسخة خارج الجهاز (مشاركة/تنزيل) + تذكير
+   ==========================================================================
+   النسخ الاحتياطية المحلية تضيع مع الجهاز نفسه (فقد/كسر/مسح بيانات المتصفح).
+   المشاركة عبر قائمة الجوال ترسل الملف لواتساب/تيليجرام/درايف… دون تخزين أي مفاتيح في التطبيق. */
+
+const DAY_MS_EXT = 86400000;
+
+/** وقت آخر نسخة خرجت من الجهاز (تنزيل أو مشاركة)؛ 0 إن لم يحدث. */
+export function getLastExternalBackupAt() {
+  try {
+    const v = Number(localStorage.getItem(STORAGE_KEYS.V3_LAST_EXTERNAL_BACKUP) || 0);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch { return 0; }
+}
+
+export function markExternalBackup(ts = Date.now()) {
+  try { localStorage.setItem(STORAGE_KEYS.V3_LAST_EXTERNAL_BACKUP, String(ts)); } catch { /* اختياري */ }
+}
+
+/** عدد الأيام منذ آخر نسخة خارجية؛ null إن لم تُحفظ قط. */
+export function daysSinceExternalBackup(now = Date.now()) {
+  const t = getLastExternalBackupAt();
+  return t > 0 ? Math.max(0, Math.floor((now - t) / DAY_MS_EXT)) : null;
+}
+
+/**
+ * ينشئ نسخة جديدة ثم يشاركها (Web Share مع ملف) وإلا ينزّلها.
+ * @param {Object} [deps] — للاختبار: { navigator, download }
+ * @returns {Promise<{ok:boolean, method?:'share'|'download', cancelled?:boolean, error?:string}>}
+ */
+export async function shareLatestBackup(deps = {}) {
+  const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+  const download = deps.download || exportBackupToFile;
+
+  const created = await createBackup({ label: 'نسخة للمشاركة' });
+  if (!created.ok) return { ok: false, error: created.error || 'تعذّر إنشاء النسخة' };
+
+  try {
+    const backup = await getBackup(created.id);
+    if (backup && nav && typeof nav.canShare === 'function' && typeof File !== 'undefined') {
+      const file = new File([JSON.stringify(backup)],
+        'jalabiya-backup-' + localDateInput(Date.now()) + '.json', { type: 'application/json' });
+      if (nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: 'نسخة احتياطية — الجلابية' });
+          markExternalBackup();
+          return { ok: true, method: 'share' };
+        } catch (e) {
+          if (e && e.name === 'AbortError') return { ok: false, cancelled: true };
+          /* فشلت المشاركة لسبب آخر: ننزّل الملف بدلاً منها */
+        }
+      }
+    }
+  } catch { /* ننتقل للتنزيل */ }
+
+  const ok = await download(created.id);
+  return ok ? { ok: true, method: 'download' } : { ok: false, error: 'تعذّر تنزيل النسخة' };
 }
 
 /* ==========================================================================

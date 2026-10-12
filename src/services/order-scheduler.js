@@ -121,6 +121,18 @@ export function buildDayLedger(orders, opts = {}) {
 }
 
 /**
+ * أيام عمل طلب مرتّبة زمنياً: [{day:'YYYY-MM-DD', amount}] — من خطته المحفوظة إن صالحة
+ * وإلا بالتوزيع الافتراضي. (بلا تأثر بحالة الطلب.)
+ */
+export function getOrderParts(order, opts = {}) {
+  const dueTs = toTimestamp(order && order.dueDate);
+  if (Number.isNaN(dueTs)) return [];
+  const parts = planParts(order, dueTs) ||
+    legacyAllocate(toPiasters(order.amount), dueTs, toPiasters(opts.dailyLimit), Number(opts.dayOffWeekday ?? 0));
+  return parts.map((p) => ({ day: p.key, amount: p.piasters / 100 })).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+}
+
+/**
  * مجموع مبالغ الطلبات (غير المسلَّمة وغير الملغاة) في يوم معيّن.
  * @param {Array} orders
  * @param {number|Date|string} day — أي لحظة داخل اليوم المطلوب

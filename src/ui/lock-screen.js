@@ -21,6 +21,7 @@ import { STORE_NAMES } from '../data/schema.js';
 import * as idb from '../data/idb.js';
 import { toLatinDigits } from '../core/utils.js';
 import * as biometric from '../security/biometric.js';
+import { recoverPinWithCloud } from '../security/pin-recovery.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -85,7 +86,7 @@ export async function wipeAllLocalData() {
   auth.reset();
 }
 
-function buildOverlay(cfg, onSubmit, onBio) {
+export function buildOverlay(cfg, onSubmit, onBio, onCloudReset) {
   const ws = cfg.workshop || {};
   const ls = cfg.lockScreen || DEFAULT_SETTINGS.lockScreen;
 
@@ -159,9 +160,24 @@ function buildOverlay(cfg, onSubmit, onBio) {
     type: 'button',
     style: { padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '700', background: '#B3261E', color: '#fff', fontFamily: 'inherit' },
   }, 'مسح بيانات هذا الجهاز وإزالة الرقم');
+  /* --- استرجاع بحساب المزامنة (بدون مسح البيانات) --- */
+  const fieldStyle = { width: '240px', fontSize: '15px', textAlign: 'center', padding: '8px', borderRadius: '10px', border: '2px solid #ffffff88', background: '#ffffffee', color: '#1F6D57', direction: 'ltr' };
+  const emailInput = el('input', { type: 'email', placeholder: 'بريد حساب المزامنة', autocomplete: 'email', 'aria-label': 'بريد حساب المزامنة', style: fieldStyle });
+  const passInput = el('input', { type: 'password', placeholder: 'كلمة المرور', autocomplete: 'current-password', 'aria-label': 'كلمة مرور حساب المزامنة', style: fieldStyle });
+  const cloudBtn = el('button', {
+    type: 'button',
+    style: { padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '700', background: '#B8863B', color: '#fff', fontFamily: 'inherit' },
+  }, '🔑 دخول بالحساب وإزالة الرقم (بدون مسح)');
+  const cloudSection = typeof onCloudReset === 'function' ? [
+    el('div', {}, 'إن كان لديك حساب مزامنة سحابية: سجّل الدخول به لإزالة الرقم السري دون فقدان أي بيانات، ثم عيّن رقماً جديداً من الإعدادات.'),
+    emailInput, passInput, cloudBtn,
+    el('div', { style: { opacity: '0.7' } }, '— أو، إن لم يكن لديك حساب —'),
+  ] : [];
+
   const forgotPanel = el('div', {
     style: { display: 'none', flexDirection: 'column', alignItems: 'center', gap: '10px', maxWidth: '320px', fontSize: '13px', lineHeight: '1.7' },
   }, [
+    ...cloudSection,
     el('div', {}, '⚠️ لا يمكن استرجاع الرقم. الاستمرار يمسح كل بيانات التطبيق من هذا الجهاز (العملاء، الطلبات، الدفعات، والنسخ المحلية). يمكنك استعادتها بعدها من السحابة أو من ملف JSON إن كنت قد صدّرته.'),
     confirmInput,
     wipeBtn,
@@ -225,6 +241,17 @@ function buildOverlay(cfg, onSubmit, onBio) {
 
   forgotLink.addEventListener('click', () => {
     forgotPanel.style.display = forgotPanel.style.display === 'none' ? 'flex' : 'none';
+  });
+  cloudBtn.addEventListener('click', async () => {
+    if (typeof onCloudReset !== 'function' || cloudBtn.disabled) return;
+    cloudBtn.disabled = true;
+    status.textContent = 'جارٍ التحقق من الحساب…';
+    try {
+      const res = await onCloudReset(emailInput.value, passInput.value);
+      if (!res || !res.success) status.textContent = '❌ ' + ((res && res.error) || 'تعذّر الاسترجاع');
+    } catch (e) {
+      status.textContent = '❌ ' + (e && e.message ? e.message : 'تعذّر الاسترجاع');
+    } finally { cloudBtn.disabled = false; }
   });
   wipeBtn.addEventListener('click', async () => {
     if (confirmInput.value.trim() !== 'مسح') { status.textContent = 'اكتب كلمة «مسح» للتأكيد'; return; }
@@ -306,6 +333,19 @@ export function showLock() {
         /* نجحت البصمة (تحقّق نظام الجوال): نصفّر عدّاد المحاولات الفاشلة ونفتح */
         try { auth._resetAttempts(); } catch (e) { /* اختياري */ }
         finish();
+      }, async (email, password) => {
+        /* نسيت الرقم: التحقق بحساب المزامنة يزيل الرقم ويُبقي البيانات */
+        const res = await recoverPinWithCloud(email, password);
+        if (res.success) {
+          ui.dispose();
+          if (_overlay) { _overlay.remove(); _overlay = null; }
+          setAppHidden(false);
+          _lastActivity = Date.now();
+          resolve();
+          import('./toast.js').then((m) => m.toast.success('أُزيل الرقم السري — عيّن رقماً جديداً من الإعدادات › الأمان'))
+            .catch(() => { /* اختياري */ });
+        }
+        return res;
       });
       _overlay = ui.node;
       document.body.appendChild(ui.node);

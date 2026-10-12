@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.46',
+  version: '3.3.47',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -268,6 +268,7 @@ export const STORAGE_KEYS = {
   V3_CALENDAR_FILTER: 'jalabiya_v3_calendar_filter',
   V3_DATA_HASH: 'jalabiya_v3_data_hash',
   V3_LAST_AUTO_BACKUP: 'jalabiya_v3_last_auto_backup',
+  V3_LAST_EXTERNAL_BACKUP: 'jalabiya_v3_last_external_backup',
 };
 
 /* --- 21. الحدود القصوى --- */
