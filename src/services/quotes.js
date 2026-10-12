@@ -5,6 +5,9 @@
    (status = pending) بنفس بنوده وأسعاره، ويُربط العرض بالطلب (orderId).
    ========================================================================== */
 
+import { renderTemplate, workshopVars, KIND } from './message-templates.js';
+import { formatDate, formatEGP } from '../core/utils.js';
+
 const DAY = 86400000;
 export const QUOTE_STATUS = { open: 'مفتوح', accepted: 'مُحوَّل لطلب', rejected: 'مرفوض' };
 export const DEFAULT_VALID_DAYS = 7;
@@ -41,13 +44,25 @@ export function quoteToOrderPayload(q) {
   };
 }
 
-export function buildQuoteText(q, customerName = '', workshopName = '') {
+/** متغيرات رسالة عرض السعر. */
+export function quoteVars(q, customerName = '', workshop = '') {
   const t = quoteTotals(q.items, q.discount);
-  const lines = ['السلام عليكم ' + customerName + '،', 'عرض سعر' + (workshopName ? ' من ' + workshopName : '') + ':', ''];
-  (q.items || []).forEach((it) => lines.push('• ' + (it.name || 'بند') + ' × ' + (nn(it.quantity) || 1) + ' = ' + r2(nn(it.price) * (nn(it.quantity) || 1)) + ' ج.م'));
-  if (t.discountAmount > 0) lines.push('خصم: -' + t.discountAmount + ' ج.م');
-  lines.push('', 'الإجمالي: ' + t.amount + ' ج.م');
-  if (q.validUntil) lines.push('العرض ساري حتى ' + new Date(q.validUntil).toLocaleDateString('ar-EG'));
-  if (q.notes) lines.push('', q.notes);
-  return lines.join('\n');
+  const items = (q.items || []).map((it) => '• ' + (it.name || 'بند') + ' × ' + (nn(it.quantity) || 1) +
+    ' = ' + formatEGP(r2(nn(it.price) * (nn(it.quantity) || 1))));
+  return {
+    customer: customerName || 'عميلنا',
+    items: items.join('\n'),
+    discountLine: t.discountAmount > 0 ? 'خصم: -' + formatEGP(t.discountAmount) : '',
+    total: formatEGP(t.amount),
+    validLine: q.validUntil ? 'العرض ساري حتى ' + formatDate(q.validUntil) : '',
+    notes: q.notes || '',
+    ...workshopVars(workshop),
+  };
+}
+
+/**
+ * نص عرض السعر. القالب قابل للتخصيص (cfg = settings.autoMessages).
+ */
+export function buildQuoteText(q, customerName = '', workshop = '', cfg = null) {
+  return renderTemplate(KIND.QUOTE, quoteVars(q, customerName, workshop), cfg);
 }

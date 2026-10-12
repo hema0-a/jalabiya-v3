@@ -14,15 +14,17 @@ import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import { modal } from '../ui/modal.js';
-import { sendWhatsApp } from '../services/auto-messages.js';
+import { sendLogged } from '../services/auto-messages.js';
+import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
 import { toast } from '../ui/toast.js';
 import { computeReceivables, buildReminderText } from '../services/receivables.js';
 
-let state = { container: null, showAll: false, data: null, workshop: '' };
+let state = { container: null, showAll: false, data: null, workshop: {}, msgCfg: null };
 
 async function loadData() {
   const [ord, pay, cus, st] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get()]);
-  state.workshop = (st.workshop && st.workshop.name) || '';
+  state.workshop = st.workshop || {};
+  state.msgCfg = st.autoMessages || null;
   state.data = computeReceivables(ord, pay, cus);
 }
 
@@ -120,8 +122,10 @@ function customerCard(c) {
       className: 'btn btn--primary', type: 'button', style: { fontSize: '12px', padding: '4px 10px' },
       onClick: () => {
         if (!c.phone) return toast.warning('لا يوجد رقم هاتف لهذا العميل');
-        const ok = sendWhatsApp(c.phone, buildReminderText(c.name, formatEGP(c.overdue), state.workshop));
+        const ok = sendLogged(c.phone, buildReminderText(c.name, formatEGP(c.overdue), state.workshop, state.msgCfg),
+          { kind: 'debt_reminder', customerId: c.customerId });
         if (!ok) toast.warning('رقم الهاتف غير صالح');
+        else draw();   /* لتحديث «آخر تذكير» */
       },
     }, '💬 تذكير واتساب'));
   }
@@ -136,6 +140,8 @@ function customerCard(c) {
   if (hasOverdue) meta.push('أقدم دين: ' + c.oldestDays + ' يوم');
   if (c.pending > 0.009) meta.push('عند التسليم: ' + formatEGP(c.pending));
   if (c.unlinkedCredit > 0.009) meta.push('دفعات غير مربوطة بطلب: ' + formatEGP(c.unlinkedCredit) + ' (لم تُخصم)');
+  const lastRem = hasOverdue ? lastSentIn(loadLog(), { kinds: ['debt_reminder', 'payment_due'], customerId: c.customerId }) : null;
+  if (lastRem) meta.push('📱 آخر تذكير: ' + sinceText(lastRem));
 
   return el('div', { className: 'card', style: { padding: '12px', marginBottom: '10px' } }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' } }, [
@@ -195,7 +201,7 @@ function draw() {
 
 export const debtsPage = {
   async render(container) {
-    state = { container, showAll: false, data: null, workshop: '' };
+    state = { container, showAll: false, data: null, workshop: {}, msgCfg: null };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ الحساب...'));
     try {
       await loadData();
@@ -207,5 +213,5 @@ export const debtsPage = {
         'تعذّر حساب المستحقات: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, showAll: false, data: null, workshop: '' }; },
+  destroy() { state = { container: null, showAll: false, data: null, workshop: {}, msgCfg: null }; },
 };

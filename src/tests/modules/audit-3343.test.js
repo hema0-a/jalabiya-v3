@@ -40,7 +40,7 @@ register('audit v3.3.43 auto-messages service (pure)', async (t) => {
 
   await settingsRepo.clear();
   const all = await getTemplates();
-  t.test('11. getTemplates = 5 بلا تخصيص وisCustom=false', all.length === 5 && all.every((x) => x.isCustom === false));
+  t.test('11. getTemplates = كل الافتراضية بلا تخصيص وisCustom=false', all.length === DEFAULT_TEMPLATES.length && all.every((x) => x.isCustom === false));
 
   await settingsRepo.update({ autoMessages: { templates: { ready: { text: 'نصي {customer}' } } } });
   const all2 = await getTemplates();
@@ -61,11 +61,12 @@ register('audit v3.3.43 auto-messages settings section (UI)', async (t) => {
   await sec.render(body, await settingsRepo.get(), saveFn);
 
   const toggles = body.querySelectorAll('.toggle__input');
-  t.test('1. مفتاح رئيسي + 5 مفاتيح قوالب', toggles.length === 6);
+  t.test('1. مفتاحان رئيسيان + مفتاح لكل قالب قابل للتعطيل',
+    toggles.length === 2 + DEFAULT_TEMPLATES.filter((x) => x.toggleable !== false).length);
 
   const flip = (input, v) => { input.checked = v; input.dispatchEvent(new Event('change', { bubbles: true })); };
-  flip(toggles[1], false);   /* new_order */
-  flip(toggles[3], false);   /* ready */
+  flip(toggles[2], false);   /* new_order */
+  flip(toggles[5], false);   /* ready */
   await Promise.all(pending);
 
   const s = await settingsRepo.get();
@@ -74,7 +75,7 @@ register('audit v3.3.43 auto-messages settings section (UI)', async (t) => {
     tpls.new_order && tpls.new_order.enabled === false && tpls.ready && tpls.ready.enabled === false);
   t.test('3. لا يُحفظ نص إن لم يتغيّر عن الافتراضي', !('text' in tpls.new_order));
 
-  flip(toggles[1], true);
+  flip(toggles[2], true);
   await Promise.all(pending);
   const s2 = await settingsRepo.get();
   t.test('4. إعادة التفعيل تزيل التخصيص الفارغ', !s2.autoMessages.templates.new_order);

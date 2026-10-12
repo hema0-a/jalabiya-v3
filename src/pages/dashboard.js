@@ -18,7 +18,11 @@
 import { withDepositPayments, withWorkerExpenses, orderPaidBreakdown } from '../services/payments-view.js';
 import { computePickups, buildPickupText } from '../services/pickup-reminders.js';
 import { computeReceivables, buildReminderText } from '../services/receivables.js';
-import { sendWhatsApp } from '../services/auto-messages.js';
+import { sendLogged } from '../services/auto-messages.js';
+import { buildQueue } from '../services/message-queue.js';
+import { isEnabledCfg } from '../services/message-templates.js';
+import { loadLog } from '../services/message-log.js';
+import { statusNotifyAction } from '../services/status-notify.js';
 import { isDemoRecord, clearDemoData } from '../services/demo-data.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -216,6 +220,15 @@ async function loadKPIs() {
   return {
     hasDemo: customersList.some(isDemoRecord) || ordersList.some(isDemoRecord),
     custMap, orderById, pickups, overdueOrders, debtors, workshopNameRaw: workshopName,
+    workshopObj: s.workshop || {}, msgCfg: s.autoMessages || null,
+    msgCounts: (() => {
+      /* عدّاد «رسائل اليوم»: لا يُسقط اللوحة إن فشل الحساب */
+      try {
+        if (!isEnabledCfg(s.autoMessages)) return null;
+        return buildQueue({ orders: ordersList, payments: rawPayments, customers: customersList,
+          occasions: s.occasions || [], cfg: s.autoMessages || null, workshop: s.workshop || {}, log: loadLog() }).counts;
+      } catch (e) { return null; }
+    })(),
     dueSoonRows: dueSoonOrders.map(withCust),
     todayApptsRows: todayAppts.map((a) => {
       const c = a.customerId ? custMap.get(a.customerId) : null;
@@ -279,11 +292,12 @@ async function advanceOrder(order, remaining) {
     await orders.update(order.id, patch);
     /* التراجع يعيد الحالة وتواريخها كما كانت (بما فيها عمر «جاهز») */
     const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null };
+    const notify = await statusNotifyAction({ ...order, ...patch }, next.to);
     toast.undo('الحالة: ' + STATUS_LABEL[next.to], async () => {
       await orders.update(order.id, prev);
       toast.info('تم التراجع: ' + STATUS_LABEL[prev.status]);
       await refresh();
-    });
+    }, notify ? { extraAction: notify, duration: 10000 } : {});
     await refresh();
   } catch (e) { toast.danger('تعذّر التحديث: ' + e.message); }
 }
@@ -344,9 +358,9 @@ async function markApptDone(a) {
 const callBtn = (phone) => (phone
   ? el('a', { className: 'btn btn--sm btn--ghost dash-act', href: 'tel:' + String(phone).replace(/[^\d+]/g, ''), 'aria-label': 'اتصال', title: 'اتصال' }, '📞')
   : null);
-const waBtn = (phone, textFn) => (phone
+const waBtn = (phone, textFn, meta = null) => (phone
   ? el('button', { className: 'btn btn--sm btn--ghost dash-act', type: 'button', 'aria-label': 'واتساب', title: 'واتساب',
-      onClick: () => { if (!sendWhatsApp(phone, textFn())) toast.warning('رقم الهاتف غير صالح'); } }, '💬')
+      onClick: () => { if (!sendLogged(phone, textFn(), meta)) toast.warning('رقم الهاتف غير صالح'); } }, '💬')
   : null);
 const actBtn = (label, onClick, primary = true) => el('button', {
   className: 'btn btn--sm dash-act ' + (primary ? 'btn--primary' : 'btn--secondary'), type: 'button', onClick,
@@ -474,7 +488,8 @@ function buildKPICards(data) {
 
 /** «يحتاج إجراءك»: ما ينتظر قراراً الآن، وتنفيذه من مكانه. */
 function buildAttention(data) {
-  const wn = data.workshopNameRaw || '';
+  const wn = data.workshopObj || data.workshopNameRaw || '';
+  const mc = data.msgCfg || null;
   const groups = [];
 
   /* 1) جاهز ولم يُستلم */
@@ -485,7 +500,7 @@ function buildAttention(data) {
       return dashRow(
         (it.late ? '🔴 ' : '🟢 ') + it.name,
         'جاهز منذ ' + it.ageDays + ' يوم' + (it.remaining > 0 ? ' · متبقي ' + formatEGP(it.remaining) : ' · مدفوع بالكامل'),
-        [callBtn(it.phone), waBtn(it.phone, () => buildPickupText(it, wn)),
+        [callBtn(it.phone), waBtn(it.phone, () => buildPickupText(it, wn, mc), { kind: 'pickup_ready', ref: it.orderId, customerId: it.customerId }),
           order ? actBtn('📦 تسليم', () => advanceOrder(order, it.remaining)) : null],
         () => go('#/pickups'));
     });
@@ -514,11 +529,21 @@ function buildAttention(data) {
       return dashRow('💸 ' + c.name,
         'عليه ' + formatEGP(c.overdue) + ' منذ ' + c.oldestDays + ' يوم',
         [callBtn(c.phone),
-          waBtn(c.phone, () => buildReminderText(c.name, formatEGP(c.overdue), wn)),
+          waBtn(c.phone, () => buildReminderText(c.name, formatEGP(c.overdue), wn, mc), { kind: 'debt_reminder', customerId: c.customerId }),
           o ? actBtn('💰 دفعة', () => quickPay({ customerId: c.customerId, orderId: o.id, name: c.name, remaining: o.remaining })) : null],
         () => go('#/debts'));
     });
     groups.push(dashGroup('💸 مستحقات متأخرة', db.length, rows, '#/debts'));
+  }
+
+  /* 4) رسائل بانتظار الإرسال (استلام + مستحقات + تهاني لم تُرسل مؤخراً) */
+  const mq = data.msgCounts;
+  if (mq && mq.pending > 0) {
+    const part = (k, label) => ((mq[k] && mq[k].pending) ? label + ' ' + mq[k].pending : null);
+    const sub = [part('pickup', 'استلام'), part('debt', 'مستحقات'), part('greeting', 'تهاني')].filter(Boolean).join(' · ');
+    groups.push(dashGroup('📣 رسائل بانتظار الإرسال', mq.pending, [
+      dashRow('📣 رسائل اليوم', sub, [actBtn('▶ ابدأ المرور', () => go('#/messages'))], () => go('#/messages')),
+    ], '#/messages'));
   }
 
   const card = el('div', { className: 'card dash-attention', style: { marginBottom: '16px' } });

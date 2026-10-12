@@ -23,6 +23,8 @@ import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { orderPaidBreakdown } from '../services/payments-view.js';
+import { statusNotifyAction, newOrderNotifyAction } from '../services/status-notify.js';
+import { sinceText } from '../services/message-log.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
@@ -692,7 +694,11 @@ function openOrderForm(existing = null) {
 
           try {
             if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }
-            else { await orders.create(data); toast.success('تم إضافة الطلب'); }
+            else {
+              const created = await orders.create(data);
+              const notify = await newOrderNotifyAction(created && created.id ? created : { ...data });
+              toast.success('تم إضافة الطلب', notify ? { action: notify, duration: 9000 } : {});
+            }
             draftDone = true;
             draft.clear(DRAFT_KEY);
             handle.close();
@@ -832,11 +838,13 @@ async function advanceStatus(order) {
     if (next === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
     await orders.update(order.id, patch);
     const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null };
+    /* زر «📱 إشعار العميل» في نفس التنبيه (إن كان للحالة قالب والعميل له هاتف) */
+    const notify = await statusNotifyAction({ ...order, ...patch }, next);
     toast.undo('الحالة: ' + STATUS_MAP[next].label, async () => {
       await orders.update(order.id, prev);
       toast.info('تم التراجع: ' + STATUS_MAP[prev.status].label);
       await refreshAll();
-    });
+    }, notify ? { extraAction: notify, duration: 10000 } : {});
     await refreshAll();
   } catch (err) { toast.danger('فشل التحديث: ' + err.message); }
 }
@@ -931,6 +939,10 @@ async function openMessageMenu(order) {
       el('div', {
         style: { fontSize: '12px', color: '#666', marginTop: '6px', whiteSpace: 'pre-wrap' },
       }, opt.text),
+      opt.lastSentAt
+        ? el('div', { style: { fontSize: '11px', color: '#E65100', marginTop: '6px' } },
+          '✔ فُتحت لهذا الطلب ' + sinceText(opt.lastSentAt))
+        : null,
     ]));
   });
 

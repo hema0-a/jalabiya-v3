@@ -5,6 +5,8 @@
    ========================================================================== */
 
 import { orderPaidBreakdown } from './payments-view.js';
+import { renderTemplate, workshopVars, KIND } from './message-templates.js';
+import { formatEGP } from '../core/utils.js';
 
 const DAY = 86400000;
 export const DEFAULT_PICKUP_DAYS = 3;
@@ -49,11 +51,27 @@ export function computePickups(ordersList, paymentsList, customersList, now = Da
   };
 }
 
-export function buildPickupText(item, workshopName = '') {
-  const code = '#' + String(item.orderId).slice(-6);
-  const lines = ['السلام عليكم ' + (item.name || '') + '،',
-    'طلبكم رقم ' + code + ' جاهز للاستلام' + (workshopName ? ' من ' + workshopName : '') + '.'];
-  if (item.remaining > 0) lines.push('المتبقي عند الاستلام: ' + item.remaining + ' ج.م');
-  lines.push('نتشرف بزيارتكم في أقرب وقت. شكراً لثقتكم 🌹');
-  return lines.join('\n');
+/**
+ * متغيرات رسالة «جاهز للاستلام» (تُستعمل أيضاً في طابور الرسائل).
+ * @param {Object} item — عنصر من computePickups
+ * @param {Object|string} [workshop] — كائن settings.workshop أو اسم الورشة
+ */
+export function pickupVars(item, workshop = '') {
+  const remaining = Number(item && item.remaining) || 0;
+  return {
+    customer: (item && item.name) || '',
+    orderId: '#' + String((item && item.orderId) || '').slice(-6),
+    amount: formatEGP(Number(item && item.amount) || 0),
+    remaining: formatEGP(remaining),
+    remainingLine: remaining > 0 ? 'المتبقي عند الاستلام: ' + formatEGP(remaining) : '',
+    phone: (item && item.phone) || '',
+    ...workshopVars(workshop),
+  };
+}
+
+/**
+ * نص تذكير الاستلام. القالب قابل للتخصيص من الإعدادات (cfg = settings.autoMessages).
+ */
+export function buildPickupText(item, workshop = '', cfg = null) {
+  return renderTemplate(KIND.PICKUP, pickupVars(item, workshop), cfg);
 }

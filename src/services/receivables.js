@@ -12,6 +12,7 @@
    ========================================================================== */
 
 import { orderPaidBreakdown } from './payments-view.js';
+import { renderTemplate, workshopVars, KIND } from './message-templates.js';
 
 const EPS = 0.009;
 const DAY_MS = 86400000;
@@ -112,8 +113,14 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
 }
 
 /** نص تذكير واتساب مهذّب لمستحق عميل. */
-export function buildReminderText(name, amountText, workshopName) {
-  return 'السلام عليكم ' + (name || 'عميلنا الكريم') + '،\n' +
-    'نذكّركم بلطف بوجود مبلغ متبقٍّ ' + amountText + ' لدى ' + (workshopName || 'الورشة') + '.\n' +
-    'نشكر لكم تعاونكم 🌷';
+/** متغيرات رسالة تذكير المستحقات (تُستعمل أيضاً في طابور الرسائل). */
+export function debtVars(name, amountText, workshop = '', phone = '') {
+  return { customer: name || 'عميلنا الكريم', overdue: String(amountText ?? ''), phone: phone || '', ...workshopVars(workshop) };
+}
+
+/**
+ * نص تذكير بالمستحقات. القالب قابل للتخصيص (cfg = settings.autoMessages).
+ */
+export function buildReminderText(name, amountText, workshop = '', cfg = null) {
+  return renderTemplate(KIND.DEBT, debtVars(name, amountText, workshop), cfg);
 }

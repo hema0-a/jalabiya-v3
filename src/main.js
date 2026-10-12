@@ -134,6 +134,7 @@ async function loadPageModule(pageId) {
       case 'payments':           return await import('./pages/payments.js');
       case 'debts':              return await import('./pages/debts.js');
       case 'pickups':            return await import('./pages/pickups.js');
+      case 'messages':           return await import('./pages/messages.js');
       case 'quotes':             return await import('./pages/quotes.js');
       case 'season-compare':     return await import('./pages/season-compare.js');
       case 'data-care':          return await import('./pages/data-care.js');
@@ -191,6 +192,7 @@ const SIDEBAR_SECTIONS = [
     { id: 'payments',  icon: '💰', label: 'الدفعات' },
     { id: 'debts',     icon: '🧾', label: 'مستحقات العملاء' },
     { id: 'pickups',   icon: '📦', label: 'جاهز للاستلام' },
+    { id: 'messages',  icon: '📣', label: 'رسائل اليوم' },
     { id: 'quotes',    icon: '📝', label: 'عروض الأسعار' },
   ]},
   { title: 'إدارة الورشة', items: [
@@ -238,6 +240,7 @@ const MODULE_EXPORT_MAP = {
   payments:             'paymentsPage',
   debts:                'debtsPage',
   pickups:              'pickupsPage',
+  messages:             'messagesPage',
   quotes:               'quotesPage',
   'season-compare':     'seasonComparePage',
   'data-care':          'dataCarePage',

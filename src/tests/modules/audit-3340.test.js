@@ -61,7 +61,7 @@ register('audit v3.3.40 demo data', async (t) => {
     await dashboardPage.render(box);
     t.test('12. شريط «بيانات تجريبية» يظهر في اللوحة', !!box.querySelector('.dash-demo'));
     const att = box.querySelector('.dash-attention');
-    t.test('13. «يحتاج إجراءك» يعرض الجاهز والمتأخر والمستحقات', !!att && att.querySelectorAll('.dash-group').length === 3);
+    t.test('13. «يحتاج إجراءك» يعرض الجاهز والمتأخر والمستحقات + رسائل بانتظار الإرسال', !!att && att.querySelectorAll('.dash-group').length === 4 && att.textContent.includes('رسائل اليوم'));
 
     /* قسم الإعدادات */
     const sbox = document.createElement('div');

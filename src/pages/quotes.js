@@ -15,18 +15,19 @@ import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { sendWhatsApp } from '../services/auto-messages.js';
+import { sendLogged } from '../services/auto-messages.js';
 import {
   QUOTE_STATUS, DEFAULT_VALID_DAYS, quoteTotals, isExpired, validUntilFrom, quoteToOrderPayload, buildQuoteText,
 } from '../services/quotes.js';
 
-let state = { container: null, list: [], customers: [], workshop: '', filter: 'open' };
+let state = { container: null, list: [], customers: [], workshop: {}, msgCfg: null, filter: 'open' };
 
 async function loadData() {
   const [q, cus, st] = await Promise.all([quotes.list(), customers.list(), settings.get()]);
   state.list = q.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   state.customers = cus;
-  state.workshop = (st.workshop && st.workshop.name) || '';
+  state.workshop = st.workshop || {};
+  state.msgCfg = st.autoMessages || null;
 }
 
 const custName = (id) => { const c = state.customers.find((x) => x.id === id); return c ? c.name : 'عميل غير معروف'; };
@@ -133,7 +134,7 @@ async function remove(q) {
 function share(q) {
   const c = state.customers.find((x) => x.id === q.customerId);
   if (!c || !c.phone) { toast.error('لا يوجد رقم هاتف لهذا العميل'); return; }
-  sendWhatsApp(c.phone, buildQuoteText(q, c.name, state.workshop));
+  sendLogged(c.phone, buildQuoteText(q, c.name, state.workshop, state.msgCfg), { kind: 'quote_share', ref: q.id, customerId: c.id });
 }
 
 function card(q) {
@@ -186,7 +187,7 @@ function draw() {
 
 export const quotesPage = {
   async render(container) {
-    state = { container, list: [], customers: [], workshop: '', filter: 'open' };
+    state = { container, list: [], customers: [], workshop: {}, msgCfg: null, filter: 'open' };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[quotes] render:', err);
@@ -194,5 +195,5 @@ export const quotesPage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, list: [], customers: [], workshop: '', filter: 'open' }; },
+  destroy() { state = { container: null, list: [], customers: [], workshop: {}, msgCfg: null, filter: 'open' }; },
 };

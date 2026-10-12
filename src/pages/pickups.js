@@ -12,15 +12,17 @@ import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
 import { formatEGP } from '../core/utils.js';
-import { sendWhatsApp } from '../services/auto-messages.js';
+import { sendLogged } from '../services/auto-messages.js';
+import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
 import { toast } from '../ui/toast.js';
 import { computePickups, buildPickupText, DEFAULT_PICKUP_DAYS } from '../services/pickup-reminders.js';
 
-let state = { container: null, data: null, workshop: '', onlyLate: false };
+let state = { container: null, data: null, workshop: {}, msgCfg: null, onlyLate: false };
 
 async function loadData() {
   const [ord, pay, cus, st] = await Promise.all([orders.list(), payments.list(), customers.list(), settings.get()]);
-  state.workshop = (st.workshop && st.workshop.name) || '';
+  state.workshop = st.workshop || {};
+  state.msgCfg = st.autoMessages || null;
   state.data = computePickups(ord, pay, cus, Date.now(), DEFAULT_PICKUP_DAYS);
 }
 
@@ -33,6 +35,7 @@ function statCard(label, value, color) {
 
 function itemCard(i) {
   const canSend = !!i.phone;
+  const lastAt = lastSentIn(loadLog(), { kinds: ['pickup_ready', 'ready'], ref: i.orderId });
   return el('div', { className: 'card', style: { padding: '12px', marginBottom: '8px' } }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
       el('strong', {}, i.name),
@@ -41,12 +44,15 @@ function itemCard(i) {
     ]),
     el('div', { style: { fontSize: '12px', color: '#666', margin: '4px 0 8px' } },
       '#' + String(i.orderId).slice(-6) + ' · الإجمالي ' + formatEGP(i.amount)
-      + (i.remaining > 0 ? ' · المتبقي ' + formatEGP(i.remaining) : ' · مسدَّد بالكامل')),
+      + (i.remaining > 0 ? ' · المتبقي ' + formatEGP(i.remaining) : ' · مسدَّد بالكامل')
+      + (lastAt ? ' · 📱 آخر تذكير: ' + sinceText(lastAt) : '')),
     el('button', {
       className: 'btn btn--primary', type: 'button', disabled: canSend ? null : 'disabled',
       style: { fontSize: '13px', padding: '6px 12px' },
       onClick: () => {
-        if (!sendWhatsApp(i.phone, buildPickupText(i, state.workshop))) toast.error('تعذّر فتح واتساب');
+        if (!sendLogged(i.phone, buildPickupText(i, state.workshop, state.msgCfg),
+          { kind: 'pickup_ready', ref: i.orderId, customerId: i.customerId })) toast.error('تعذّر فتح واتساب');
+        else draw();   /* لتحديث «آخر تذكير» */
       },
     }, canSend ? '💬 تذكير واتساب' : 'لا يوجد رقم هاتف'),
   ]);
@@ -80,7 +86,7 @@ function draw() {
 
 export const pickupsPage = {
   async render(container) {
-    state = { container, data: null, workshop: '', onlyLate: false };
+    state = { container, data: null, workshop: {}, msgCfg: null, onlyLate: false };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[pickups] render:', err);
@@ -88,5 +94,5 @@ export const pickupsPage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, data: null, workshop: '', onlyLate: false }; },
+  destroy() { state = { container: null, data: null, workshop: {}, msgCfg: null, onlyLate: false }; },
 };

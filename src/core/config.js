@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.43',
+  version: '3.3.44',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -178,7 +178,7 @@ export const WEEKDAYS = [
 
 /* --- 17. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
-  workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
+  workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '', pickupHours: '' },
   appearance: {
     theme: 'classic', primaryColor: '#1F6D57', accentColor: '#B8863B',
     backgroundColor: '#F6F1E6', backgroundPattern: 'none', iconStyle: 'default',
@@ -207,7 +207,7 @@ export const DEFAULT_SETTINGS = {
     defaultMargin: 30, marginPresets: [20, 30, 50, 100],
     saveHistory: true, enableCreateOrder: true, maxHistoryItems: 50,
   },
-  autoMessages: { enabled: true, templates: {} },
+  autoMessages: { enabled: true, promptOnStatus: true, templates: {}, custom: [] },
   backup: { autoBackup: true, intervalHours: 24 },
   cloudSync: { enabled: false, lastSyncAt: null },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600 },

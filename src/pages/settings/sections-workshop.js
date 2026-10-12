@@ -69,6 +69,7 @@ const workshopInfoSection = {
     body.appendChild(textField('العنوان', 'address', 'المحافظة — المدينة — الشارع'));
     body.appendChild(textField('رقم الهاتف', 'phone', '01xxxxxxxxx'));
     body.appendChild(textField('رقم WhatsApp', 'whatsapp', '+20xxxxxxxxxx'));
+    body.appendChild(textField('مواعيد الاستلام (تظهر في الرسائل)', 'pickupHours', 'مثال: يومياً من 10 ص إلى 9 م'));
 
     /* الشعار */
     const logoPreview = el('div', {
