@@ -15,6 +15,7 @@ import { STORAGE_KEYS } from '../core/config.js';
 import * as authSync from '../sync/auth-sync.js';
 import { pushFlow, pullFlow } from '../sync/sync-flow.js';
 import * as autoSync from '../sync/auto-sync.js';
+import { requestPersistence, getStorageStatus, formatBytes } from '../services/storage-health.js';
 
 /* --- الحالة --- */
 let state = {
@@ -212,6 +213,47 @@ function buildUserCard() {
   return card;
 }
 
+/** بطاقة حماية التخزين المحلي (تُملأ بعد قراءة الحالة، فلا تعطّل رسم الصفحة). */
+function buildStorageCard() {
+  const card = el('div', { className: 'card', style: { padding: '12px', marginBottom: '16px' } });
+  const line = el('div', { style: { fontSize: '14px', fontWeight: '600' } }, '💾 جارٍ فحص حماية التخزين...');
+  const note = el('div', { style: { fontSize: '11px', color: '#666', marginTop: '4px', lineHeight: '1.7' } });
+  const btnHolder = el('div', { style: { marginTop: '8px' } });
+  card.append(line, note, btnHolder);
+
+  const paint = async () => {
+    const s = await getStorageStatus();
+    /* \u2066…\u2069: عزل اتجاه الأرقام والوحدات داخل النص العربي (وإلا ظهرت «KB 32.2») */
+    const ltr = (x) => '\u2066' + x + '\u2069';
+    const usage = s.usage !== null ? 'المستخدم: ' + ltr(formatBytes(s.usage)) + (s.quota ? ' من ' + ltr(formatBytes(s.quota)) : '') : '';
+    btnHolder.textContent = '';
+    if (!s.supported) {
+      line.textContent = '💾 هذا المتصفح لا يدعم حماية التخزين';
+      line.style.color = '#E65100';
+      note.textContent = 'اعتمد على المزامنة السحابية والنسخ الاحتياطي الخارجي. ' + usage;
+    } else if (s.persisted) {
+      line.textContent = '💾 التخزين المحلي محمي ✅';
+      line.style.color = '#2E7D32';
+      note.textContent = 'لن يحذف المتصفح بياناتك تلقائياً عند امتلاء الجهاز. ' + usage;
+    } else {
+      line.textContent = '💾 التخزين المحلي غير محمي ⚠️';
+      line.style.color = '#E65100';
+      note.textContent = 'قد يحذف المتصفح بيانات التطبيق عند امتلاء الجهاز. ثبّت التطبيق على الشاشة الرئيسية ثم اطلب الحماية، وحافظ على المزامنة والنسخ الخارجي. ' + usage;
+      btnHolder.appendChild(el('button', {
+        className: 'btn btn--secondary', type: 'button', style: { fontSize: '12px', padding: '4px 10px' },
+        onClick: async () => {
+          const r = await requestPersistence();
+          if (r.persisted) toast.success('تم تفعيل حماية التخزين');
+          else toast.warning('لم يمنح المتصفح الحماية — ثبّت التطبيق على الشاشة الرئيسية وجرّب لاحقاً');
+          paint();
+        },
+      }, '🛡️ اطلب الحماية'));
+    }
+  };
+  paint().catch(() => { line.textContent = '💾 تعذّر فحص حالة التخزين'; });
+  return card;
+}
+
 function buildAutoSyncCard() {
   const st = autoSync.getStatus();
   const card = el('div', { className: 'card', style: { padding: '12px', marginBottom: '16px' } });
@@ -274,6 +316,7 @@ function renderPage() {
   ]));
 
   c.appendChild(buildStatusCards());
+  c.appendChild(buildStorageCard());
 
   if (!authSync.isConfigured()) {
     c.appendChild(el('div', {

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.48 — تأمين استرجاع الرقم السري
+   الإصدار: v3.3.49 — حماية التخزين المحلي
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.48';
+const CACHE_VERSION = 'v3.3.49';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -127,6 +127,7 @@ const PRECACHE_URLS = [
   './src/services/vip-rules.js',
   './src/services/season-compare.js',
   './src/services/receivables.js',
+  './src/services/storage-health.js',
   './src/sync/dirty-state.js',
   './src/sync/tombstones.js',
   './src/sync/settings-sync.js',

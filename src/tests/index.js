@@ -54,6 +54,7 @@ import './modules/audit-3346.test.js';
 import './modules/audit-3346-row.test.js';
 import './modules/audit-3347.test.js';
 import './modules/audit-3348.test.js';
+import './modules/audit-3349.test.js';
 import './modules/audit-3347-ui.test.js';
 
 export { runAll, register } from './registry.js';

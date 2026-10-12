@@ -35,7 +35,7 @@ let installErrorHandler;
 let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
-let startAutoSync, mountSyncIndicator;
+let startAutoSync, mountSyncIndicator, requestPersistence;
 let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
 let APP_CONFIG;
@@ -43,7 +43,7 @@ try {
   /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
   const [
     cfg, dom, toastMod, layoutMod, eventsMod, searchMod, backupMod, pwaMod, onboardingMod,
-    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod,
+    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod,
   ] = await Promise.all([
     import('./core/config.js'),
     import('./core/dom.js'),
@@ -64,6 +64,7 @@ try {
     import('./ui/sync-indicator.js'),
     import('./ui/notifications-center.js'),
     import('./ui/lock-screen.js'),
+    import('./services/storage-health.js'),
   ]);
   ({ APP_CONFIG } = cfg);
   ({ el } = dom);
@@ -84,6 +85,7 @@ try {
   ({ mount: mountSyncIndicator } = syncIndMod);
   ({ mount: mountNotifications, open: openNotifications } = notifCenterMod);
   ({ ensureUnlocked, installAutoLock } = lockMod);
+  ({ requestPersistence } = storageMod);
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -408,6 +410,13 @@ try {
   }
 } catch (err) {
   console.warn('[OfflineIndicator] فشل التثبيت:', err);
+}
+
+/* 💾 طلب «تخزين دائم» كي لا يحذف المتصفح البيانات المحلية عند امتلاء الجهاز (صامت، لا يُلقي أخطاء) */
+try {
+  if (typeof requestPersistence === 'function') requestPersistence();
+} catch (err) {
+  console.warn('[StorageHealth] تعذّر الطلب:', err);
 }
 
 /* ☁️ الرفع التلقائي الهادئ + تنبيه المزامنة (لا يعمل قبل فتح القفل) */
