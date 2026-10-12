@@ -79,7 +79,8 @@ export async function isEnabled() {
 export function sendWhatsApp(phone, text) {
   if (!phone) return false;
   const normalized = normalizePhone(phone);
-  const clean = String(normalized).replace(/\D/g, '');
+  let clean = String(normalized).replace(/\D/g, '');
+  if (clean.startsWith('00')) clean = clean.slice(2);   /* 00 = بادئة دولية (wa.me لا يقبلها) */
   if (!clean) return false;
   const url = 'https://wa.me/' + clean + '?text=' + encodeURIComponent(text || '');
   window.open(url, '_blank', 'noopener,noreferrer');

@@ -7,6 +7,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -61,6 +62,7 @@ function itemCard(i) {
 function draw() {
   const c = state.container;
   if (!c || !state.data) return;
+  if (state.pl) { state.pl.destroy(); state.pl = null; }
   clear(c);
   const d = state.data;
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '📦 جاهز للاستلام'));
@@ -81,12 +83,13 @@ function draw() {
       d.count === 0 ? '✅ لا توجد طلبات جاهزة بانتظار الاستلام' : '✅ لا توجد طلبات متأخرة عن الاستلام'));
     return;
   }
-  list.forEach((i) => c.appendChild(itemCard(i)));
+  state.pl = createProgressiveList({ items: list, pageSize: 25, render: (i) => itemCard(i), endText: 'تم عرض كل الطلبات' });
+  c.appendChild(state.pl.node);
 }
 
 export const pickupsPage = {
   async render(container) {
-    state = { container, data: null, workshop: {}, msgCfg: null, onlyLate: false };
+    state = { container, data: null, workshop: {}, msgCfg: null, onlyLate: false, pl: null };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[pickups] render:', err);
@@ -94,5 +97,8 @@ export const pickupsPage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, data: null, workshop: {}, msgCfg: null, onlyLate: false }; },
+  destroy() {
+    if (state.pl) { try { state.pl.destroy(); } catch (e) { /* اختياري */ } }
+    state = { container: null, data: null, workshop: {}, msgCfg: null, onlyLate: false, pl: null };
+  },
 };

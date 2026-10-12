@@ -83,14 +83,26 @@ export function open(options = {}) {
   /* Footer — فقط إن وُجدت أزرار */
   const footer = actions.length > 0
     ? el('div', { className: 'modal__footer' }, actions.map((a) => {
-        return el('button', {
+        const btn = el('button', {
           className: 'btn btn--' + (a.variant || 'primary'),
           type: 'button',
           'data-action': a.action || '',
-          onClick: () => {
-            if (typeof a.onClick === 'function') a.onClick();
-          },
         }, a.text || '');
+        /* 🛡️ حماية من النقر المزدوج (v3.3.50): كان الزر يتجاهل الـ Promise المُرجَع من المعالج، فنقرتان
+           متتاليتان على «إضافة/حفظ» أنشأتا سجلين (دفعة مكررة تضاعف مبلغاً). الآن لا يُستدعى المعالج
+           ثانية قبل انتهاء الأول، ويُعطَّل الزر أثناءه ويعود بعده (مثلاً عند فشل التحقق وبقاء النافذة). */
+        let busy = false;
+        const release = () => { busy = false; btn.disabled = false; };
+        btn.addEventListener('click', () => {
+          if (typeof a.onClick !== 'function' || busy) return;
+          busy = true;
+          btn.disabled = true;
+          let r;
+          try { r = a.onClick(); } catch (e) { release(); throw e; }
+          if (r && typeof r.then === 'function') r.finally(release);   // finally: يحافظ على ظهور الأخطاء كما كان
+          else release();
+        });
+        return btn;
       }))
     : null;
 

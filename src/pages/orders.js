@@ -36,6 +36,7 @@ import {
 import * as draft from '../services/draft-manager.js';
 import { orderProfit, summarizeProfit } from '../services/order-profit.js';
 import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
+import { MAX_AMOUNT, CONFIRM_AMOUNT } from '../services/amount-guard.js';
 import { clusterBySize } from '../services/size-clusters.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 
@@ -699,6 +700,24 @@ function openOrderForm(existing = null) {
           if (deposit > totals.amount) {
             toast.warning('المقدم (' + formatEGP(deposit) + ') أكبر من إجمالي الطلب (' + formatEGP(totals.amount) + ')');
             return;
+          }
+
+          /* إجمالي صفر: غالباً نُسي السعر أو أُدخل ناقصاً (كان يُحفظ بصمت) — وأرقام مستحيلة تُرفض */
+          if (totals.amount > MAX_AMOUNT) { toast.warning('إجمالي الطلب كبير جداً — تأكد من الأسعار والكميات'); return; }
+          if (totals.amount <= 0 && statusSelect.value !== 'cancelled') {
+            const okZero = await modal.confirm({
+              title: 'إجمالي الطلب صفر',
+              message: 'لم تُدخل سعراً للبنود (أو السعر ناقص). هل تريد حفظ الطلب بدون مبلغ؟',
+              confirmText: 'احفظ بدون سعر', cancelText: 'تعديل الأسعار',
+            });
+            if (!okZero) return;
+          } else if (totals.amount > CONFIRM_AMOUNT) {
+            const okBig = await modal.confirm({
+              title: 'إجمالي كبير',
+              message: 'إجمالي الطلب ' + formatEGP(totals.amount) + ' كبير جداً. هل الرقم صحيح؟',
+              confirmText: 'نعم، احفظ', cancelText: 'تعديل',
+            });
+            if (!okBig) return;
           }
 
           if (isDiscountExcessive(totals)) {

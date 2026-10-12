@@ -10,6 +10,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -23,7 +24,7 @@ import { buildQueue, buildCampaign, countTasks, TYPE_LABELS } from '../services/
 
 const blank = () => ({
   container: null, raw: null, tab: 'today', filter: 'all', showSent: false,
-  campaign: { templateId: '', audience: 'vip' }, tasks: [], template: null, stepper: null,
+  campaign: { templateId: '', audience: 'vip' }, tasks: [], template: null, stepper: null, lists: [],
 });
 let state = blank();
 
@@ -180,6 +181,9 @@ function drawStepper(c) {
 function draw() {
   const c = state.container;
   if (!c || !state.raw) return;
+  /* تحرير مراقبات القوائم التدريجية القديمة قبل إعادة الرسم */
+  state.lists.forEach((l) => { try { l.destroy(); } catch (e) { /* اختياري */ } });
+  state.lists = [];
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '📣 رسائل اليوم'));
 
@@ -242,11 +246,17 @@ function draw() {
       '✅ لا شيء بانتظار الإرسال'));
   }
 
-  pendingList.forEach((t) => c.appendChild(taskCard(t)));
+  /* عرض تدريجي: بآلاف العملاء كانت الحملة ترسم كل البطاقات دفعة واحدة (~16 ألف عنصر وتجمّد ثانية) */
+  const addList = (items) => {
+    const pl = createProgressiveList({ items, pageSize: 25, render: (t) => taskCard(t), endText: '' });
+    state.lists.push(pl);
+    c.appendChild(pl.node);
+  };
+  addList(pendingList);
 
   if (noPhone.length) {
     c.appendChild(el('div', { style: { fontSize: '12px', color: '#C62828', margin: '10px 0 6px' } }, '⚠️ بلا رقم هاتف (' + noPhone.length + ')'));
-    noPhone.forEach((t) => c.appendChild(taskCard(t)));
+    addList(noPhone);
   }
 
   if (sentList.length) {
@@ -254,7 +264,7 @@ function draw() {
       className: 'btn btn--ghost', type: 'button', style: { fontSize: '12px', margin: '8px 0' },
       onClick: () => { state.showSent = !state.showSent; draw(); },
     }, (state.showSent ? '▲ إخفاء' : '▼ إظهار') + ' ما أُرسل مؤخراً (' + sentList.length + ')'));
-    if (state.showSent) sentList.forEach((t) => c.appendChild(taskCard(t)));
+    if (state.showSent) addList(sentList);
   }
 }
 
@@ -308,5 +318,8 @@ export const messagesPage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = blank(); },
+  destroy() {
+    (state.lists || []).forEach((l) => { try { l.destroy(); } catch (e) { /* اختياري */ } });
+    state = blank();
+  },
 };

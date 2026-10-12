@@ -1,12 +1,14 @@
 {
   "name": "jalabiya-v3",
-  "version": "3.3.45",
+  "version": "3.3.50",
   "private": true,
-  "description": "ورشة تفصيل الجلابيب — PWA",
-  "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "description": "ورشة تفصيل الجلابيب V3 — PWA بلا اعتماديات تشغيل",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "setup": "npm install && npx playwright install chromium",
+    "setup": "npm install --no-audit --no-fund && npx playwright install chromium",
     "dev": "node scripts/serve.cjs",
     "dev:mobile": "node scripts/serve.cjs --host",
     "check:syntax": "node scripts/check-syntax.cjs",
@@ -17,6 +19,6 @@
     "bump": "node scripts/bump-version.cjs"
   },
   "devDependencies": {
-    "playwright": "^1.56.0"
+    "playwright": "^1.50.0"
   }
 }

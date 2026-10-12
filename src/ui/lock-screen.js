@@ -21,6 +21,7 @@ import { STORE_NAMES } from '../data/schema.js';
 import * as idb from '../data/idb.js';
 import { toLatinDigits } from '../core/utils.js';
 import * as biometric from '../security/biometric.js';
+import { clearSyncIdentity } from '../sync/sync-identity.js';
 import { recoverPinWithCloud } from '../security/pin-recovery.js';
 
 const PIN_LENGTH = 4;
@@ -83,6 +84,9 @@ export async function wipeAllLocalData() {
   for (const s of STORE_NAMES) {
     await idb.clear(s);
   }
+  /* v3.3.50: جلسة Firebase المحفوظة ومفاتيح المزامنة تُمسح أيضاً، وإلا سحب الماسح بيانات المالك
+     من السحابة وهو ما زال مسجَّلاً بحسابه. الاستعادة بعدها بتسجيل الدخول بكلمة المرور. */
+  await clearSyncIdentity();
   auth.reset();
 }
 
@@ -178,7 +182,7 @@ export function buildOverlay(cfg, onSubmit, onBio, onCloudReset) {
     style: { display: 'none', flexDirection: 'column', alignItems: 'center', gap: '10px', maxWidth: '320px', fontSize: '13px', lineHeight: '1.7' },
   }, [
     ...cloudSection,
-    el('div', {}, '⚠️ لا يمكن استرجاع الرقم. الاستمرار يمسح كل بيانات التطبيق من هذا الجهاز (العملاء، الطلبات، الدفعات، والنسخ المحلية). يمكنك استعادتها بعدها من السحابة أو من ملف JSON إن كنت قد صدّرته.'),
+    el('div', {}, '⚠️ لا يمكن استرجاع الرقم. الاستمرار يمسح كل بيانات التطبيق من هذا الجهاز (العملاء، الطلبات، الدفعات، والنسخ المحلية) ويُسجِّل خروج حساب المزامنة. يمكنك استعادتها بعدها بتسجيل الدخول بحساب المزامنة وتنزيلها من السحابة، أو من ملف JSON إن كنت قد صدّرته.'),
     confirmInput,
     wipeBtn,
   ]);

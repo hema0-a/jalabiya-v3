@@ -10,6 +10,7 @@
    ========================================================================== */
 
 import * as authSync from './auth-sync.js';
+import { auth as pinAuth } from '../security/auth.js';
 import * as fsync from './firestore-sync.js';
 import * as dirty from './dirty-state.js';
 import * as tombstones from './tombstones.js';
@@ -55,10 +56,17 @@ export function onManualSyncDone() {
 }
 
 /** المستخدم الحالي لهذا الجهاز (تُحدّثه صفحة المزامنة عند تسجيل الدخول). */
+/** مفتوح = لا رقم سري، أو جلسة صالحة. أي خطأ في القراءة = مقفل (الأحوط). */
+function isDeviceUnlocked() {
+  try { return !pinAuth.hasPin() || !!pinAuth.getSession(); } catch (e) { return false; }
+}
+
 export function setUser(u) {
   user = u || null;
-  /* جلسة مفتوحة (بعد القفل): نربط الجهاز بهذا الحساب ليصلح لاسترجاع الرقم السري */
-  if (user && user.uid) authSync.bindOwner(user.uid);
+  /* جلسة مفتوحة (بعد القفل): نربط الجهاز بهذا الحساب ليصلح لاسترجاع الرقم السري.
+     ⚠️ لا نربط أبداً والتطبيق مقفل: بعد أول فتح يبقى هذا المستمع فعّالاً، فإذا قُفل التطبيق (قفل الخمول)
+     وسجّل مهاجم الدخول بحسابه من «نسيت الرقم السري» لأعاد الربط بحسابه وتجاوز تحقق الاسترجاع (v3.3.50). */
+  if (user && user.uid && isDeviceUnlocked()) authSync.bindOwner(user.uid);
   emit();
   if (user) schedule(10000);
 }

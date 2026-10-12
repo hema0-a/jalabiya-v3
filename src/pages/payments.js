@@ -11,6 +11,7 @@ import { payments } from '../data/repos/payments.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { trash } from '../data/repos/trash.js';
+import { checkAmount } from '../services/amount-guard.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewPayment } from '../ui/quick-preview.js';
@@ -204,9 +205,15 @@ function openPaymentForm(existing = null) {
         onClick: async () => {
           const customerId = customerSelect.value;
           const orderId = orderSelect.value || null;
-          const amount = Number(amountInput.value);
           if (!customerId) return toast.warning('اختر عميلاً');
-          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          const chk = checkAmount(amountInput.value);
+          if (chk.level === 'invalid') return toast.warning('أدخل مبلغاً صحيحاً');
+          if (chk.level === 'huge') return toast.warning('المبلغ كبير جداً — تأكد من عدد الأصفار');
+          if (chk.level === 'confirm' && !(await modal.confirm({
+            title: 'مبلغ كبير', message: 'المبلغ ' + formatEGP(chk.amount) + ' كبير جداً. هل الرقم صحيح؟',
+            confirmText: 'نعم، احفظ', cancelText: 'تعديل',
+          }))) return;
+          const amount = chk.amount;
 
           const data = {
             customerId,

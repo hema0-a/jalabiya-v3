@@ -9,6 +9,7 @@ import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
 import { expenses } from '../data/repos/expenses.js';
 import { trash } from '../data/repos/trash.js';
+import { checkAmount } from '../services/amount-guard.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
@@ -77,8 +78,14 @@ function openExpenseForm(existing = null) {
         variant: 'primary',
         action: 'save',
         onClick: async () => {
-          const amount = Number(amountInput.value);
-          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          const chk = checkAmount(amountInput.value);
+          if (chk.level === 'invalid') return toast.warning('أدخل مبلغاً صحيحاً');
+          if (chk.level === 'huge') return toast.warning('المبلغ كبير جداً — تأكد من عدد الأصفار');
+          if (chk.level === 'confirm' && !(await modal.confirm({
+            title: 'مبلغ كبير', message: 'المبلغ ' + formatEGP(chk.amount) + ' كبير جداً. هل الرقم صحيح؟',
+            confirmText: 'نعم، احفظ', cancelText: 'تعديل',
+          }))) return;
+          const amount = chk.amount;
           const data = {
             category: categorySelect.value,
             amount,

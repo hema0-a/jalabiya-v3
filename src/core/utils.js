@@ -57,8 +57,15 @@ export function isValidPin(pin) {
  * @returns {string} رقم بصيغة +20... أو السلسلة الأصلية
  */
 export function normalizePhone(phone) {
-  const clean = toLatinDigits(phone).replace(/\D/g, '');
+  let clean = toLatinDigits(phone).replace(/\D/g, '');
+  /* بادئة الاتصال الدولي 00 (0020…) = + */
+  if (clean.startsWith('00')) clean = clean.slice(2);
+  /* +20 (0)10… : صفر زائد بعد رمز الدولة */
+  if (/^2001[0125]\d{8}$/.test(clean)) clean = '20' + clean.slice(3);
   if (/^01[0125]\d{8}$/.test(clean)) return '+20' + clean.slice(1);
+  /* رقم بلا الصفر الأول (يحدث عند النسخ من Excel أو جهات الاتصال): 10 أرقام تبدأ 10/11/12/15.
+     كان يُترك كما هو فيصير wa.me/1012345678 = رقم أمريكي/كندي (+1) فتصل رسالة العميل لغريب. */
+  if (/^1[0125]\d{8}$/.test(clean)) return '+20' + clean;
   if (/^201[0125]\d{8}$/.test(clean)) return '+' + clean;
   return String(phone || '');
 }

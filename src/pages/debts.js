@@ -8,6 +8,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -159,6 +160,7 @@ function customerCard(c) {
 function draw() {
   const c = state.container;
   if (!c || !state.data) return;
+  if (state.pl) { state.pl.destroy(); state.pl = null; }
   clear(c);
   const { customers: list, totals, buckets } = state.data;
 
@@ -196,12 +198,14 @@ function draw() {
       state.showAll ? 'لا توجد مستحقات 🎉' : '✅ لا ديون متأخرة — كل الطلبات المسلَّمة مسدَّدة'));
     return;
   }
-  shown.forEach((x) => c.appendChild(customerCard(x)));
+  /* عرض تدريجي: بآلاف العملاء كان يُرسم كل شيء دفعة واحدة (~27 ألف عنصر وتجمّد ثوانٍ على الجوال) */
+  state.pl = createProgressiveList({ items: shown, pageSize: 20, render: (x) => customerCard(x), endText: 'تم عرض كل العملاء' });
+  c.appendChild(state.pl.node);
 }
 
 export const debtsPage = {
   async render(container) {
-    state = { container, showAll: false, data: null, workshop: {}, msgCfg: null };
+    state = { container, showAll: false, data: null, workshop: {}, msgCfg: null, pl: null };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ الحساب...'));
     try {
       await loadData();
@@ -213,5 +217,8 @@ export const debtsPage = {
         'تعذّر حساب المستحقات: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, showAll: false, data: null, workshop: {}, msgCfg: null }; },
+  destroy() {
+    if (state.pl) { try { state.pl.destroy(); } catch (e) { /* اختياري */ } }
+    state = { container: null, showAll: false, data: null, workshop: {}, msgCfg: null, pl: null };
+  },
 };
