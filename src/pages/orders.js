@@ -27,6 +27,7 @@ import { statusNotifyAction, newOrderNotifyAction } from '../services/status-not
 import { depositGuard } from '../ui/deposit-guard.js';
 import { sinceText } from '../services/message-log.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
+import { buildItemCatalog, findInCatalog } from '../services/item-catalog.js';
 import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
@@ -236,9 +237,16 @@ function syncTypesDatalist() {
   } catch (e) { /* اختياري */ }
 }
 
-function buildItemRow(item, onRemove) {
+const CUSTOM_ITEM = '__custom__';
+
+/**
+ * صف بند. اسم البند يُختار من قائمة منسدلة أصلية (تعمل على الجوال بخلاف datalist)
+ * تضم أنواع الإعدادات والأسماء المستخدمة سابقاً، مع خيار «اسم آخر» لكتابة اسم جديد.
+ * حقل النص nameIn هو مصدر القيمة دائماً (يُخفى فقط حين يُختار عنصر من القائمة).
+ */
+export function buildItemRow(item, onRemove, catalog = []) {
   const nameIn = el('input', {
-    className: 'input', type: 'text', placeholder: 'اسم البند (مثال: جلابية سادة)',
+    className: 'input', type: 'text', placeholder: 'اكتب اسم البند (مثال: جلابية سادة)',
     'aria-label': 'اسم البند', value: item.name || '',
   });
   const priceIn = el('input', {
@@ -258,22 +266,64 @@ function buildItemRow(item, onRemove) {
   qtyIn.addEventListener('input', updateTotal);
   updateTotal();
 
-  /* اختيار نوع من الإعدادات يملأ السعر إن كان فارغاً (لا يكتب فوق سعر أدخله المستخدم) */
-  nameIn.setAttribute('list', TYPES_DL_ID);
-  nameIn.addEventListener('change', () => {
-    const t = state.jalabiyaTypes.find((x) => x.name === nameIn.value.trim());
-    if (t && Number(t.price) > 0 && !(Number(priceIn.value) > 0)) {
-      priceIn.value = String(t.price);
+  /* اختيار بند يملأ السعر إن كان فارغاً أو كان معبّأً تلقائياً من اختيار سابق (لا يكتب فوق سعر أدخله المستخدم) */
+  nameIn.setAttribute('list', TYPES_DL_ID);   /* اقتراحات إضافية عند الكتابة اليدوية */
+  let autoPrice = null;
+  const applyPrice = (c) => {
+    if (!c || !(Number(c.price) > 0)) return;
+    const cur = Number(priceIn.value);
+    if (!(cur > 0) || (autoPrice !== null && cur === autoPrice)) {
+      autoPrice = Number(c.price);
+      priceIn.value = String(autoPrice);
       priceIn.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  });
+  };
+  nameIn.addEventListener('change', () => applyPrice(findInCatalog(catalog, nameIn.value)));
+
+  let nameSelect = null;
+  if (catalog.length > 0) {
+    nameSelect = el('select', { className: 'select', 'aria-label': 'اختر البند المطلوب' });
+    nameSelect.appendChild(el('option', { value: '' }, '— اختر البند المطلوب —'));
+    const optionOf = (c) => el('option', { value: c.name }, c.name + (c.price > 0 ? ' — ' + c.price + ' ج.م' : ''));
+    const group = (label, list) => {
+      if (list.length === 0) return;
+      const g = el('optgroup', { label });
+      list.forEach((c) => g.appendChild(optionOf(c)));
+      nameSelect.appendChild(g);
+    };
+    group('أنواع الجلابيب', catalog.filter((c) => c.source === 'type'));
+    group('استخدمتها في طلبات سابقة', catalog.filter((c) => c.source === 'history'));
+    nameSelect.appendChild(el('option', { value: CUSTOM_ITEM }, '✍️ اسم آخر (اكتبه)…'));
+
+    /* الحالة الابتدائية: اسم معروف → يظهر في القائمة؛ اسم غير معروف → حقل الكتابة؛ فارغ → القائمة فقط */
+    const startName = nameIn.value.trim();
+    const known = startName ? findInCatalog(catalog, startName) : null;
+    if (known) { nameSelect.value = known.name; nameIn.style.display = 'none'; }
+    else if (startName) { nameSelect.value = CUSTOM_ITEM; }
+    else { nameSelect.value = ''; nameIn.style.display = 'none'; }
+
+    nameSelect.addEventListener('change', () => {
+      const v = nameSelect.value;
+      if (v === CUSTOM_ITEM) {
+        nameIn.style.display = '';
+        nameIn.value = '';
+        nameIn.dispatchEvent(new Event('input', { bubbles: true }));
+        nameIn.focus();
+        return;
+      }
+      nameIn.style.display = 'none';
+      nameIn.value = v;
+      nameIn.dispatchEvent(new Event('input', { bubbles: true }));   /* للمسودة التلقائية */
+      applyPrice(findInCatalog(catalog, v));
+    });
+  }
 
   const labeled = (txt, input, cls) => el('label', { className: 'order-item__f ' + (cls || '') }, [
     el('span', { className: 'order-item__lbl' }, txt), input,
   ]);
 
   const row = el('div', { className: 'order-item' }, [
-    el('div', { className: 'order-item__name' }, [nameIn]),
+    el('div', { className: 'order-item__name' }, nameSelect ? [nameSelect, nameIn] : [nameIn]),
     labeled('السعر (ج.م)', priceIn),
     labeled('الكمية', qtyIn, 'order-item__f--qty'),
     el('button', {
@@ -414,12 +464,15 @@ function openOrderForm(existing = null) {
   const itemsContainer = el('div', {});
   const initialItems = isEdit ? itemsFromOrder(existing) : [{ id: uid(), name: '', price: 0, quantity: 1 }];
 
+  /* قائمة البنود المنسدلة: أنواع الإعدادات + أسماء الطلبات السابقة (بدون الطلب الجاري تعديله) */
+  const itemCatalog = buildItemCatalog(state.jalabiyaTypes, state.orders.filter((o) => !existing || o.id !== existing.id));
+
   function addItemRow(item) {
     const row = buildItemRow(item, (r) => {
       if (itemsContainer.children.length <= 1) { toast.warning('يجب بند واحد على الأقل'); return; }
       itemsContainer.removeChild(r);
       recalc();
-    });
+    }, itemCatalog);
     itemsContainer.appendChild(row);
   }
 
@@ -429,7 +482,11 @@ function openOrderForm(existing = null) {
     className: 'btn btn--sm btn--secondary btn--block', type: 'button', 'data-full': '1',
     onClick: () => {
       addItemRow({ id: uid(), name: '', price: 0, quantity: 1 }); recalc();
-      itemsContainer.lastElementChild?.querySelector('input')?.focus();   /* جاهز للكتابة فوراً */
+      /* جاهز للاختيار فوراً: القائمة المنسدلة إن وُجدت (وتُفتح مباشرة حيث يدعم المتصفح)، وإلا حقل الكتابة */
+      const lastRow = itemsContainer.lastElementChild;
+      const sel = lastRow?.querySelector('select');
+      if (sel) { sel.focus(); try { sel.showPicker && sel.showPicker(); } catch (e) { /* اختياري */ } }
+      else lastRow?.querySelector('input')?.focus();
     },
   }, '➕ إضافة بند');
 

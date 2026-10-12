@@ -50,5 +50,7 @@ import './modules/audit-3342.test.js';
 import './modules/audit-3343.test.js';
 import './modules/audit-3344.test.js';
 import './modules/audit-3345.test.js';
+import './modules/audit-3346.test.js';
+import './modules/audit-3346-row.test.js';
 
 export { runAll, register } from './registry.js';
