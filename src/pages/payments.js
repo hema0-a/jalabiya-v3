@@ -343,7 +343,7 @@ function buildPaymentCard(p) {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
   }, [
     el('div', { style: { flex: '1', minWidth: '0' } }, [
-      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
+      el('div', { 'data-customer-id': p.customerId || null, style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
       orderLabel ? el('div', {
         style: { fontSize: '11px', color: '#1F6D57', marginTop: '2px', fontWeight: '500' },
       }, '🔗 ' + orderLabel) : el('div', {

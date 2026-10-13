@@ -1015,3 +1015,10 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 .wall__empty, .wall__more { font-size: clamp(16px, 2vw, 24px); opacity: .6; padding: var(--space-m) 0; text-align: center; }
 body.wall-open { overflow: hidden; }
 @media print { .wall { display: none; } }
+
+/* عملاء هذا الأسبوع + قائمة العميل (v3.3.55) */
+.dash-row__sub--lines { white-space: pre-line; }
+[data-customer-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.customer-menu { display: flex; flex-direction: column; gap: var(--space-s); }
+.customer-menu__phone { text-align: center; font-size: var(--font-size-lg, 18px); color: var(--color-primary-dark); direction: ltr; }
+.customer-menu__item { min-height: 48px; text-decoration: none; display: flex; align-items: center; justify-content: center; }

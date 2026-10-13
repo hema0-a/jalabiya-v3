@@ -546,6 +546,9 @@ window.addEventListener('hashchange', () => {
 /* ⚡ تشغيل أولي */
 renderPage(getHashPage());
 
+/* 👤 ضغطة مطوّلة على اسم عميل ⟵ قائمة (اتصال/واتساب/ملف) */
+import('./ui/customer-menu.js').then((m) => m.installCustomerLongPress()).catch((e) => console.warn('[Main] customer menu unavailable:', e));
+
 /* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
 setTimeout(() => {
   (async () => {

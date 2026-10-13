@@ -274,7 +274,7 @@ function buildAppointmentCard(a) {
   const meta = el('div', {
     style: { display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '12px', color: '#666', marginBottom: '8px' },
   }, [
-    el('span', {}, '👤 ' + name),
+    el('span', { 'data-customer-id': a.customerId || null }, '👤 ' + name),
     a.date ? el('span', {}, '📅 ' + formatDate(a.date)) : null,
     a.date ? el('span', {}, '🕐 ' + formatTime(a.date)) : null,
   ]);

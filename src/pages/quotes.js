@@ -153,7 +153,7 @@ function card(q) {
   actions.push(btn('🗑️', () => remove(q), 'danger'));
   return el('div', { className: 'card', style: { padding: '12px', marginBottom: '8px' } }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between' } }, [
-      el('strong', {}, custName(q.customerId)),
+      el('strong', { 'data-customer-id': q.customerId || null }, custName(q.customerId)),
       el('span', { style: { fontSize: '12px', fontWeight: '700', color } }, statusText),
     ]),
     el('div', { style: { fontSize: '12px', color: '#666', margin: '4px 0 8px' } },

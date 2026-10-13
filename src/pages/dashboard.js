@@ -31,6 +31,7 @@ import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
 import { startOfDayPlus } from '../core/day-math.js';
+import { buildWeekVisits, buildVisitText, dayLabel } from '../services/week-visits.js'; /* v3.3.55 */
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -149,7 +150,7 @@ function computeFinance(paymentsList, expensesList) {
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList, referralsList] = await Promise.all([
+  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList, referralsList, allAppts] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
@@ -158,6 +159,7 @@ async function loadKPIs() {
     settings.get().catch(() => ({})),
     workerPayments.list().catch(() => []),
     referralsRepo.list().catch(() => []),
+    appointments.list().catch(() => []),
   ]);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
   const paymentsList = withDepositPayments(rawPayments, ordersList);
@@ -233,6 +235,7 @@ async function loadKPIs() {
       } catch (e) { return null; }
     })(),
     dueSoonRows: dueSoonOrders.map(withCust),
+    weekVisits: buildWeekVisits({ orders: ordersList, customers: customersList, appointments: allAppts, payments: rawPayments }),
     todayApptsRows: todayAppts.map((a) => {
       const c = a.customerId ? custMap.get(a.customerId) : null;
       return { appt: a, name: c ? c.name : '', phone: c ? (c.phone || '') : '' };
@@ -370,11 +373,12 @@ const actBtn = (label, onClick, primary = true) => el('button', {
   className: 'btn btn--sm dash-act ' + (primary ? 'btn--primary' : 'btn--secondary'), type: 'button', onClick,
 }, label);
 
-function dashRow(title, sub, actions, onOpen) {
+function dashRow(title, sub, actions, onOpen, customerId) {
   const main = el('div', { className: 'dash-row__main' }, [
     el('div', { className: 'dash-row__title' }, title),
     sub ? el('div', { className: 'dash-row__sub' }, sub) : null,
   ]);
+  if (customerId) main.setAttribute('data-customer-id', customerId);   /* ضغطة مطوّلة ⟵ قائمة العميل */
   if (onOpen) { main.setAttribute('role', 'button'); main.tabIndex = 0; main.addEventListener('click', onOpen); main.addEventListener('keydown', (e) => { if (e.key === 'Enter') onOpen(); }); }
   return el('div', { className: 'dash-row' }, [main, el('div', { className: 'dash-row__actions' }, actions.filter(Boolean))]);
 }
@@ -506,7 +510,7 @@ function buildAttention(data) {
         'جاهز منذ ' + it.ageDays + ' يوم' + (it.remaining > 0 ? ' · متبقي ' + formatEGP(it.remaining) : ' · مدفوع بالكامل'),
         [callBtn(it.phone), waBtn(it.phone, () => buildPickupText(it, wn, mc), { kind: 'pickup_ready', ref: it.orderId, customerId: it.customerId }),
           order ? actBtn('📦 تسليم', () => advanceOrder(order, it.remaining)) : null],
-        () => go('#/pickups'));
+        () => go('#/pickups'), it.customerId);
     });
     groups.push(dashGroup('📦 جاهز ولم يُستلم', pk.length, rows, '#/pickups'));
   }
@@ -520,7 +524,7 @@ function buildAttention(data) {
       return dashRow('⏰ ' + r.name,
         'متأخر ' + days + ' يوم · ' + STATUS_LABEL[r.order.status] + (r.order.amount ? ' · ' + formatEGP(r.order.amount) : ''),
         [callBtn(r.phone), next ? actBtn(next.label, () => advanceOrder(r.order, r.remaining)) : null],
-        () => go('#/orders'));
+        () => go('#/orders'), r.customerId);
     });
     groups.push(dashGroup('⏰ متأخر عن موعد التسليم', od.length, rows, '#/orders'));
   }
@@ -535,7 +539,7 @@ function buildAttention(data) {
         [callBtn(c.phone),
           waBtn(c.phone, () => buildReminderText(c.name, formatEGP(c.overdue), wn, mc), { kind: 'debt_reminder', customerId: c.customerId }),
           o ? actBtn('💰 دفعة', () => quickPay({ customerId: c.customerId, orderId: o.id, name: c.name, remaining: o.remaining })) : null],
-        () => go('#/debts'));
+        () => go('#/debts'), c.customerId);
     });
     groups.push(dashGroup('💸 مستحقات متأخرة', db.length, rows, '#/debts'));
   }
@@ -577,7 +581,7 @@ function buildDueSoonSection(rows) {
       (o.status === 'ready' ? '✅ جاهز للتسليم' : '⏳ ' + (o.status === 'pending' ? 'قيد الانتظار' : 'قيد التنفيذ')) +
         (o.dueDate ? ' · 📅 ' + formatDate(o.dueDate) : '') + (o.amount ? ' · ' + formatEGP(o.amount) : ''),
       [callBtn(r.phone), next ? actBtn(next.label, () => advanceOrder(o, r.remaining), false) : null],
-      () => go('#/orders')));
+      () => go('#/orders'), o.customerId));
   });
   return card;
 }
@@ -599,8 +603,35 @@ function buildTodayAppointmentsSection(rows) {
       (done ? '✔ ' : '🕐 ') + formatTime(a.date) + ' — ' + (a.title || 'موعد'),
       r.name || null,
       [callBtn(r.phone), done ? null : actBtn('✔ تم', () => markApptDone(a), false)],
-      () => go('#/appointments')));
+      () => go('#/appointments'), a.customerId));
   });
+  return card;
+}
+
+const WEEK_ROWS = 6;
+const REASON_ICON = { appt: '🗓️', due: '📅', ready: '📦' };
+
+function buildWeekVisitsSection(rows, wn) {
+  const card = el('div', { className: 'card dash-week', style: { marginBottom: '16px' } });
+  card.appendChild(el('div', { className: 'card__header' }, [
+    el('h3', { className: 'card__title' }, '👣 عملاء هذا الأسبوع'),
+    el('span', { className: 'badge badge--info' }, String(rows.length)),
+  ]));
+  if (rows.length === 0) {
+    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا حضور متوقّع خلال 7 أيام.'));
+    return card;
+  }
+  rows.slice(0, WEEK_ROWS).forEach((r) => {
+    const sub = r.reasons.slice(0, 3).map((x) => REASON_ICON[x.type] + ' ' + dayLabel(x.ts) + ' — ' + x.label).join('\n');
+    const row = dashRow(
+      r.name,
+      sub + (r.remaining > 0 ? '\n💰 المتبقي ' + formatEGP(r.remaining) : ''),
+      [callBtn(r.phone), waBtn(r.phone, () => buildVisitText(r, wn), { kind: 'week_visit', customerId: r.customerId })],
+      () => go('#/customers'), r.customerId);
+    row.querySelector('.dash-row__sub')?.classList.add('dash-row__sub--lines');
+    card.appendChild(row);
+  });
+  if (rows.length > WEEK_ROWS) card.appendChild(el('p', { className: 'dash-note', style: { margin: 'var(--space-s) 0 0' } }, '+' + (rows.length - WEEK_ROWS) + ' آخرون'));
   return card;
 }
 
@@ -619,7 +650,7 @@ function buildRecentCustomersSection(list, wn) {
       (c.name || 'بدون اسم') + (c.vip ? '  ⭐ VIP' : ''),
       c.phone || null,
       [callBtn(c.phone), waBtn(c.phone, () => 'السلام عليكم ' + (c.name || '') + '،' + (wn ? ' معكم ' + wn + '.' : ''))],
-      () => go('#/customers')));
+      () => go('#/customers'), c.id));
   });
   return card;
 }
@@ -646,6 +677,9 @@ export const dashboardPage = {
 
     /* 📅 مواعيد اليوم */
     container.appendChild(buildTodayAppointmentsSection(data.todayApptsRows));
+
+    /* 👣 عملاء هذا الأسبوع */
+    container.appendChild(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
 
     /* ⏰ طلبات مستحقة */
     container.appendChild(buildDueSoonSection(data.dueSoonRows));

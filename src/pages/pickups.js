@@ -39,7 +39,7 @@ function itemCard(i) {
   const lastAt = lastSentIn(loadLog(), { kinds: ['pickup_ready', 'ready'], ref: i.orderId });
   return el('div', { className: 'card', style: { padding: '12px', marginBottom: '8px' } }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
-      el('strong', {}, i.name),
+      el('strong', { 'data-customer-id': i.customerId || null }, i.name),
       el('span', { style: { fontSize: '12px', fontWeight: '700', color: i.late ? '#C62828' : '#2E7D32' } },
         i.ageDays === 0 ? 'جاهز اليوم' : 'جاهز منذ ' + i.ageDays + ' يوم'),
     ]),

@@ -146,7 +146,7 @@ function customerCard(c) {
 
   return el('div', { className: 'card', style: { padding: '12px', marginBottom: '10px' } }, [
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' } }, [
-      el('strong', {}, c.name),
+      el('strong', { 'data-customer-id': c.customerId || null }, c.name),
       el('strong', { style: { color: hasOverdue ? '#C62828' : '#555' } },
         hasOverdue ? formatEGP(c.overdue) : formatEGP(c.pending)),
     ]),

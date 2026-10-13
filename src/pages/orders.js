@@ -1223,7 +1223,7 @@ function buildOrderCard(o) {
   const headerChildren = [
     thumb,
     el('div', { style: { flex: '1', minWidth: '0' } }, [
-      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
+      el('div', { 'data-customer-id': o.customerId || null, style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
       phone ? el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, phone) : null,
     ]),
     el('span', { className: 'badge ' + statusInfo.badge }, statusInfo.label),
