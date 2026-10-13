@@ -15,10 +15,10 @@ import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
 import { customers as customersRepo } from '../data/repos/customers.js';
 import { settings as settingsRepo } from '../data/repos/settings.js';
+import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
-import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { orderPaidBreakdown, withDepositPayments } from '../services/payments-view.js';
 
@@ -195,6 +195,14 @@ export async function shareCatalog(opts = {}) {
     return;
   }
 
+  /* صور الأنواع المربوطة بمعرض الأعمال */
+  const picById = new Map();
+  try {
+    const items = await portfolioRepo.list();
+    items.forEach((it) => { if (it && it.id) picById.set(it.id, it); });
+  } catch { /* بدون صور */ }
+  const picOf = (t) => (t.portfolioId && picById.get(t.portfolioId)) || null;
+
   const checks = [];
   const area = el('textarea', {
     className: 'textarea', rows: '10',
@@ -225,8 +233,11 @@ export async function shareCatalog(opts = {}) {
     checks.push({ cb, t });
     list.appendChild(el('label', {
       style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', padding: '4px 0' },
-    }, [cb, el('span', { style: { flex: '1' } }, t.name),
-      el('span', { style: { color: '#B8863B', fontWeight: '600' } }, formatEGP(t.price))]));
+    }, [cb,
+      picOf(t) ? el('img', { src: picOf(t).thumbnail || picOf(t).image, alt: '',
+        style: { width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: '0' } }) : null,
+      el('span', { style: { flex: '1' } }, t.name),
+      el('span', { style: { color: '#B8863B', fontWeight: '600' } }, formatEGP(t.price))].filter(Boolean)));
   });
 
   const body = el('div', {}, [
@@ -244,13 +255,37 @@ export async function shareCatalog(opts = {}) {
         if (opts.phone) { _whatsapp(opts.phone, text); return; }
         window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
       } },
+    checks.some(({ t }) => picOf(t)) ? { text: '🖼️ مشاركة بالصور', variant: 'secondary',
+      onClick: async () => {
+        /* مشاركة النظام (Web Share) هي الطريقة الوحيدة لإرفاق صور بواتساب؛ تُرسل الصور مع النص لأي تطبيق/جهة تختارها */
+        const chosen = checks.filter(({ cb, t }) => cb.checked && picOf(t)).slice(0, 10);
+        try {
+          const files = [];
+          for (const { t } of chosen) {
+            const it = picOf(t);
+            const blob = await (await fetch(it.image || it.thumbnail)).blob();
+            const ext = (blob.type && blob.type.split('/')[1]) || 'jpg';
+            files.push(new File([blob], (t.name || 'jalabiya') + '.' + ext, { type: blob.type || 'image/jpeg' }));
+          }
+          if (files.length && navigator.canShare && navigator.canShare({ files })) {
+            await navigator.share({ files, text: area.value });
+            return;
+          }
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;   /* المستخدم ألغى المشاركة */
+          console.warn('[catalog share]', e);
+        }
+        /* المتصفح لا يدعم مشاركة الملفات: نرجع لنص واتساب */
+        if (opts.phone) _whatsapp(opts.phone, area.value);
+        else window.open('https://wa.me/?text=' + encodeURIComponent(area.value), '_blank', 'noopener,noreferrer');
+      } } : null,
     { text: '📋 نسخ', variant: 'secondary',
       onClick: async () => {
         try { await navigator.clipboard.writeText(area.value); }
         catch { area.select(); try { document.execCommand('copy'); } catch { /* ignore */ } }
       } },
     _closeAction(),
-  ];
+  ].filter(Boolean);
   modal.open({ title: '📋 كتالوج الأسعار', body, actions, closable: true, variant: 'sheet' });
 }
 

@@ -11,6 +11,7 @@ import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { shareCatalog } from '../../ui/quick-preview.js';
+import { portfolio as portfolioRepo } from '../../data/repos/portfolio.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
@@ -210,7 +211,7 @@ const jalabiyaTypesSection = {
         }, [
           el('div', { style: { flex: '1' } }, [
             el('div', { style: { fontSize: '14px', fontWeight: '500' } }, t.name),
-            t.price ? el('div', { style: { fontSize: '11px', color: '#B8863B' } }, t.price + ' ج.م') : null,
+            t.price ? el('div', { style: { fontSize: '11px', color: '#B8863B' } }, t.price + ' ج.م' + (t.portfolioId ? ' · 🖼️' : '')) : null,
           ]),
           el('button', {
             className: 'btn btn--sm btn--ghost', type: 'button',
@@ -258,9 +259,68 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   notesInput.value = existing.notes || '';
 
+  /* --- صورة من معرض الأعمال (v3.3.51): تُربط بالنوع وتظهر في كتالوج الأسعار --- */
+  let portfolioId = existing.portfolioId || null;
+  const picPreview = el('div', {
+    style: { width: '96px', height: '96px', borderRadius: '10px', background: '#F6F1E6',
+      border: '2px dashed #E5DDD0', overflow: 'hidden', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: '#999' },
+  }, 'بدون صورة');
+  async function refreshPic() {
+    clear(picPreview);
+    let item = null;
+    if (portfolioId) { try { item = await portfolioRepo.find(portfolioId); } catch { item = null; } }
+    if (item && (item.thumbnail || item.image)) {
+      picPreview.appendChild(el('img', { src: item.thumbnail || item.image, alt: item.title || '',
+        style: { width: '100%', height: '100%', objectFit: 'cover' } }));
+    } else {
+      if (portfolioId) portfolioId = null;   /* الصورة اتحذفت من المعرض */
+      picPreview.textContent = 'بدون صورة';
+    }
+  }
+  async function openPicker() {
+    let items = [];
+    try { items = await portfolioRepo.list(); } catch { items = []; }
+    items = items.filter((x) => x && (x.thumbnail || x.image));
+    const grid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' } });
+    if (items.length === 0) {
+      grid.appendChild(el('div', { style: { gridColumn: '1 / -1', fontSize: '13px', color: '#666', textAlign: 'center', padding: '12px' } },
+        'معرض الأعمال فاضي. أضف صوراً من صفحة معرض الأعمال أولاً.'));
+    }
+    items.forEach((it) => {
+      grid.appendChild(el('button', {
+        type: 'button',
+        style: { border: it.id === portfolioId ? '3px solid #1F6D57' : '1px solid #E5DDD0',
+          borderRadius: '10px', padding: '0', overflow: 'hidden', background: '#fff', cursor: 'pointer' },
+        onClick: () => { portfolioId = it.id; pickerHandle.close(); refreshPic(); },
+      }, [
+        el('img', { src: it.thumbnail || it.image, alt: it.title || '',
+          style: { width: '100%', height: '90px', objectFit: 'cover', display: 'block' } }),
+        el('div', { style: { fontSize: '11px', padding: '3px 4px', color: '#123C2F' } }, it.title || ''),
+      ]));
+    });
+    const pickerHandle = modal.open({
+      title: '🖼️ اختر صورة من المعرض', body: grid, closable: true, variant: 'sheet',
+      actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => pickerHandle.close() }],
+    });
+  }
+  const picField = el('div', { className: 'field' }, [
+    el('label', { className: 'field__label' }, '🖼️ صورة النوع (من معرض الأعمال)'),
+    el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
+      picPreview,
+      el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, [
+        el('button', { type: 'button', className: 'btn btn--sm btn--secondary', onClick: openPicker }, 'اختيار من المعرض'),
+        el('button', { type: 'button', className: 'btn btn--sm btn--ghost',
+          onClick: () => { portfolioId = null; refreshPic(); } }, 'إزالة الصورة'),
+      ]),
+    ]),
+  ]);
+  refreshPic();
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'السعر (ج.م)'), priceInput]),
+    picField,
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
 
@@ -278,6 +338,7 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
             name,
             price: Number(priceInput.value) || 0,
             notes: notesInput.value.trim(),
+            portfolioId: portfolioId || null,
           };
           if (isEdit) {
             types[editIdx] = { ...types[editIdx], ...data };
