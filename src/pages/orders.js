@@ -31,6 +31,10 @@ import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../servi
 import { buildItemCatalog, findInCatalog } from '../services/item-catalog.js';
 import { assessOrderRisks } from '../services/order-risk.js';
 import {
+  deliveryProgress, canPartialDeliver, deliveryBadgeText, planDelivery, applyDelivery,
+  completeRemaining, sanitizeDeliveries,
+} from '../services/partial-delivery.js';
+import {
   getDeadlineInfo, getPickupInfo, formatDuration,
   getTotalWorkTime, getActiveSession, startSession, stopSession, isPastDue,
 } from '../services/order-timing.js';
@@ -750,6 +754,21 @@ function openOrderForm(existing = null) {
             data.deliveredAt = null;
           }
 
+          /* التسليم الجزئي: تتبع التسليمات المحفوظة تعديل البنود والحالة */
+          if (isEdit && Array.isArray(existing.deliveries) && existing.deliveries.length > 0) {
+            if (existing.status === 'delivered' && data.status !== 'delivered') {
+              data.deliveries = [];                              /* إعادة فتح الطلب: يُبدأ التسليم من جديد */
+            } else {
+              const cleaned = sanitizeDeliveries(existing, data.items);
+              if (data.status === 'delivered') {
+                const cr = completeRemaining({ ...existing, ...data, deliveries: cleaned, status: 'ready' }, { now: data.deliveredAt });
+                data.deliveries = cr.deliveries || cleaned;      /* الحالة «تم التسليم» تُسلِّم المتبقي */
+              } else {
+                data.deliveries = cleaned;
+              }
+            }
+          }
+
           /* خطة العمل على أساس الحد اليومي: تُحفظ مع الطلب فتُحسب سعة كل يوم بدقة (حتى الجزئية) */
           const planLimit = state.scheduleConfig.dailyOrderLimit || 0;
           const planActive = data.status !== 'delivered' && data.status !== 'cancelled';
@@ -928,9 +947,14 @@ async function advanceStatus(order) {
   if (!(await depositGuard(order, next))) return;   /* تحذير العربون قبل بدء التنفيذ */
   try {
     const patch = { status: next };
-    if (next === 'delivered' && !order.deliveredAt) patch.deliveredAt = Date.now();
+    if (next === 'delivered') {
+      const cr = completeRemaining(order);                    /* يُسلِّم المتبقي ويكمل سجل التسليم الجزئي إن وُجد */
+      patch.deliveredAt = order.deliveredAt || cr.deliveredAt;
+      if (cr.deliveries) patch.deliveries = cr.deliveries;
+    }
     await orders.update(order.id, patch);
-    const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null };
+    const prev = { status: order.status, deliveredAt: order.deliveredAt ?? null, readyAt: order.readyAt ?? null,
+      deliveries: order.deliveries ?? null };
     /* زر «📱 إشعار العميل» في نفس التنبيه (إن كان للحالة قالب والعميل له هاتف) */
     const notify = await statusNotifyAction({ ...order, ...patch }, next);
     toast.undo('الحالة: ' + STATUS_MAP[next].label, async () => {
@@ -961,9 +985,12 @@ async function shareInvoiceImage(order) {
 }
 
 async function deliverWithSignature(order) {
+  const prog = deliveryProgress(order);
   const confirmed = await modal.confirm({
     title: 'تأكيد التسليم',
-    message: 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟',
+    message: prog.state === 'partial'
+      ? 'سيُسلَّم المتبقي (' + prog.remainingUnits + ' من ' + prog.totalUnits + ' قطعة) ويكتمل الطلب. هل العميل في انتظار التسليم الآن؟'
+      : 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟',
     confirmText: 'نعم، ابدأ التوقيع', cancelText: 'إلغاء',
   });
   if (!confirmed) return;
@@ -973,10 +1000,109 @@ async function deliverWithSignature(order) {
   });
   if (!signature) { toast.info('تم إلغاء التسليم'); return; }
   try {
-    await orders.update(order.id, { status: 'delivered', signature, deliveredAt: Date.now() });
+    await orders.update(order.id, completeRemaining(order, { signature }));
     toast.success('تم التسليم مع التوقيع ✅');
     await refreshAll();
   } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
+}
+
+/**
+ * نافذة التسليم الجزئي: اختيار كمية كل بند يستلمها العميل الآن.
+ * تقرأ الطلب من قاعدة البيانات عند التأكيد (لا من نسخة البطاقة) حتى لا تُسلَّم قطعة مرتين.
+ */
+export function openPartialDelivery(order) {
+  const prog = deliveryProgress(order);
+  const c = state.customerMap[order.customerId];
+  const inputs = new Map();
+
+  const summary = el('div', { role: 'status', style: { marginTop: '10px', fontSize: '13px', fontWeight: '600', minHeight: '20px' } });
+  const readSelection = () => {
+    const sel = {};
+    inputs.forEach((inp, id) => { sel[id] = inp.value === '' ? 0 : Number(inp.value); });
+    return sel;
+  };
+  const refresh = () => {
+    const plan = planDelivery(order, readSelection());
+    if (!plan.ok) {
+      const anyTyped = Array.from(inputs.values()).some((i) => Number(i.value) > 0);
+      summary.textContent = anyTyped ? '⚠️ ' + plan.error : 'اختر الكميات التي يستلمها العميل الآن';
+      summary.style.color = anyTyped ? '#B3261E' : '#666';
+      return;
+    }
+    const left = prog.remainingUnits - plan.units;
+    summary.textContent = plan.completes
+      ? '✅ هذه آخر الأجزاء — سيكتمل الطلب (' + plan.units + ' قطعة)'
+      : '🚚 سيُسلَّم ' + plan.units + ' قطعة — يتبقى ' + left;
+    summary.style.color = plan.completes ? '#2E7D32' : '#0B5A8A';
+  };
+
+  const rows = prog.lines.filter((l) => l.remaining > 0).map((l) => {
+    const input = el('input', {
+      type: 'number', className: 'input', min: '0', max: String(l.remaining), step: '1',
+      inputmode: 'numeric', value: '0', 'aria-label': 'كمية ' + l.name,
+      style: { width: '84px', textAlign: 'center' },
+    });
+    input.addEventListener('input', refresh);
+    inputs.set(l.id, input);
+    return el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #EFE7D8' } }, [
+      el('div', { style: { flex: '1', minWidth: '0' } }, [
+        el('div', { style: { fontWeight: '600', color: '#123C2F' } }, l.name),
+        el('div', { style: { fontSize: '12px', color: '#666' } },
+          'المتبقي ' + l.remaining + ' من ' + l.quantity + (l.delivered > 0 ? ' · سُلِّم ' + l.delivered : '')),
+      ]),
+      input,
+      el('button', {
+        type: 'button', className: 'btn btn--sm btn--ghost', title: 'تسليم كل المتبقي من هذا البند',
+        onClick: () => { input.value = String(l.remaining); refresh(); },
+      }, 'الكل'),
+    ]);
+  });
+
+  const noteInput = el('input', { type: 'text', className: 'input', placeholder: 'ملاحظة (اختياري)', style: { marginTop: '10px' } });
+  const sigBox = el('input', { type: 'checkbox', id: 'partial-sig' });
+  sigBox.checked = true;
+  const sigRow = el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px' } },
+    [sigBox, 'طلب توقيع العميل على الاستلام']);
+
+  const body = el('div', {}, [
+    el('div', { style: { fontSize: '13px', color: '#555', marginBottom: '6px' } },
+      (c ? c.name + ' — ' : '') + 'سُلِّم ' + prog.deliveredUnits + ' من ' + prog.totalUnits + ' قطعة حتى الآن'),
+    ...rows, noteInput, sigRow, summary,
+  ]);
+  refresh();
+
+  modal.open({
+    title: '🚚 تسليم جزئي', body, closable: true,
+    actions: [
+      { text: 'إلغاء', variant: 'ghost', onClick: () => modal.close() },
+      {
+        text: '🚚 تأكيد التسليم', variant: 'primary',
+        onClick: async () => {
+          const sel = readSelection();
+          const fresh = (await orders.find(order.id)) || order;       /* أحدث نسخة من قاعدة البيانات */
+          const plan = planDelivery(fresh, sel);
+          if (!plan.ok) { toast.warning(plan.error); return; }
+          let signature = null;
+          if (sigBox.checked) {
+            signature = await openSignaturePad({
+              title: '✍️ توقيع استلام ' + plan.units + ' قطعة',
+              hint: 'وقّع هنا لاستلام هذا الجزء — سيُحفظ التوقيع مع التسليم',
+            });
+            if (!signature) { toast.info('تم إلغاء التسليم'); return; }
+          }
+          const res = applyDelivery(fresh, sel, { note: noteInput.value, signature });
+          if (!res.ok) { toast.warning(res.error); return; }
+          try {
+            await orders.update(order.id, res.patch);
+            modal.close();
+            toast.success(res.completes ? 'اكتمل تسليم الطلب ✅'
+              : 'تم تسليم ' + res.units + ' قطعة — يتبقى ' + res.remainingUnits);
+            await refreshAll();
+          } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
+        },
+      },
+    ],
+  });
 }
 
 function showSignature(dataUrl) {
@@ -1243,6 +1369,13 @@ function buildOrderCard(o) {
       style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
         borderRadius: '10px', color: pickup.color, background: pickup.bg },
     }, pickup.icon + ' ' + pickup.label));
+    const partialText = deliveryBadgeText(o);
+    if (partialText) {
+      badgesRow.appendChild(el('span', {
+        style: { fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '10px',
+          color: '#0B5A8A', background: '#E3F2FD' },
+      }, partialText));
+    }
     const risk = state.riskMap && state.riskMap.get(o.id);
     if (risk) {
       const danger = risk.level === 'danger';
@@ -1321,11 +1454,19 @@ function buildOrderCard(o) {
     }, isRunning ? '⏸️' : '⏱️'));
   }
 
+  if (canPartialDeliver(o)) {
+    actionChildren.push(el('button', {
+      className: 'btn btn--sm btn--secondary',
+      title: 'تسليم جزء من الطلب للعميل',
+      onClick: () => openPartialDelivery(o),
+    }, '🚚 جزئي'));
+  }
+
   if (canDeliver) {
     actionChildren.push(el('button', {
       className: 'btn btn--sm btn--primary',
       onClick: () => deliverWithSignature(o),
-    }, '✅ تسليم'));
+    }, deliveryProgress(o).state === 'partial' ? '✅ تسليم المتبقي' : '✅ تسليم'));
   }
 
   if (!isDelivered) {

@@ -21,6 +21,7 @@ import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
+import { deliveryProgress } from '../services/partial-delivery.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { orderPaidBreakdown, withDepositPayments } from '../services/payments-view.js';
 
@@ -541,6 +542,19 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     )),
   ] : [];
 
+  /* التسليم الجزئي: التقدم وسجل التسليمات (يظهر فقط إن وُجدت تسليمات) */
+  const dprog = deliveryProgress(order);
+  const deliverySection = dprog.history.length > 0 ? [
+    _section('🚚 التسليم (' + dprog.deliveredUnits + ' من ' + dprog.totalUnits + ' قطعة)'),
+    ...dprog.history.map((h) => _listItem(
+      formatDate(h.at) + ' — ' + h.units + ' قطعة' + (h.hasSignature ? ' ✍️' : ''),
+      h.items.map((x) => x.qty + ' × ' + x.name).join('، ') + (h.note ? ' · ' + h.note : '')
+    )),
+    dprog.remainingUnits > 0
+      ? _row('⏳', 'المتبقي للتسليم', dprog.remainingUnits + ' قطعة · ' + formatEGP(dprog.remainingValue))
+      : null,
+  ] : [];
+
   const subtotal = Number(order.subtotal) || 0;
   const discountAmount = Number(order.discountAmount) || 0;
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
@@ -578,6 +592,7 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     order.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(order.createdAt)) : null,
 
     ...itemsSection,
+    ...deliverySection,
     ...breakdown,
     ...extraFeesList,
 
