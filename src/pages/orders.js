@@ -21,6 +21,7 @@ import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad } from '../ui/signature-pad.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
+import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { orderPaidBreakdown } from '../services/payments-view.js';
 import { statusNotifyAction, newOrderNotifyAction } from '../services/status-notify.js';
@@ -946,6 +947,18 @@ async function printInvoice(order) {
   catch (err) { toast.danger('فشل فتح نافذة الطباعة'); }
 }
 
+/** مشاركة الفاتورة كصورة (واتساب): قائمة المشاركة على الجوال، أو تنزيل الصورة كبديل. */
+async function shareInvoiceImage(order) {
+  const c = state.customerMap[order.customerId] || null;
+  try {
+    const r = await shareOrderInvoiceImage(order, c);
+    if (r === 'downloaded') toast.info('تم حفظ صورة الفاتورة — أرفقها في محادثة واتساب');
+  } catch (err) {
+    console.error('[orders shareInvoiceImage]', err);
+    toast.danger('تعذّر إنشاء صورة الفاتورة');
+  }
+}
+
 async function deliverWithSignature(order) {
   const confirmed = await modal.confirm({
     title: 'تأكيد التسليم',
@@ -1293,6 +1306,8 @@ function buildOrderCard(o) {
       onClick: () => openOrderForm(o) }, '✏️'),
     el('button', { className: 'btn btn--sm btn--ghost',
       title: 'طباعة', onClick: () => printInvoice(o) }, '🖨️'),
+    el('button', { className: 'btn btn--sm btn--ghost',
+      title: 'مشاركة الفاتورة كصورة', 'aria-label': 'مشاركة الفاتورة كصورة', onClick: () => shareInvoiceImage(o) }, '🖼️'),
     phone ? el('button', { className: 'btn btn--sm btn--ghost',
       title: 'رسالة', onClick: () => openMessageMenu(o) }, '📱') : null,
   ].filter(Boolean);

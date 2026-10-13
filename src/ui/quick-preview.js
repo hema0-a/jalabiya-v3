@@ -10,6 +10,7 @@
 
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
+import { toast } from './toast.js';
 import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
@@ -20,6 +21,7 @@ import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
+import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { orderPaidBreakdown, withDepositPayments } from '../services/payments-view.js';
 
 /* ============================================================
@@ -599,6 +601,17 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
         modal.close();
         try { printOrderInvoice(order, customer); }
         catch (e) { console.error('[previewOrder print]', e); }
+      } },
+    { text: '🖼️ فاتورة كصورة', variant: 'secondary',
+      onClick: async () => {
+        modal.close();
+        try {
+          const r = await shareOrderInvoiceImage(order, customer);
+          if (r === 'downloaded') toast.info('تم حفظ صورة الفاتورة — أرفقها في محادثة واتساب');
+        } catch (e) {
+          console.error('[previewOrder share image]', e);
+          toast.danger('تعذّر إنشاء صورة الفاتورة');
+        }
       } },
     customer && customer.phone ? { text: '📱 واتساب', variant: 'secondary',
       onClick: () => _whatsapp(customer.phone, 'بخصوص طلبك #' + String(order.id).slice(-6)) } : null,

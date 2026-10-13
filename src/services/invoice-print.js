@@ -285,15 +285,14 @@ function buildFooter(workshop) {
    ========================================================== */
 
 /**
- * طباعة فاتورة A4 لطلب واحد.
- * يدعم البنود المتعددة + الخصم + الرسوم الإضافية + المقدم.
- * @param {Object} order — سجل الطلب
- * @param {Object} [customer] — سجل العميل (اختياري)
- * @returns {Promise<void>}
+ * نموذج بيانات فاتورة الطلب (المجاميع والمدفوع والمتبقي) — مصدر واحد للطباعة وللصورة،
+ * فلا يختلف رقم في الصورة المرسلة للعميل عن الفاتورة المطبوعة.
+ * @param {Object} order
+ * @returns {Promise<{workshop:Object, items:Array, subtotal:number, discountAmount:number,
+ *   extraFeesTotal:number, total:number, deposit:number, paidLabel:string, remaining:number,
+ *   statusInfo:{label:string,cls:string}}>}
  */
-export async function printOrderInvoice(order, customer) {
-  if (!order) return;
-
+export async function buildOrderInvoiceModel(order) {
   const workshop = await getWorkshop();
 
   /* البنود (توافق خلفي) */
@@ -316,6 +315,21 @@ export async function printOrderInvoice(order, customer) {
   const remaining = Math.max(0, total - deposit);
 
   const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
+  return { workshop, items, subtotal, discountAmount, extraFeesTotal, total, deposit, paidLabel, remaining, statusInfo };
+}
+
+/**
+ * طباعة فاتورة A4 لطلب واحد.
+ * يدعم البنود المتعددة + الخصم + الرسوم الإضافية + المقدم.
+ * @param {Object} order — سجل الطلب
+ * @param {Object} [customer] — سجل العميل (اختياري)
+ * @returns {Promise<void>}
+ */
+export async function printOrderInvoice(order, customer) {
+  if (!order) return;
+
+  const { workshop, items, subtotal, discountAmount, extraFeesTotal, total, deposit, paidLabel, remaining, statusInfo } =
+    await buildOrderInvoiceModel(order);
 
   /* صفوف البنود */
   let itemsRows = '';
