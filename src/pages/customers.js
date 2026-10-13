@@ -261,12 +261,32 @@ function openCustomerForm(existing = null) {
     isEdit ? existing.measurements : null
   );
 
+  /* --- ملف العيلة (v3.3.51): ربط العميل برب أسرة. يُسمح فقط برب أسرة ليس تابعاً لغيره،
+         ولا يُسمح لمن له أفراد تابعون أن يصير تابعاً (لا سلاسل). --- */
+  const hasMembers = isEdit && state.customers.some((x) => x.familyHeadId === existing.id);
+  const familySelect = el('select', { className: 'select' });
+  familySelect.appendChild(el('option', { value: '' }, 'بدون (عميل مستقل)'));
+  state.customers
+    .filter((x) => (!isEdit || x.id !== existing.id) && !x.familyHeadId)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ar'))
+    .forEach((x) => familySelect.appendChild(el('option', { value: x.id }, x.name || '—')));
+  if (isEdit && existing.familyHeadId) familySelect.value = existing.familyHeadId;
+  if (hasMembers) familySelect.disabled = true;
+  const familyField = el('div', { className: 'field' }, [
+    el('label', { className: 'field__label' }, '👨‍👩‍👧 تابع لعيلة (رب الأسرة)'),
+    familySelect,
+    el('div', { style: { fontSize: '11px', color: '#999', marginTop: '3px' } },
+      hasMembers ? 'هذا العميل رب أسرة لديه أفراد تابعون، فلا يمكن ربطه بعميل آخر.'
+        : 'اختياري — مثلاً ابن يتبع أباه: تظهر مقاساته في ملف الأب ويُجمع حسابهم.'),
+  ]);
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'رقم الهاتف'), phoneInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العنوان'), addressInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
     el('div', { className: 'field' }, [vipToggle]),
+    familyField,
     imagePicker.node,
     measurements.node,
   ]);
@@ -291,6 +311,7 @@ function openCustomerForm(existing = null) {
             vip: vipCheckbox.checked,
             image: imagePicker.getValue() || '',
             measurements: measurements.getValues(),
+            familyHeadId: familySelect.value || '',
           };
           try {
             if (isEdit) { await customers.update(existing.id, data); toast.success('تم تحديث العميل'); }
@@ -522,6 +543,18 @@ function buildCustomerCard(c) {
         padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
       },
     }, '📏 مقاسات'));
+  }
+
+  /* شارة العيلة */
+  const headOf = c.familyHeadId ? state.customers.find((x) => x.id === c.familyHeadId) : null;
+  const membersCount = state.customers.filter((x) => x.familyHeadId === c.id).length;
+  if (headOf || membersCount > 0) {
+    badges.appendChild(el('span', {
+      style: {
+        fontSize: '11px', color: '#6A1B9A', background: '#F3E5F5',
+        padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
+      },
+    }, headOf ? '👨‍👩‍👧 تابع لـ ' + headOf.name : '👨‍👩‍👧 عيلة (' + membersCount + ')'));
   }
 
   if (ordersCount > 0) {
