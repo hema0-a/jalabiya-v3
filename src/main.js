@@ -406,6 +406,15 @@ try {
   console.warn('[FAB] فشل التثبيت:', err);
 }
 
+/* ☀️ ملخص الصباح: مرة كل يوم عند أول فتح (لا يظهر في #/tests ولا #/wall) */
+setTimeout(() => {
+  try {
+    const base = String(location.hash || '').replace(/^#\/?/, '').split('/')[0] || 'dashboard';
+    if (base === 'tests' || base === 'wall') return;
+    import('./ui/morning-summary.js').then((m) => m.maybeShowMorningSummary()).catch((e) => console.warn('[Morning] unavailable:', e));
+  } catch (e) { console.warn('[Morning] failed:', e); }
+}, 2500);
+
 /* 📱 شريط التنقّل السفلي (يد واحدة) — جوال فقط، ويُوقَف من الإعدادات */
 try {
   import('./ui/bottom-nav.js').then((m) => m.mountBottomNav(layout)).catch((e) => console.warn('[BottomNav] unavailable:', e));

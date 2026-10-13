@@ -1048,3 +1048,15 @@ body.wall-open { overflow: hidden; }
   body.has-bottom-nav .fab { display: none !important; }
   body.has-bottom-nav .app-shell__content { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* سحب البطاقة + ملخص الصباح + أزرار الشريط (v3.3.58) */
+.swipe-card { position: relative; will-change: transform; }
+.swipe-card[data-swipe="left"] { box-shadow: inset 6px 0 0 var(--color-primary), var(--shadow-m, 0 4px 12px rgba(0,0,0,.15)); }
+.swipe-card[data-swipe="right"] { box-shadow: inset -6px 0 0 #25D366, var(--shadow-m, 0 4px 12px rgba(0,0,0,.15)); }
+.swipe-card[data-swipe="left-hint"], .swipe-card[data-swipe="right-hint"] { opacity: .92; }
+.morning__lead { margin: 0 0 var(--space-m); font-size: var(--font-size-md); color: var(--color-primary-dark); }
+.morning__row { padding: var(--space-s) 0; border-bottom: 1px solid var(--color-border); }
+.morning__row:last-child { border-bottom: none; }
+.morning__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-s); font-weight: var(--font-weight-bold); }
+.morning__names { font-size: var(--font-size-sm); color: var(--color-primary-light); margin-top: 2px; overflow-wrap: anywhere; }
+.settings-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: var(--space-s); }

@@ -13,7 +13,8 @@
 import { applyAppearance, applyFont, applyFontSize, ensureAllFonts } from '../../ui/display-settings.js';
 import { isDarkMode, setDarkMode } from '../../ui/theme.js';
 import { isClientMode, setClientMode } from '../../ui/client-mode.js';
-import { isBottomNavEnabled, setBottomNavEnabled } from '../../ui/bottom-nav.js';
+import { isBottomNavEnabled, setBottomNavEnabled, NAV_CHOICES, getNavSlots, setNavSlots } from '../../ui/bottom-nav.js';
+import { isMorningEnabled, setMorningEnabled } from '../../ui/morning-summary.js';
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
@@ -477,6 +478,33 @@ const displaySection = {
         el('div', { className: 'settings-row__hint' }, 'أزرار في أسفل الشاشة تصلها بإبهام واحد (للجوال فقط)'),
       ]),
       createToggle({ label: '', checked: isBottomNavEnabled(), onChange: (v) => setBottomNavEnabled(v) }),
+    ]));
+    /* اختيار الصفحات الثلاث في الشريط (الزر الأوسط ＋ والأخير «المزيد» ثابتان) */
+    const slotSelects = [0, 1, 2].map((i) => {
+      const sel = el('select', { className: 'select', 'data-slot': String(i), 'aria-label': 'زر الشريط ' + (i + 1) },
+        NAV_CHOICES.map((c) => el('option', { value: c.id }, c.icon + ' ' + c.label)));
+      sel.value = getNavSlots()[i];
+      sel.addEventListener('change', () => {
+        const ids = slotSelects.map((s) => s.value);
+        if (!setNavSlots(ids)) {
+          toast.warning('اختر صفحة مختلفة لكل زر');
+          const cur = getNavSlots();
+          slotSelects.forEach((s, k) => { s.value = cur[k]; });
+        }
+      });
+      return sel;
+    });
+    body.appendChild(el('div', { className: 'settings-field', 'data-setting': 'bottom-nav-slots' }, [
+      el('label', { className: 'settings-field__label' }, 'صفحات الشريط السفلي (من اليمين)'),
+      el('div', { className: 'settings-slots' }, slotSelects),
+    ]));
+    /* ملخص الصباح: نافذة مرة كل يوم عند أول فتح (تفضيل لهذا الجهاز) */
+    body.appendChild(el('div', { className: 'settings-row', 'data-setting': 'morning-summary' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'ملخص الصباح ☀️'),
+        el('div', { className: 'settings-row__hint' }, 'نافذة قصيرة عند أول فتح كل يوم بما ينتظرك (المتأخر والتسليمات والمواعيد)'),
+      ]),
+      createToggle({ label: '', checked: isMorningEnabled(), onChange: (v) => setMorningEnabled(v) }),
     ]));
   },
 };

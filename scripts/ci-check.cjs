@@ -27,7 +27,7 @@ const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
   const { port } = await listen(server, Number(process.env.PORT) || 0);
   const browser = await chromium.launch({ headless: !HEADED });
   const ctx = await browser.newContext({ viewport: { width: 400, height: 800 } });
-  await ctx.addInitScript(() => localStorage.setItem('jalabiya_v3_onboarding_done', '1'));
+  await ctx.addInitScript(() => { localStorage.setItem('jalabiya_v3_onboarding_done', '1'); localStorage.setItem('jalabiya_v3_morning_summary', 'off'); });
   const page = await ctx.newPage();
   let errs = [];
   page.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message));

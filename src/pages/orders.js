@@ -40,6 +40,7 @@ import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
 import { MAX_AMOUNT, CONFIRM_AMOUNT } from '../services/amount-guard.js';
 import { clusterBySize } from '../services/size-clusters.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
+import { attachSwipe } from '../ui/swipe.js';
 
 /* --- مفاتيح المسودات --- */
 const DRAFT_KEY = 'order-form';
@@ -1344,6 +1345,12 @@ function buildOrderCard(o) {
     onClick: (e) => e.stopPropagation(),
   }, actionChildren));
 
+  /* سحب البطاقة (v3.3.58): يساراً ⟵ تقدّم الحالة، يميناً ⟵ رسائل العميل (يتطلب هاتفاً) */
+  attachSwipe(card, {
+    onLeft: isDelivered ? null : () => advanceStatus(o),
+    onRight: phone ? () => openMessageMenu(o) : null,
+  });
+
   return card;
 }
 
@@ -1649,6 +1656,15 @@ function renderFilters() {
   wrap.querySelector('.btn--primary')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
 }
 
+const SWIPE_TIP_KEY = 'jalabiya_v3_swipe_tip';
+function showSwipeTipOnce() {
+  try {
+    if (localStorage.getItem(SWIPE_TIP_KEY)) return;
+    localStorage.setItem(SWIPE_TIP_KEY, '1');
+  } catch { return; }
+  toast.info('💡 اسحب بطاقة الطلب: يساراً لتقدّم حالته، ويميناً لمراسلة العميل');
+}
+
 function renderList() {
   const listContainer = state.container?.querySelector('#orders-list');
   if (!listContainer) return;
@@ -1666,6 +1682,7 @@ function renderList() {
     return;
   }
 
+  showSwipeTipOnce();
   ordersList = createProgressiveList({
     items: filtered,
     pageSize: 30,

@@ -12,13 +12,39 @@ import { events } from '../core/events.js';
 import { openQuickActions } from './fab.js';
 
 export const STORAGE_KEY = 'jalabiya_v3_bottom_nav';
-export const NAV_ITEMS = [
-  { id: 'dashboard', icon: '🏠', label: 'الرئيسية', hash: '#/dashboard' },
-  { id: 'orders',    icon: '📋', label: 'الطلبات',  hash: '#/orders' },
-  { id: 'add',       icon: '＋',  label: 'جديد',     primary: true },
-  { id: 'customers', icon: '👥', label: 'العملاء',  hash: '#/customers' },
-  { id: 'more',      icon: '☰',  label: 'المزيد' },
+/* الصفحات التي يمكن وضعها في الأزرار الثلاثة القابلة للتخصيص */
+export const NAV_CHOICES = [
+  { id: 'dashboard',    icon: '🏠', label: 'الرئيسية',   hash: '#/dashboard' },
+  { id: 'orders',       icon: '📋', label: 'الطلبات',    hash: '#/orders' },
+  { id: 'customers',    icon: '👥', label: 'العملاء',    hash: '#/customers' },
+  { id: 'payments',     icon: '💰', label: 'الدفعات',    hash: '#/payments' },
+  { id: 'appointments', icon: '🗓️', label: 'المواعيد',   hash: '#/appointments' },
+  { id: 'pickups',      icon: '📦', label: 'جاهز',       hash: '#/pickups' },
+  { id: 'debts',        icon: '🧾', label: 'المستحقات',  hash: '#/debts' },
+  { id: 'inventory',    icon: '🧵', label: 'المخزون',    hash: '#/inventory' },
+  { id: 'expenses',     icon: '💸', label: 'المصروفات',  hash: '#/expenses' },
+  { id: 'wall',         icon: '📺', label: 'الورشة',     hash: '#/wall' },
 ];
+export const DEFAULT_SLOTS = ['dashboard', 'orders', 'customers'];
+export const SLOTS_KEY = 'jalabiya_v3_bottom_nav_items';
+const ADD = { id: 'add', icon: '＋', label: 'جديد', primary: true };
+const MORE = { id: 'more', icon: '☰', label: 'المزيد' };
+
+/** الأزرار الثلاثة المختارة (تُتحقَّق: 3 معرّفات صالحة غير مكررة وإلا الافتراضي). */
+export function getNavSlots() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(SLOTS_KEY) || 'null');
+    if (Array.isArray(arr) && arr.length === 3 && new Set(arr).size === 3 && arr.every((id) => NAV_CHOICES.some((c) => c.id === id))) return arr;
+  } catch { /* ignore */ }
+  return DEFAULT_SLOTS.slice();
+}
+
+/** الترتيب الظاهر: [زر1، زر2، ＋، زر3، المزيد]. */
+export function navItems(slots = getNavSlots()) {
+  const pick = (id) => NAV_CHOICES.find((c) => c.id === id);
+  return [pick(slots[0]), pick(slots[1]), ADD, pick(slots[2]), MORE];
+}
+export const NAV_ITEMS = navItems(DEFAULT_SLOTS);
 const HIDDEN_PAGES = new Set(['tests', 'wall']);
 
 let node = null;
@@ -64,6 +90,28 @@ function onItem(item) {
   else location.hash = item.hash;
 }
 
+function renderItems() {
+  if (!node) return;
+  while (node.firstChild) node.removeChild(node.firstChild);
+  navItems().forEach((it) => node.appendChild(el('button', {
+    type: 'button', 'data-nav': it.id,
+    className: 'bottom-nav__item' + (it.primary ? ' bottom-nav__item--primary' : ''),
+    'aria-label': it.label, onClick: () => onItem(it),
+  }, [
+    el('span', { className: 'bottom-nav__icon', 'aria-hidden': 'true' }, it.icon),
+    el('span', { className: 'bottom-nav__label' }, it.label),
+  ])));
+  sync();
+}
+
+/** حفظ اختيار الأزرار الثلاثة. يرجع false إن كان الاختيار غير صالح. */
+export function setNavSlots(ids) {
+  if (!Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 || !ids.every((id) => NAV_CHOICES.some((c) => c.id === id))) return false;
+  try { localStorage.setItem(SLOTS_KEY, JSON.stringify(ids)); } catch { /* ignore */ }
+  renderItems();
+  return true;
+}
+
 /** تثبيت الشريط (مرة واحدة). */
 /**
  * @param {Object} layout
@@ -74,15 +122,8 @@ export function mountBottomNav(layout, hooks = {}) {
   layoutRef = layout || null;
   getRoute = hooks.route || null;
   navigate = hooks.navigate || null;
-  node = el('nav', { className: 'bottom-nav', 'aria-label': 'التنقّل السريع', hidden: true },
-    NAV_ITEMS.map((it) => el('button', {
-      type: 'button', 'data-nav': it.id,
-      className: 'bottom-nav__item' + (it.primary ? ' bottom-nav__item--primary' : ''),
-      'aria-label': it.label, onClick: () => onItem(it),
-    }, [
-      el('span', { className: 'bottom-nav__icon', 'aria-hidden': 'true' }, it.icon),
-      el('span', { className: 'bottom-nav__label' }, it.label),
-    ])));
+  node = el('nav', { className: 'bottom-nav', 'aria-label': 'التنقّل السريع', hidden: true });
+  renderItems();
   document.body.appendChild(node);
 
   /* أثناء الكتابة نُخفيه حتى لا يضيّق مساحة لوحة المفاتيح */

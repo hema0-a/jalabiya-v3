@@ -4,7 +4,7 @@ async function scanNarrow(browser, base, widths, routes, shot) {
   const problems = [];
   for (const W of widths) {
     const ctx = await browser.newContext({ viewport: { width: W, height: 700 }, hasTouch: true });
-    await ctx.addInitScript(() => localStorage.setItem('jalabiya_v3_onboarding_done', '1'));
+    await ctx.addInitScript(() => { localStorage.setItem('jalabiya_v3_onboarding_done', '1'); localStorage.setItem('jalabiya_v3_morning_summary', 'off'); });
     const page = await ctx.newPage();
     await page.goto(base, { waitUntil: 'load' });
     await page.waitForTimeout(1000);
