@@ -128,6 +128,25 @@ function _closeAction() {
 }
 
 /**
+ * قسم «مقاسات وقت الطلب» (نسخة محفوظة مع الطلب).
+ * @param {Object} order
+ * @returns {Array<HTMLElement>}
+ */
+function _orderMeasurementRows(order) {
+  const snap = order && order.measurementsSnapshot;
+  if (!snap || !Array.isArray(snap.fields) || snap.fields.length === 0) {
+    return [el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } },
+      'لا توجد نسخة مقاسات محفوظة لهذا الطلب (طلب قديم)')];
+  }
+  return [
+    ...snap.fields.map((f) => _row('📏', f.name,
+      f.value + (f.unit ? ' ' + (f.unit === 'cm' ? 'سم' : f.unit) : ''))),
+    snap.at ? el('div', { style: { fontSize: '11px', color: '#999', padding: '4px 0' } },
+      'مأخوذة بتاريخ ' + formatDate(snap.at)) : null,
+  ].filter(Boolean);
+}
+
+/**
  * تحويل الطلب إلى قائمة بنود (يدعم items أو amount القديم).
  * @param {Object} order
  * @returns {Array<{name:string, price:number, quantity:number}>}
@@ -259,6 +278,10 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
         _stat('المدفوع', formatEGP(paid), '#2E7D32'),
         _stat('المتبقي', formatEGP(Math.max(0, total - paid)), total - paid > 0 ? '#F57C00' : '#666'),
       ]),
+      o.measurementsSnapshot && Array.isArray(o.measurementsSnapshot.fields) && o.measurementsSnapshot.fields.length > 0
+        ? el('div', { style: { fontSize: '12px', color: '#1F6D57', marginTop: '8px', lineHeight: '1.6' } },
+            '📏 مقاسات الطلب: ' + o.measurementsSnapshot.fields.map((f) => f.name + ' ' + f.value).join(' · '))
+        : null,
       o.notes ? el('p', { style: { fontSize: '12px', color: '#666', margin: '8px 0 0', lineHeight: '1.5' } },
         '📝 ' + o.notes) : null,
     ].filter(Boolean)));
@@ -379,6 +402,9 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
       _stat('المتبقي', formatEGP(remaining), remaining > 0 ? '#F57C00' : '#666'),
     ]),
 
+    _section('📏 مقاسات وقت الطلب'),
+    ..._orderMeasurementRows(order),
+
     order.notes ? _section('📝 ملاحظات') : null,
     order.notes ? el('p', { style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' } }, order.notes) : null,
   ].filter(Boolean));
@@ -392,6 +418,18 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
       } },
     customer && customer.phone ? { text: '📱 واتساب', variant: 'secondary',
       onClick: () => _whatsapp(customer.phone, 'بخصوص طلبك #' + String(order.id).slice(-6)) } : null,
+    customer && order.status !== 'delivered' && order.status !== 'cancelled' ? { text: '🔄 تحديث المقاسات', variant: 'secondary',
+      onClick: async () => {
+        const ok = await modal.confirm({
+          title: 'تحديث مقاسات الطلب',
+          message: 'سيتم استبدال مقاسات هذا الطلب بمقاسات العميل الحالية. هل تريد المتابعة؟',
+          confirmText: 'نعم، حدّث', cancelText: 'إلغاء',
+        });
+        if (!ok) return;
+        const snap = await ordersRepo.refreshMeasurementsSnapshot(order.id);
+        modal.close();
+        if (snap) previewOrder(order.id, customer, editCb);
+      } } : null,
     editCb ? { text: '✏️ تعديل', variant: 'secondary',
       onClick: () => { modal.close(); editCb(); } } : null,
     _closeAction(),
