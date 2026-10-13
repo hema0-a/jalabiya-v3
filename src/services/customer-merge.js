@@ -46,6 +46,35 @@ export function findDuplicateGroups(customers) {
   return groups;
 }
 
+/** تطبيع الاسم العربي للمقارنة: بلا تشكيل/تطويل، وتوحيد (أإآ→ا، ة→ه، ى→ي) والمسافات. */
+export function looseNameKey(name) {
+  return String(name || '')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * عملاء يشبهون عميلاً يُدخَل الآن (v3.3.54) — للتنبيه قبل الحفظ.
+ * phone = نفس الهاتف (آخر 10 أرقام) — شبه مؤكد، ويأتي أولاً. name = نفس الاسم بعد التطبيع.
+ * @param {{name?:string, phone?:string}} candidate
+ * @param {Array} customers
+ * @param {{excludeId?:string}} [opts] استبعاد السجل الجاري تعديله
+ * @returns {Array<{customer:Object, reason:'phone'|'name'}>}
+ */
+export function findSimilarCustomers(candidate, customers, opts = {}) {
+  const pk = phoneKey(candidate && candidate.phone);
+  const nk = looseNameKey(candidate && candidate.name);
+  const out = [];
+  for (const c of Array.isArray(customers) ? customers : []) {
+    if (!c || !c.id || c.id === opts.excludeId) continue;
+    if (pk && phoneKey(c.phone) === pk) out.push({ customer: c, reason: 'phone' });
+    else if (nk && looseNameKey(c.name) === nk) out.push({ customer: c, reason: 'name' });
+  }
+  out.sort((a, b) => (a.reason === b.reason ? 0 : a.reason === 'phone' ? -1 : 1));
+  return out;
+}
+
 /** يقترح أي سجل يبقى: الأكثر بياناتاً ثم الأقدم */
 export function pickPrimary(customers) {
   const score = (c) => ['phone', 'address', 'notes', 'email'].filter((f) => c[f]).length + (c.vip ? 1 : 0);

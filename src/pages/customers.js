@@ -25,6 +25,7 @@ import { shareCustomerStatementImage } from '../services/invoice-image.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { formatEGP } from '../core/utils.js';
+import { findSimilarCustomers, phoneKey } from '../services/customer-merge.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -352,9 +353,25 @@ function openCustomerForm(existing = null) {
         : 'اختياري — مثلاً ابن يتبع أباه: تظهر مقاساته في ملف الأب ويُجمع حسابهم.'),
   ]);
 
+  /* --- كشف التكرار (v3.3.54): تنبيه فوري أثناء الكتابة، وتأكيد عند الحفظ إن تطابق الهاتف --- */
+  const dupHint = el('div', { className: 'order-hint order-hint--warn', role: 'status', 'aria-live': 'polite', 'data-role': 'dup-hint' });
+  const dupMatches = () => findSimilarCustomers(
+    { name: nameInput.value, phone: phoneInput.value }, state.customers, { excludeId: isEdit ? existing.id : undefined });
+  const updateDupHint = () => {
+    clear(dupHint);
+    const m = dupMatches().slice(0, 3);
+    m.forEach(({ customer, reason }) => dupHint.appendChild(el('div', {},
+      (reason === 'phone' ? '⚠️ نفس الرقم: ' : 'ℹ️ نفس الاسم: ') + customer.name + (customer.phone ? ' (' + customer.phone + ')' : ''))));
+    dupHint.style.display = m.length ? '' : 'none';
+  };
+  nameInput.addEventListener('input', updateDupHint);
+  phoneInput.addEventListener('input', updateDupHint);
+  updateDupHint();
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'رقم الهاتف'), phoneInput]),
+    dupHint,
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'العنوان'), addressInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
     el('div', { className: 'field' }, [vipToggle]),
@@ -385,6 +402,18 @@ function openCustomerForm(existing = null) {
             measurements: measurements.getValues(),
             familyHeadId: familySelect.value || '',
           };
+          /* تطابق الهاتف مع عميل آخر: نسأل قبل الحفظ (عند التعديل فقط إن تغيّر الرقم) */
+          const phoneChanged = !isEdit || phoneKey(data.phone) !== phoneKey(existing.phone);
+          const samePhone = phoneChanged ? dupMatches().filter((m) => m.reason === 'phone') : [];
+          if (samePhone.length) {
+            const okDup = await modal.confirm({
+              title: 'عميل مكرر؟',
+              message: 'يوجد عميل بنفس رقم الهاتف: ' + samePhone.map((m) => m.customer.name).join('، ') +
+                '.\nهل هذا شخص آخر فعلاً؟ (يمكنك دمجهما لاحقاً من «صيانة البيانات»)',
+              confirmText: 'نعم، احفظ كعميل مستقل', cancelText: 'رجوع للتعديل',
+            });
+            if (!okDup) { phoneInput.focus(); return; }
+          }
           try {
             if (isEdit) { await customers.update(existing.id, data); toast.success('تم تحديث العميل'); }
             else { await customers.create(data); toast.success('تم إضافة العميل'); }

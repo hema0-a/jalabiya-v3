@@ -60,5 +60,6 @@ import './modules/audit-3347-ui.test.js';
 import './modules/audit-3351.test.js';
 import './modules/audit-3352.test.js';
 import './modules/audit-3353.test.js';
+import './modules/audit-3354.test.js';
 
 export { runAll, register } from './registry.js';
