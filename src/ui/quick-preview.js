@@ -167,6 +167,94 @@ function _orderItems(order) {
 }
 
 /* ============================================================
+   كتالوج الأسعار للمشاركة (v3.3.51)
+   ============================================================ */
+
+/**
+ * نافذة مشاركة كتالوج الأسعار: اختيار الأنواع، نص قابل للتعديل، ثم واتساب أو نسخ.
+ * @param {Object} [opts]
+ * @param {string} [opts.phone] — رقم العميل (لو غير مُمرَّر يفتح واتساب لاختيار جهة اتصال)
+ * @param {string} [opts.customerName]
+ * @param {Array}  [opts.types] — أنواع الجلابيب (لو غير مُمرَّرة تُقرأ من الإعدادات)
+ * @returns {Promise<void>}
+ */
+export async function shareCatalog(opts = {}) {
+  let st = {};
+  try { st = await settingsRepo.get(); } catch { st = {}; }
+  const ws = (st && st.workshop) || {};
+  const all = (Array.isArray(opts.types) ? opts.types : (st.jalabiyaTypes || []))
+    .filter((t) => t && t.name && Number(t.price) > 0);
+
+  if (all.length === 0) {
+    modal.open({
+      title: '📋 كتالوج الأسعار',
+      body: el('p', { style: { fontSize: '13px', color: '#666', lineHeight: '1.6' } },
+        'لا توجد أنواع بأسعار. أضفها من الإعدادات ← أنواع الجلابيات (الاسم والسعر)، ثم ارجع هنا.'),
+      actions: [_closeAction()], closable: true,
+    });
+    return;
+  }
+
+  const checks = [];
+  const area = el('textarea', {
+    className: 'textarea', rows: '10',
+    style: { width: '100%', fontSize: '13px', lineHeight: '1.7', marginTop: '8px' },
+  });
+
+  function build() {
+    const lines = [];
+    lines.push((opts.customerName ? 'أهلاً ' + opts.customerName + '،\n' : '') +
+      '*' + (ws.name || 'ورشة الجلابيب') + '*');
+    lines.push('أسعار الجلابيب:');
+    checks.forEach(({ cb, t }) => {
+      if (cb.checked) lines.push('• ' + t.name + ' — ' + formatEGP(t.price));
+    });
+    if (ws.pickupHours) lines.push('🕐 مواعيد الاستلام: ' + ws.pickupHours);
+    if (ws.phone) lines.push('📞 ' + ws.phone);
+    if (ws.address) lines.push('📍 ' + ws.address);
+    area.value = lines.join('\n');
+  }
+
+  const list = el('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto' },
+  });
+  all.forEach((t) => {
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = true;
+    cb.addEventListener('change', build);
+    checks.push({ cb, t });
+    list.appendChild(el('label', {
+      style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', padding: '4px 0' },
+    }, [cb, el('span', { style: { flex: '1' } }, t.name),
+      el('span', { style: { color: '#B8863B', fontWeight: '600' } }, formatEGP(t.price))]));
+  });
+
+  const body = el('div', {}, [
+    el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '6px' } },
+      'اختر الأنواع اللي تظهر للعميل (تغيير الاختيار يعيد كتابة النص):'),
+    list,
+    area,
+  ]);
+  build();
+
+  const actions = [
+    { text: '📱 واتساب', variant: 'primary',
+      onClick: () => {
+        const text = area.value;
+        if (opts.phone) { _whatsapp(opts.phone, text); return; }
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
+      } },
+    { text: '📋 نسخ', variant: 'secondary',
+      onClick: async () => {
+        try { await navigator.clipboard.writeText(area.value); }
+        catch { area.select(); try { document.execCommand('copy'); } catch { /* ignore */ } }
+      } },
+    _closeAction(),
+  ];
+  modal.open({ title: '📋 كتالوج الأسعار', body, actions, closable: true, variant: 'sheet' });
+}
+
+/* ============================================================
    2. previewCustomer
    ============================================================ */
 
@@ -216,6 +304,8 @@ export async function previewCustomer(idOrObj, onEdit) {
       onClick: () => _whatsapp(c.phone, 'مرحباً ' + c.name + '،') } : null,
     { text: 'التفاصيل الكاملة', variant: 'secondary',
       onClick: () => { modal.close(); _openCustomerFullDetails(c, orders, onEdit); } },
+    c.phone ? { text: '📋 كتالوج الأسعار', variant: 'secondary',
+      onClick: () => { modal.close(); shareCatalog({ phone: c.phone, customerName: c.name }); } } : null,
     onEdit ? { text: '✏️ تعديل', variant: 'secondary',
       onClick: () => { modal.close(); onEdit(); } } : null,
     _closeAction(),

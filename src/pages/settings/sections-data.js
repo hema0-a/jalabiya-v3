@@ -10,6 +10,7 @@
 import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
+import { shareCatalog } from '../../ui/quick-preview.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
@@ -233,6 +234,11 @@ const jalabiyaTypesSection = {
       style: { marginTop: '8px' },
       onClick: () => openTypeForm(types, -1, saveFn, rebuild),
     }, '➕ إضافة نوع جديد'));
+    body.appendChild(el('button', {
+      className: 'btn btn--secondary btn--block', type: 'button',
+      style: { marginTop: '6px' },
+      onClick: () => shareCatalog({ types }),
+    }, '📤 مشاركة كتالوج الأسعار'));
     rebuild();
   },
 };
