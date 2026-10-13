@@ -30,13 +30,16 @@ function esc(s) {
 }
 
 /** حالات الطلب. */
-const STATUS_LABELS = {
+export const STATUS_LABELS = {
   pending:     { label: 'قيد الانتظار', cls: 'pending' },
   in_progress: { label: 'قيد التنفيذ', cls: 'in_progress' },
   ready:       { label: 'جاهز للتسليم', cls: 'ready' },
   delivered:   { label: 'تم التسليم', cls: 'delivered' },
   cancelled:   { label: 'ملغي', cls: 'cancelled' },
 };
+
+/** طرق الدفع (للكشف المطبوع وللصورة). */
+export const PAYMENT_METHOD_LABELS = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى', deposit: 'مقدم الطلب' };
 
 /** خرائط الرسوم الإضافية. */
 const FEE_TYPE_LABELS = {
@@ -485,15 +488,13 @@ export async function printOrderInvoice(order, customer) {
    ========================================================== */
 
 /**
- * طباعة كشف حساب شامل لعميل (طلبات + دفعات + إجماليات).
+ * نموذج بيانات كشف حساب العميل (الإجماليات + الدفعات بعد دمج المقدم) — مصدر واحد للطباعة وللصورة.
  * @param {Object} customer
  * @param {Array} orders
  * @param {Array} payments
- * @returns {Promise<void>}
+ * @returns {Promise<{workshop:Object, orders:Array, payments:Array, totalOrders:number, totalPaid:number, remaining:number}>}
  */
-export async function printCustomerStatement(customer, orders, payments) {
-  if (!customer) return;
-
+export async function buildCustomerStatementModel(customer, orders, payments) {
   const workshop = await getWorkshop();
 
   /* نفس قواعد بقية التطبيق: لا تُحسب الطلبات الملغاة، ويُحسب المقدم للطلب بلا دفعات */
@@ -503,6 +504,22 @@ export async function printCustomerStatement(customer, orders, payments) {
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
   const totalPaid = (payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = Math.max(0, totalOrders - totalPaid);
+  return { workshop, orders: orders || [], payments: payments || [], totalOrders, totalPaid, remaining };
+}
+
+/**
+ * طباعة كشف حساب شامل لعميل (طلبات + دفعات + إجماليات).
+ * @param {Object} customer
+ * @param {Array} orders
+ * @param {Array} payments
+ * @returns {Promise<void>}
+ */
+export async function printCustomerStatement(customer, orders, payments) {
+  if (!customer) return;
+
+  const model = await buildCustomerStatementModel(customer, orders, payments);
+  const { workshop, totalOrders, totalPaid, remaining } = model;
+  payments = model.payments;
 
   /* صفوف الطلبات */
   let ordersRows = '';
@@ -527,7 +544,7 @@ export async function printCustomerStatement(customer, orders, payments) {
   if (!payments || payments.length === 0) {
     paymentsRows = '<tr><td colspan="3" style="text-align:center;color:#999;padding:20px">لا توجد دفعات</td></tr>';
   } else {
-    const methods = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى', deposit: 'مقدم الطلب' };
+    const methods = PAYMENT_METHOD_LABELS;
     const sorted = [...payments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     sorted.forEach((p) => {
       paymentsRows +=

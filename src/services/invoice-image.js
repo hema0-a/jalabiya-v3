@@ -1,16 +1,23 @@
 /* ==========================================================================
-   invoice-image.js — فاتورة الطلب كصورة + مشاركتها (واتساب)
+   invoice-image.js — فاتورة الطلب وكشف حساب العميل كصورة + مشاركتها (واتساب)
    ==========================================================================
-   - renderOrderInvoiceCanvas(order, customer) — ترسم الفاتورة على Canvas (RTL، بلا مكتبات).
-   - shareOrderInvoiceImage(order, customer)   — مشاركة الصورة:
-       1) Web Share API مع ملف (جوال: تظهر قائمة المشاركة فيختار واتساب والمحادثة).
-       2) بديل: تنزيل الصورة + فتح محادثة واتساب العميل لإرفاقها.
-   - الأرقام من buildOrderInvoiceModel نفسه الذي تعتمده الفاتورة المطبوعة.
-   - الشعار لا يُرسم إلا إن كان data:image (غيره يلوّث الـ Canvas ويفشل التصدير).
+   - renderOrderInvoiceCanvas(order, customer)              — فاتورة طلب على Canvas.
+   - renderCustomerStatementCanvas(customer, orders, pays)  — كشف حساب على Canvas.
+   - shareOrderInvoiceImage(order, customer)                — مشاركة الفاتورة.
+   - shareCustomerStatementImage(customer, orders, pays)    — مشاركة الكشف.
+   المشاركة:
+     1) Web Share API مع ملف PNG (جوال: تظهر قائمة المشاركة فيختار واتساب والمحادثة).
+     2) بديل: تنزيل الصورة + فتح محادثة واتساب العميل لإرفاقها.
+   - الأرقام من buildOrderInvoiceModel / buildCustomerStatementModel نفسهما
+     اللذين تعتمدهما الطباعة، فلا يختلف رقم في الصورة عن المطبوع.
+   - الرسم بلا مكتبات (يتوافق مع CSP ويعمل دون إنترنت)؛ الشعار لا يُرسم إلا إن كان
+     data:image (غيره يلوّث الـ Canvas ويفشل التصدير).
    - Static imports فقط.
    ========================================================================== */
 
-import { buildOrderInvoiceModel } from './invoice-print.js';
+import {
+  buildOrderInvoiceModel, buildCustomerStatementModel, STATUS_LABELS, PAYMENT_METHOD_LABELS,
+} from './invoice-print.js';
 import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 
 const W = 800;            /* العرض المنطقي (px) */
@@ -20,6 +27,7 @@ const GREEN = '#1F6D57';
 const DARK = '#123C2F';
 const GRAY = '#666666';
 const LINE = '#E5DDD0';
+const MAX_STATEMENT_ROWS = 25;   /* آخر 25 طلباً/دفعة في الصورة (الإجماليات تشمل الكل) */
 
 /** إزالة الإيموجي من نص (الخط في الصورة نصي؛ الإيموجي يظهر مربعات على بعض الأجهزة). */
 function plain(s) {
@@ -52,14 +60,11 @@ function wrapLines(ctx, text, maxW) {
   return lines;
 }
 
-/**
- * يرسم الفاتورة على ctx ويُرجع الارتفاع الكلي.
- * تُستدعى مرتين: على Canvas مؤقت لقياس الارتفاع ثم على الـ Canvas الفعلي.
- */
-function layout(ctx, m, order, customer, logoImg, fontFamily) {
+/** أدوات الرسم المشتركة (RTL). */
+function makePen(ctx, fontFamily) {
+  const R = W - PAD;   /* الحافة اليمنى */
+  const L = PAD;       /* الحافة اليسرى */
   const font = (size, weight = 400) => { ctx.font = weight + ' ' + size + 'px ' + fontFamily; };
-  const R = W - PAD;      /* الحافة اليمنى (RTL) */
-  const L = PAD;          /* الحافة اليسرى */
   const text = (s, x, y, o = {}) => {
     font(o.size || 18, o.weight || 400);
     ctx.fillStyle = o.color || DARK;
@@ -70,18 +75,19 @@ function layout(ctx, m, order, customer, logoImg, fontFamily) {
     ctx.strokeStyle = color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke();
   };
-
   ctx.direction = 'rtl';
   ctx.textBaseline = 'alphabetic';
-
-  /* خلفية بيضاء */
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, W, 5000);
+  ctx.fillRect(0, 0, W, 12000);
+  return { R, L, font, text, hline, ctx };
+}
 
-  /* ---- الشريط العلوي ---- */
+/** الشريط العلوي (اسم الورشة + عنوان المستند). يُرجع الارتفاع. */
+function drawHeader(p, workshop, logoImg, title, num, date) {
+  const { ctx, R, L, text } = p;
   const metaLines = [];
-  if (m.workshop.address) metaLines.push(plain(m.workshop.address));
-  if (m.workshop.phone) metaLines.push(plain(m.workshop.phone));
+  if (workshop.address) metaLines.push(plain(workshop.address));
+  if (workshop.phone) metaLines.push(plain(workshop.phone));
   const headH = Math.max(120, 78 + metaLines.length * 24);
   ctx.fillStyle = GREEN;
   ctx.fillRect(0, 0, W, headH);
@@ -96,13 +102,51 @@ function layout(ctx, m, order, customer, logoImg, fontFamily) {
     ctx.restore();
     nameX = R - ls - 14;
   }
-  text(plain(m.workshop.name) || 'ورشة تفصيل الجلابيب', nameX, 56, { size: 30, weight: 700, color: '#FFFFFF' });
+  text(plain(workshop.name) || 'ورشة تفصيل الجلابيب', nameX, 56, { size: 30, weight: 700, color: '#FFFFFF' });
   metaLines.forEach((t, i) => text(t, nameX, 86 + i * 24, { size: 16, color: '#D9EFE6' }));
 
-  text('فاتورة', L, 52, { size: 28, weight: 700, color: '#FFFFFF', align: 'left' });
-  text('#' + String(order.id).slice(-6), L, 82, { size: 18, color: '#D9EFE6', align: 'left' });
-  text(formatDate(order.createdAt || Date.now()), L, 106, { size: 16, color: '#D9EFE6', align: 'left' });
+  text(title, L, 52, { size: 28, weight: 700, color: '#FFFFFF', align: 'left' });
+  if (num) text(num, L, 82, { size: 18, color: '#D9EFE6', align: 'left' });
+  text(date, L, num ? 106 : 82, { size: 16, color: '#D9EFE6', align: 'left' });
+  return headH;
+}
 
+/** التذييل. يُرجع y الجديد. */
+function drawFooter(p, workshop, y) {
+  const { R, L, text, hline } = p;
+  y += 18;
+  hline(y);
+  y += 34;
+  text('شكراً لتعاملكم معنا', W / 2, y, { size: 20, weight: 600, color: GREEN, align: 'center' });
+  y += 30;
+  const contact = [workshop.phone, workshop.whatsapp].filter(Boolean).map(plain);
+  if (contact.length) {
+    text(contact.join('  |  '), W / 2, y, { size: 16, color: GRAY, align: 'center' });
+    y += 26;
+  }
+  void R; void L;
+  return y + 24;
+}
+
+/** بيانات العميل (اسم/هاتف/…) كأزواج. يُرجع y الجديد. */
+function drawInfoRows(p, rows, y) {
+  const { R, text } = p;
+  rows.forEach(([k, v]) => {
+    text(k + ':', R, y, { size: 18, color: GRAY });
+    text(v, R - 130, y, { size: 19, weight: 600 });
+    y += 32;
+  });
+  return y;
+}
+
+/* ==========================================================================
+   فاتورة الطلب
+   ========================================================================== */
+
+function layoutInvoice(p, m, order, customer, logoImg) {
+  const { ctx, R, L, font, text, hline } = p;
+  const headH = drawHeader(p, m.workshop, logoImg, 'فاتورة', '#' + String(order.id).slice(-6),
+    formatDate(order.createdAt || Date.now()));
   let y = headH + 36;
 
   /* ---- بيانات العميل والطلب ---- */
@@ -111,11 +155,7 @@ function layout(ctx, m, order, customer, logoImg, fontFamily) {
   if (customer && customer.phone) info.push(['الهاتف', customer.phone]);
   info.push(['الحالة', m.statusInfo.label]);
   if (order.dueDate) info.push(['تاريخ التسليم', formatDate(order.dueDate)]);
-  info.forEach(([k, v]) => {
-    text(k + ':', R, y, { size: 18, color: GRAY });
-    text(v, R - 130, y, { size: 19, weight: 600 });
-    y += 32;
-  });
+  y = drawInfoRows(p, info, y);
   y += 6;
   hline(y);
   y += 30;
@@ -182,44 +222,153 @@ function layout(ctx, m, order, customer, logoImg, fontFamily) {
       y += 26;
     });
   }
-
-  /* ---- التذييل ---- */
-  y += 18;
-  hline(y);
-  y += 34;
-  text('شكراً لتعاملكم معنا', W / 2, y, { size: 20, weight: 600, color: GREEN, align: 'center' });
-  y += 30;
-  const contact = [m.workshop.phone, m.workshop.whatsapp].filter(Boolean).map(plain);
-  if (contact.length) {
-    text(contact.join('  |  '), W / 2, y, { size: 16, color: GRAY, align: 'center' });
-    y += 26;
-  }
-  return y + 24;
+  return drawFooter(p, m.workshop, y);
 }
 
+/* ==========================================================================
+   كشف حساب العميل
+   ========================================================================== */
+
+/** جدول بسيط: أعمدة [{label, x, align, w?}] وصفوف مصفوفات نصوص. يُرجع y الجديد. */
+function drawTable(p, cols, rows, emptyText, y) {
+  const { ctx, R, L, text, hline } = p;
+  ctx.fillStyle = '#F6F1E6';
+  ctx.fillRect(L, y - 24, R - L, 38);
+  cols.forEach((c) => text(c.label, c.x, y + 1, { size: 17, weight: 700, color: GREEN, align: c.align }));
+  y += 36;
+  if (!rows.length) {
+    text(emptyText, W / 2, y + 14, { size: 18, color: '#999999', align: 'center' });
+    return y + 46;
+  }
+  rows.forEach((r) => {
+    cols.forEach((c, i) => text(r[i].t, c.x, y + 14, { size: 18, weight: r[i].bold ? 600 : 400, color: r[i].color || DARK, align: c.align }));
+    y += 40;
+    hline(y - 8);
+  });
+  return y;
+}
+
+function layoutStatement(p, m, customer, logoImg) {
+  const { ctx, R, L, text } = p;
+  const headH = drawHeader(p, m.workshop, logoImg, 'كشف حساب', '', formatDate(Date.now()));
+  let y = headH + 36;
+
+  const info = [['الاسم', plain(customer.name)]];
+  if (customer.phone) info.push(['الهاتف', customer.phone]);
+  if (customer.vip) info.push(['التصنيف', 'VIP']);
+  y = drawInfoRows(p, info, y);
+  y += 10;
+
+  /* ---- ثلاث بطاقات إجماليات ---- */
+  const gap = 14;
+  const bw = (R - L - gap * 2) / 3;
+  const boxes = [
+    ['إجمالي الطلبات', formatEGP(m.totalOrders), '#F6F1E6', DARK],
+    ['إجمالي المدفوع', formatEGP(m.totalPaid), '#E8F5E9', '#2E7D32'],
+    ['المتبقي', formatEGP(m.remaining), m.remaining > 0 ? '#FFF3E0' : '#E8F5E9', m.remaining > 0 ? '#E65100' : '#2E7D32'],
+  ];
+  boxes.forEach(([label, value, bg, color], i) => {
+    const x = R - bw * (i + 1) - gap * i;       /* RTL: الأول يمين */
+    ctx.fillStyle = bg;
+    ctx.fillRect(x, y, bw, 92);
+    text(label, x + bw / 2, y + 32, { size: 17, color: GRAY, align: 'center' });
+    text(value, x + bw / 2, y + 70, { size: 24, weight: 700, color, align: 'center' });
+  });
+  y += 92 + 40;
+
+  /* ---- الطلبات ---- */
+  const sortedOrders = [...m.orders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const shownOrders = sortedOrders.slice(0, MAX_STATEMENT_ROWS);
+  text('الطلبات (' + sortedOrders.length + ')', R, y, { size: 20, weight: 700, color: GREEN });
+  y += 34;
+  y = drawTable(p,
+    [{ label: 'رقم', x: R - 8, align: 'right' }, { label: 'التاريخ', x: R - 150, align: 'right' },
+      { label: 'الحالة', x: R - 400, align: 'right' }, { label: 'المبلغ', x: L + 10, align: 'left' }],
+    shownOrders.map((o) => {
+      const si = STATUS_LABELS[o.status] || STATUS_LABELS.pending;
+      return [
+        { t: '#' + String(o.id).slice(-6), color: GRAY },
+        { t: o.createdAt ? formatDate(o.createdAt) : '—' },
+        { t: si.label },
+        { t: formatEGP(o.amount), bold: true, color: o.status === 'cancelled' ? '#999999' : DARK },
+      ];
+    }), 'لا توجد طلبات', y);
+  if (sortedOrders.length > shownOrders.length) {
+    text('تُعرض آخر ' + shownOrders.length + ' طلباً من ' + sortedOrders.length + ' — الإجماليات أعلاه تشمل الكل',
+      W / 2, y + 22, { size: 15, color: GRAY, align: 'center' });
+    y += 34;
+  }
+  y += 34;
+
+  /* ---- الدفعات ---- */
+  const sortedPays = [...m.payments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const shownPays = sortedPays.slice(0, MAX_STATEMENT_ROWS);
+  text('الدفعات (' + sortedPays.length + ')', R, y, { size: 20, weight: 700, color: GREEN });
+  y += 34;
+  y = drawTable(p,
+    [{ label: 'التاريخ', x: R - 8, align: 'right' }, { label: 'طريقة الدفع', x: R - 300, align: 'right' },
+      { label: 'المبلغ', x: L + 10, align: 'left' }],
+    shownPays.map((pay) => [
+      { t: pay.createdAt ? formatDate(pay.createdAt) : '—' },
+      { t: PAYMENT_METHOD_LABELS[pay.method] || PAYMENT_METHOD_LABELS.cash },
+      { t: formatEGP(pay.amount), bold: true, color: '#2E7D32' },
+    ]), 'لا توجد دفعات', y);
+  if (sortedPays.length > shownPays.length) {
+    text('تُعرض آخر ' + shownPays.length + ' دفعة من ' + sortedPays.length + ' — الإجماليات أعلاه تشمل الكل',
+      W / 2, y + 22, { size: 15, color: GRAY, align: 'center' });
+    y += 34;
+  }
+  return drawFooter(p, m.workshop, y);
+}
+
+/* ==========================================================================
+   الرسم والتصدير
+   ========================================================================== */
+
 /**
- * رسم الفاتورة على Canvas.
- * @param {Object} order
- * @param {Object} [customer]
- * @returns {Promise<{canvas:HTMLCanvasElement, model:Object}>}
+ * قياس الارتفاع على Canvas مؤقت ثم الرسم الفعلي بدقة SCALE.
+ * @param {Function} layoutFn — (pen) => الارتفاع الكلي
  */
-export async function renderOrderInvoiceCanvas(order, customer) {
-  const model = await buildOrderInvoiceModel(order);
-  const logoImg = await loadLogo(model.workshop.logo);
+async function paint(workshop, layoutFn) {
+  const logoImg = await loadLogo(workshop.logo);
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* ignore */ }
   const fontFamily = (document.body && getComputedStyle(document.body).fontFamily) || 'sans-serif';
 
-  /* قياس الارتفاع على Canvas مؤقت ثم الرسم الفعلي */
   const scratch = document.createElement('canvas');
   scratch.width = W; scratch.height = 10;
-  const height = Math.ceil(layout(scratch.getContext('2d'), model, order, customer, logoImg, fontFamily));
+  const height = Math.ceil(layoutFn(makePen(scratch.getContext('2d'), fontFamily), logoImg));
 
   const canvas = document.createElement('canvas');
   canvas.width = W * SCALE;
   canvas.height = height * SCALE;
   const ctx = canvas.getContext('2d');
   ctx.scale(SCALE, SCALE);
-  layout(ctx, model, order, customer, logoImg, fontFamily);
+  layoutFn(makePen(ctx, fontFamily), logoImg);
+  return canvas;
+}
+
+/**
+ * رسم فاتورة الطلب على Canvas.
+ * @param {Object} order
+ * @param {Object} [customer]
+ * @returns {Promise<{canvas:HTMLCanvasElement, model:Object}>}
+ */
+export async function renderOrderInvoiceCanvas(order, customer) {
+  const model = await buildOrderInvoiceModel(order);
+  const canvas = await paint(model.workshop, (p, logo) => layoutInvoice(p, model, order, customer, logo));
+  return { canvas, model };
+}
+
+/**
+ * رسم كشف حساب عميل على Canvas.
+ * @param {Object} customer
+ * @param {Array} orders
+ * @param {Array} payments
+ * @returns {Promise<{canvas:HTMLCanvasElement, model:Object}>}
+ */
+export async function renderCustomerStatementCanvas(customer, orders, payments) {
+  const model = await buildCustomerStatementModel(customer, orders, payments);
+  const canvas = await paint(model.workshop, (p, logo) => layoutStatement(p, model, customer, logo));
   return { canvas, model };
 }
 
@@ -240,22 +389,16 @@ function downloadBlob(blob, filename) {
 }
 
 /**
- * مشاركة فاتورة الطلب كصورة.
- * @param {Object} order
- * @param {Object} [customer]
+ * مشاركة صورة: Web Share مع ملف، وإلا تنزيل + فتح محادثة واتساب العميل.
  * @returns {Promise<'shared'|'cancelled'|'downloaded'>}
  */
-export async function shareOrderInvoiceImage(order, customer) {
-  const { canvas, model } = await renderOrderInvoiceCanvas(order, customer);
+async function shareCanvas(canvas, filename, message, customerPhone) {
   const blob = await canvasToBlob(canvas);
-  const id6 = String(order.id).slice(-6).replace(/[^\w-]/g, '') || 'order';
-  const file = new File([blob], 'invoice-' + id6 + '.png', { type: 'image/png' });
-  const msg = 'فاتورة #' + id6 + ' — ' +
-    (model.remaining > 0 ? 'المتبقي ' + formatEGP(model.remaining) : 'مدفوع بالكامل');
+  const file = new File([blob], filename, { type: 'image/png' });
 
   if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text: msg });
+      await navigator.share({ files: [file], text: message });
       return 'shared';
     } catch (e) {
       if (e && e.name === 'AbortError') return 'cancelled';   /* المستخدم ألغى */
@@ -264,10 +407,39 @@ export async function shareOrderInvoiceImage(order, customer) {
   }
 
   /* بديل: تنزيل الصورة + فتح محادثة العميل لإرفاقها */
-  downloadBlob(blob, file.name);
-  const phone = customer && customer.phone ? String(normalizePhone(customer.phone)).replace(/\D/g, '') : '';
+  downloadBlob(blob, filename);
+  const phone = customerPhone ? String(normalizePhone(customerPhone)).replace(/\D/g, '') : '';
   if (phone) {
-    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank', 'noopener,noreferrer');
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(message), '_blank', 'noopener,noreferrer');
   }
   return 'downloaded';
+}
+
+/**
+ * مشاركة فاتورة الطلب كصورة.
+ * @param {Object} order
+ * @param {Object} [customer]
+ * @returns {Promise<'shared'|'cancelled'|'downloaded'>}
+ */
+export async function shareOrderInvoiceImage(order, customer) {
+  const { canvas, model } = await renderOrderInvoiceCanvas(order, customer);
+  const id6 = String(order.id).slice(-6).replace(/[^\w-]/g, '') || 'order';
+  const msg = 'فاتورة #' + id6 + ' — ' +
+    (model.remaining > 0 ? 'المتبقي ' + formatEGP(model.remaining) : 'مدفوع بالكامل');
+  return shareCanvas(canvas, 'invoice-' + id6 + '.png', msg, customer && customer.phone);
+}
+
+/**
+ * مشاركة كشف حساب العميل كصورة.
+ * @param {Object} customer
+ * @param {Array} orders
+ * @param {Array} payments
+ * @returns {Promise<'shared'|'cancelled'|'downloaded'>}
+ */
+export async function shareCustomerStatementImage(customer, orders, payments) {
+  const { canvas, model } = await renderCustomerStatementCanvas(customer, orders, payments);
+  const idPart = String(customer.id || '').slice(-6).replace(/[^\w-]/g, '') || 'customer';
+  const msg = 'كشف حساب — ' + plain(customer.name) + ' — ' +
+    (model.remaining > 0 ? 'المتبقي ' + formatEGP(model.remaining) : 'لا يوجد متبقٍّ');
+  return shareCanvas(canvas, 'statement-' + idPart + '.png', msg, customer.phone);
 }

@@ -21,6 +21,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
 import { printCustomerStatement } from '../services/invoice-print.js';
+import { shareCustomerStatementImage } from '../services/invoice-image.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { formatEGP } from '../core/utils.js';
@@ -514,6 +515,22 @@ async function printStatement(customer) {
   }
 }
 
+/** مشاركة كشف الحساب كصورة (واتساب): قائمة المشاركة على الجوال، أو تنزيل الصورة كبديل. */
+async function shareStatementImage(customer) {
+  try {
+    toast.info('جارٍ تجهيز الصورة...');
+    const [ordersList, paymentsList] = await Promise.all([
+      orders.findByCustomer(customer.id),
+      payments.findByCustomer(customer.id),
+    ]);
+    const r = await shareCustomerStatementImage(customer, ordersList, paymentsList);
+    if (r === 'downloaded') toast.info('تم حفظ صورة الكشف — أرفقها في محادثة واتساب');
+  } catch (err) {
+    console.error('[shareStatementImage]', err);
+    toast.danger('تعذّر إنشاء صورة الكشف');
+  }
+}
+
 /* ==========================================================================
    6. عرض صورة العميل (lightbox)
    ========================================================================== */
@@ -667,6 +684,11 @@ function buildCustomerCard(c) {
       title: 'كشف حساب',
       onClick: () => printStatement(c),
     }, '📄'),
+    el('button', {
+      className: 'btn btn--sm btn--ghost',
+      title: 'مشاركة كشف الحساب كصورة', 'aria-label': 'مشاركة كشف الحساب كصورة',
+      onClick: () => shareStatementImage(c),
+    }, '🖼️'),
     el('button', {
       className: 'btn btn--sm btn--ghost',
       onClick: () => toggleVIP(c),
