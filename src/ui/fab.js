@@ -139,7 +139,7 @@ function handleAction(action) {
 /**
  * فتح قائمة الإجراءات السريعة.
  */
-function openQuickActions() {
+export function openQuickActions() {
   try {
     modal.open({
       title: '⚡ إجراءات سريعة',

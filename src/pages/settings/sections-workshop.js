@@ -13,6 +13,7 @@
 import { applyAppearance, applyFont, applyFontSize, ensureAllFonts } from '../../ui/display-settings.js';
 import { isDarkMode, setDarkMode } from '../../ui/theme.js';
 import { isClientMode, setClientMode } from '../../ui/client-mode.js';
+import { isBottomNavEnabled, setBottomNavEnabled } from '../../ui/bottom-nav.js';
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
@@ -469,6 +470,14 @@ const displaySection = {
     body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast', 'نصوص أغمق وحدود أوضح'));
     body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل لعرض بيانات أكثر'));
     body.appendChild(toggleRow('وضع العميل 👁️', 'clientMode', 'إخفاء الأرقام والإحصائيات'));
+    /* شريط التنقّل السفلي: تفضيل لهذا الجهاز فقط (لا يُزامَن) */
+    body.appendChild(el('div', { className: 'settings-row', 'data-setting': 'bottom-nav' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'شريط التنقّل السفلي 📱'),
+        el('div', { className: 'settings-row__hint' }, 'أزرار في أسفل الشاشة تصلها بإبهام واحد (للجوال فقط)'),
+      ]),
+      createToggle({ label: '', checked: isBottomNavEnabled(), onChange: (v) => setBottomNavEnabled(v) }),
+    ]));
   },
 };
 

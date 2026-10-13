@@ -406,6 +406,13 @@ try {
   console.warn('[FAB] فشل التثبيت:', err);
 }
 
+/* 📱 شريط التنقّل السفلي (يد واحدة) — جوال فقط، ويُوقَف من الإعدادات */
+try {
+  import('./ui/bottom-nav.js').then((m) => m.mountBottomNav(layout)).catch((e) => console.warn('[BottomNav] unavailable:', e));
+} catch (err) {
+  console.warn('[BottomNav] فشل التثبيت:', err);
+}
+
 /* 🔴 مؤشر "غير متصل" — يستمع لـ online/offline */
 try {
   if (typeof mountOffline === 'function') {
