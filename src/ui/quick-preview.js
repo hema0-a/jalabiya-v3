@@ -14,6 +14,7 @@ import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
 import { customers as customersRepo } from '../data/repos/customers.js';
+import { settings as settingsRepo } from '../data/repos/settings.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
@@ -195,13 +196,99 @@ export async function previewCustomer(idOrObj, onEdit) {
     c.phone ? { text: '📱 واتساب', variant: 'primary',
       onClick: () => _whatsapp(c.phone, 'مرحباً ' + c.name + '،') } : null,
     { text: 'التفاصيل الكاملة', variant: 'secondary',
-      onClick: () => { modal.close(); location.hash = '#/customers'; } },
+      onClick: () => { modal.close(); _openCustomerFullDetails(c, orders, onEdit); } },
     onEdit ? { text: '✏️ تعديل', variant: 'secondary',
       onClick: () => { modal.close(); onEdit(); } } : null,
     _closeAction(),
   ].filter(Boolean);
 
   modal.open({ title: '👤 ' + c.name, body, actions, closable: true, variant: 'sheet' });
+}
+
+/**
+ * «التفاصيل الكاملة» للعميل: كل المقاسات + كل الطلبات بتفاصيلها.
+ * @param {Object} c — العميل
+ * @param {Array} orders — طلبات العميل
+ * @param {Function} [onEdit]
+ */
+async function _openCustomerFullDetails(c, orders, onEdit) {
+  let fields = [];
+  try {
+    const st = await settingsRepo.get();
+    fields = Array.isArray(st.measurementFields) ? st.measurementFields : [];
+  } catch { fields = []; }
+
+  /* المقاسات: الحقول المعروفة بترتيب الإعدادات، ثم أي مفاتيح قديمة/محذوفة حتى لا يضيع مقاس */
+  const m = (c.measurements && typeof c.measurements === 'object') ? c.measurements : {};
+  const known = new Set(fields.map((f) => f.id));
+  const hasVal = (v) => v != null && v !== '';
+  const measureRows = [];
+  fields.forEach((f) => {
+    if (hasVal(m[f.id])) {
+      measureRows.push(_row('📏', f.name, m[f.id] + (f.unit ? ' ' + (f.unit === 'cm' ? 'سم' : f.unit) : '')));
+    }
+  });
+  Object.keys(m).forEach((k) => {
+    if (!known.has(k) && hasVal(m[k])) measureRows.push(_row('📏', k, m[k]));
+  });
+
+  const statusLabels = { pending: '⏳ قيد الانتظار', in_progress: '🧵 قيد التنفيذ',
+    ready: '✅ جاهز', delivered: '📦 تم التسليم', cancelled: '❌ ملغي' };
+
+  const sorted = [...(orders || [])].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const orderBlocks = [];
+  for (const o of sorted) {
+    let paid = 0;
+    try {
+      const pays = await paymentsRepo.findByOrder(o.id);
+      paid = orderPaidBreakdown(o, pays).paid;
+    } catch { paid = Number(o.deposit) || 0; }
+    const total = Number(o.amount) || 0;
+    const items = _orderItems(o);
+    orderBlocks.push(el('div', {
+      style: { border: '1px solid #E5DDD0', borderRadius: '10px', padding: '8px 10px', marginTop: '8px' },
+    }, [
+      _row('🔖', 'الحالة', statusLabels[o.status] || o.status || '—'),
+      o.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(o.createdAt)) : null,
+      o.receivedDate ? _row('🧵', 'استلام القماش', formatDate(o.receivedDate)) : null,
+      o.dueDate ? _row('📅', 'تاريخ التسليم', formatDate(o.dueDate)) : null,
+      ...items.map((it) => _listItem(it.name,
+        it.quantity + ' × ' + formatEGP(it.price) + ' = ' + formatEGP(it.price * it.quantity))),
+      el('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, [
+        _stat('الإجمالي', formatEGP(total)),
+        _stat('المدفوع', formatEGP(paid), '#2E7D32'),
+        _stat('المتبقي', formatEGP(Math.max(0, total - paid)), total - paid > 0 ? '#F57C00' : '#666'),
+      ]),
+      o.notes ? el('p', { style: { fontSize: '12px', color: '#666', margin: '8px 0 0', lineHeight: '1.5' } },
+        '📝 ' + o.notes) : null,
+    ].filter(Boolean)));
+  }
+
+  const body = el('div', {}, [
+    c.vip ? el('div', { style: { fontSize: '12px', color: '#B8863B', fontWeight: '600', marginBottom: '6px' } },
+      '⭐ عميل VIP') : null,
+    _row('📞', 'الهاتف', c.phone || '—'),
+    c.address ? _row('🏠', 'العنوان', c.address) : null,
+    c.notes ? _row('📝', 'ملاحظات', c.notes) : null,
+    _section('📏 المقاسات'),
+    ...(measureRows.length > 0 ? measureRows : [
+      el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } }, 'لا توجد مقاسات مسجلة لهذا العميل'),
+    ]),
+    _section('📦 الطلبات (' + sorted.length + ')'),
+    ...(orderBlocks.length > 0 ? orderBlocks : [
+      el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } }, 'لا توجد طلبات لهذا العميل'),
+    ]),
+  ].filter(Boolean));
+
+  modal.open({
+    title: '👤 ' + c.name + ' — التفاصيل الكاملة',
+    body,
+    actions: [
+      onEdit ? { text: '✏️ تعديل', variant: 'secondary', onClick: () => { modal.close(); onEdit(); } } : null,
+      _closeAction(),
+    ].filter(Boolean),
+    closable: true, variant: 'sheet',
+  });
 }
 
 /* ============================================================
