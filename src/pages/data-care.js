@@ -21,9 +21,11 @@ import { toast } from '../ui/toast.js';
 import { scanIntegrity, ISSUE_LABELS } from '../services/data-integrity.js';
 import { findDuplicateGroups, pickPrimary, mergeFields, CUSTOMER_LINKED_STORES } from '../services/customer-merge.js';
 import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vip-rules.js';
+import { listBackups, verifyBackup, getLastVerification } from '../services/auto-backup.js';
+import { formatDate } from '../core/utils.js';
 
 const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
-let state = { container: null, data: null, scan: null };
+let state = { container: null, data: null, scan: null, backups: null, verifyResult: null };
 
 async function loadData() {
   const [cus, ord, pay, apt, qts] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
@@ -103,6 +105,54 @@ function integritySection() {
   return section('🩺 سلامة البيانات', kids);
 }
 
+/* ---------- 4) فحص النسخ الاحتياطية (v3.3.51) ---------- */
+function backupVerifySection() {
+  const kids = [el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px' } },
+    'يفتح النسخة المحفوظة ويتأكد إنها كاملة وقابلة للتصدير وأرقامها سليمة، قبل ما تحتاجها. للقراءة فقط ولا يغيّر بياناتك.')];
+
+  const last = getLastVerification();
+  if (last && !state.verifyResult) {
+    kids.push(el('div', { style: { fontSize: '12px', color: last.ok ? '#2E7D32' : '#C62828', marginBottom: '8px' } },
+      (last.ok ? '✅ آخر فحص تلقائي: سليمة' : '❌ آخر فحص تلقائي: فيها مشكلة') + ' · ' + formatDate(last.at)));
+  }
+
+  const bks = state.backups;
+  if (bks == null) {
+    kids.push(btn('📂 عرض النسخ', async () => { state.backups = await listBackups(); draw(); }));
+  } else if (bks.length === 0) {
+    kids.push(el('div', { style: { color: '#E65100', fontSize: '13px' } },
+      '⚠️ لا توجد نسخ احتياطية محفوظة. أنشئ نسخة من الإعدادات ← النسخ الاحتياطي.'));
+  } else {
+    bks.forEach((b, i) => {
+      kids.push(el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid rgba(0,0,0,0.06)', fontSize: '13px' } }, [
+        el('span', { style: { flex: '1' } }, (i === 0 ? '🆕 ' : '') + b.label + ' · ' + formatDate(b.createdAt) + ' · ' + b.sizeKB + ' KB'),
+        btn('🧪 فحص', async () => {
+          try { state.verifyResult = await verifyBackup(b.id); }
+          catch (e) { state.verifyResult = { ok: false, errors: ['فشل الفحص: ' + (e && e.message || e)], warnings: [], counts: {}, backupId: b.id, createdAt: b.createdAt }; }
+          draw();
+        }, 'secondary'),
+      ]));
+    });
+  }
+
+  const r = state.verifyResult;
+  if (r) {
+    kids.push(el('div', { style: { marginTop: '10px', padding: '10px', borderRadius: '8px', background: r.ok ? '#E8F5E9' : '#FFEBEE' } }, [
+      el('div', { style: { fontWeight: '700', color: r.ok ? '#2E7D32' : '#C62828', fontSize: '14px' } },
+        r.ok ? '✅ النسخة سليمة وجاهزة للاستعادة' : '❌ النسخة فيها مشاكل — لا تعتمد عليها'),
+      ...r.errors.map((e) => el('div', { style: { fontSize: '12px', color: '#C62828', marginTop: '4px' } }, '• ' + e)),
+      ...r.warnings.map((w) => el('div', { style: { fontSize: '12px', color: '#E65100', marginTop: '4px' } }, '⚠️ ' + w)),
+      r.counts && Object.keys(r.counts).length
+        ? el('div', { style: { fontSize: '11px', color: '#666', marginTop: '6px' } },
+          'تحتوي: ' + (r.counts.customers || 0) + ' عميل · ' + (r.counts.orders || 0) + ' طلب · ' + (r.counts.payments || 0) + ' دفعة')
+        : null,
+    ].filter(Boolean)));
+    if (!r.ok) kids.push(el('div', { style: { fontSize: '11px', color: '#888', marginTop: '6px' } },
+      'الحل: أنشئ نسخة جديدة الآن من الإعدادات ← النسخ الاحتياطي، وافحصها. ولو المشكلة استمرت ابعتلي النص اللي فوق.'));
+  }
+  return section('🧪 فحص النسخ الاحتياطية', kids);
+}
+
 /* ---------- 3) دمج المكررين ---------- */
 async function mergeGroup(primary, dups) {
   const patch = mergeFields(primary, dups);
@@ -163,11 +213,12 @@ function draw() {
   c.appendChild(vipSection());
   c.appendChild(integritySection());
   c.appendChild(mergeSection());
+  c.appendChild(backupVerifySection());
 }
 
 export const dataCarePage = {
   async render(container) {
-    state = { container, data: null, scan: null };
+    state = { container, data: null, scan: null, backups: null, verifyResult: null };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[data-care] render:', err);
@@ -175,5 +226,5 @@ export const dataCarePage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, data: null, scan: null }; },
+  destroy() { state = { container: null, data: null, scan: null, backups: null, verifyResult: null }; },
 };

@@ -428,6 +428,137 @@ export async function shareLatestBackup(deps = {}) {
 }
 
 /* ==========================================================================
+   7ج. فحص سلامة النسخة الاحتياطية (v3.3.51)
+   ==========================================================================
+   النسخة اللي ما اتجرّبتش مش مضمونة. هذا الفحص يقرأ النسخة من المخزن ويتأكد إنها
+   كاملة وقابلة للتصدير وسليمة الأرقام قبل ما تحتاجها فعلاً — دون أن يمسّ بياناتك الحالية. */
+
+const VERIFY_KEY = 'jalabiya_v3_last_backup_verify';
+const VERIFY_EVERY_DAYS = 7;
+const CORE_STORES = [STORES.CUSTOMERS, STORES.ORDERS, STORES.PAYMENTS];
+
+/**
+ * فحص نسخة احتياطية (قراءة فقط).
+ * @param {string} id
+ * @returns {Promise<{ok:boolean, backupId:string, createdAt:number, errors:string[], warnings:string[], counts:Object}>}
+ */
+export async function verifyBackup(id) {
+  const errors = [];
+  const warnings = [];
+  const res = (b) => ({ ok: errors.length === 0, backupId: id, createdAt: (b && b.createdAt) || 0,
+    errors, warnings, counts: (b && b.counts) || {} });
+
+  let backup = null;
+  try { backup = await getBackup(id); } catch { backup = null; }
+  if (!backup) { errors.push('النسخة غير موجودة أو تعذّرت قراءتها'); return res(null); }
+  if (!backup.stores || typeof backup.stores !== 'object') {
+    errors.push('النسخة لا تحتوي مخازن بيانات'); return res(backup);
+  }
+
+  /* 1) المخازن الأساسية لازم تكون موجودة؛ الناقص من نسخ أقدم تحذير فقط */
+  for (const st of BACKUP_STORES) {
+    if (!Array.isArray(backup.stores[st])) {
+      if (CORE_STORES.includes(st)) errors.push('المخزن الأساسي «' + st + '» مفقود من النسخة');
+      else warnings.push('المخزن «' + st + '» غير موجود (نسخة أقدم من إضافته)');
+    }
+  }
+
+  /* 2) سلامة السجلات: معرّف موجود وغير مكرر، والعدّاد المسجّل يطابق الفعلي */
+  for (const st of BACKUP_STORES) {
+    const list = backup.stores[st];
+    if (!Array.isArray(list)) continue;
+    const seen = new Set();
+    let noId = 0; let dup = 0;
+    for (const r of list) {
+      if (!r || typeof r !== 'object' || r.id == null) { noId++; continue; }
+      if (seen.has(r.id)) dup++; else seen.add(r.id);
+    }
+    if (noId > 0) errors.push('«' + st + '»: ' + noId + ' سجل بلا معرّف (لن يُستعاد)');
+    if (dup > 0) errors.push('«' + st + '»: ' + dup + ' سجل مكرر المعرّف');
+    if (backup.counts && backup.counts[st] != null && backup.counts[st] !== list.length) {
+      errors.push('«' + st + '»: العدد المسجّل ' + backup.counts[st] + ' لا يطابق الفعلي ' + list.length);
+    }
+  }
+
+  /* 3) قابلة للتصدير كملف JSON (نفس ما يفعله زر المشاركة) */
+  try {
+    const len = JSON.stringify(backup).length;
+    if (!len || len < 10) errors.push('تعذّر تحويل النسخة لملف');
+  } catch (e) { errors.push('النسخة لا تُحوَّل لملف JSON: ' + (e && e.message || e)); }
+
+  /* 4) روابط: طلب/دفعة لعميل غير موجود في النسخة (تحذير، قد يكون حذفاً قديماً) */
+  const custIds = new Set((backup.stores[STORES.CUSTOMERS] || []).map((c) => c && c.id));
+  const countOrphans = (store) => (backup.stores[store] || [])
+    .filter((r) => r && r.customerId && !custIds.has(r.customerId)).length;
+  const oo = countOrphans(STORES.ORDERS);
+  const po = countOrphans(STORES.PAYMENTS);
+  if (oo > 0) warnings.push(oo + ' طلب مرتبط بعميل غير موجود في النسخة');
+  if (po > 0) warnings.push(po + ' دفعة مرتبطة بعميل غير موجود في النسخة');
+
+  /* 5) مقارنة مع البيانات الحالية: نسخة شبه فارغة والبيانات الحية كبيرة = خطر */
+  try {
+    for (const st of [STORES.CUSTOMERS, STORES.ORDERS]) {
+      const live = await idb.count(st);
+      const inBackup = (backup.stores[st] || []).length;
+      if (live >= 5 && inBackup === 0) errors.push('«' + st + '» فاضي في النسخة بينما فيه ' + live + ' سجل حالياً');
+      else if (live >= 10 && inBackup < live * 0.5) {
+        warnings.push('«' + st + '»: ' + inBackup + ' في النسخة مقابل ' + live + ' حالياً (النسخة أقدم بكثير)');
+      }
+    }
+  } catch { /* المقارنة اختيارية */ }
+
+  return res(backup);
+}
+
+/** آخر نتيجة فحص محفوظة (أو null). */
+export function getLastVerification() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VERIFY_KEY) || 'null');
+    return v && typeof v === 'object' ? v : null;
+  } catch { return null; }
+}
+
+function saveVerification(r) {
+  try {
+    localStorage.setItem(VERIFY_KEY, JSON.stringify({
+      at: Date.now(), backupId: r.backupId, backupAt: r.createdAt, ok: r.ok,
+      errors: r.errors.slice(0, 10), warnings: r.warnings.slice(0, 10),
+    }));
+  } catch { /* اختياري */ }
+}
+
+/**
+ * يفحص أحدث نسخة ويحفظ النتيجة.
+ * @returns {Promise<Object|null>} null لو لا توجد نسخ
+ */
+export async function verifyLatestBackup() {
+  const list = await listBackups();
+  if (list.length === 0) return null;
+  const r = await verifyBackup(list[0].id);
+  saveVerification(r);
+  return r;
+}
+
+/**
+ * يفحص أحدث نسخة لو مضى أسبوع على آخر فحص، أو ظهرت نسخة أحدث من المفحوصة.
+ * @returns {Promise<Object|null>} نتيجة الفحص لو جرى، وإلا null
+ */
+export async function verifyLatestBackupIfDue() {
+  try {
+    const last = getLastVerification();
+    const list = await listBackups();
+    if (list.length === 0) return null;
+    const stale = !last || (Date.now() - last.at) > VERIFY_EVERY_DAYS * DAY_MS_EXT;
+    const newer = last && last.backupId !== list[0].id;
+    if (!stale && !newer) return null;
+    return await verifyLatestBackup();
+  } catch (e) {
+    console.warn('[verifyBackup]', e);
+    return null;
+  }
+}
+
+/* ==========================================================================
    8. تصدير داخلي للاختبار
    ========================================================================== */
 

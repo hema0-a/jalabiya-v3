@@ -28,7 +28,7 @@ function showError(title, err) {
 }
 
 let el, toast, createLayout, events, openUniversalSearch;
-let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
+let runAutoBackupIfDue, verifyLatestBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 let toggleClientMode, isClientMode, applyClientMode;
 let startNotificationCheck;
 let installErrorHandler;
@@ -72,7 +72,7 @@ try {
   ({ createLayout } = layoutMod);
   ({ events } = eventsMod);
   ({ openUniversalSearch } = searchMod);
-  ({ runAutoBackupIfDue } = backupMod);
+  ({ runAutoBackupIfDue, verifyLatestBackupIfDue } = backupMod);
   ({ registerServiceWorker } = pwaMod);
   ({ maybeStartOnboarding } = onboardingMod);
   ({ toggleClientMode, isClientMode, applyClientMode } = clientMod);
@@ -557,6 +557,16 @@ setTimeout(() => {
       } else {
         console.log('[AutoBackup] ⚠️ لم يُنشأ:', res && res.reason);
       }
+      /* 🧪 فحص سلامة أحدث نسخة (أسبوعياً أو عند ظهور نسخة جديدة) — قراءة فقط */
+      try {
+        const v = await verifyLatestBackupIfDue();
+        if (v && !v.ok) {
+          console.warn('[BackupVerify] ❌', v.errors);
+          toast.warning('⚠️ آخر نسخة احتياطية فيها مشكلة — افتح «صيانة البيانات» لتفاصيل الفحص', { duration: 9000 });
+        } else if (v) {
+          console.log('[BackupVerify] ✅ النسخة سليمة', v.warnings.length ? '(مع تحذيرات)' : '');
+        }
+      } catch (e) { console.warn('[BackupVerify] فشل الفحص:', e); }
     } catch (err) {
       console.warn('[AutoBackup] ❌ فشل:', err);
     }
