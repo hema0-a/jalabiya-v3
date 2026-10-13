@@ -17,7 +17,7 @@ function loadPlaywright() {
 const { chromium } = loadPlaywright();
 
 const SHOTS = path.join(ROOT, 'test-results');
-const ROUTES = 'dashboard customers orders appointments payments debts inventory workers expenses reports settings calendar pricing-calculator financial-center kpis portfolio commitments house-expenses loans referrals occasions activity-log trash cloud-sync pickups messages quotes season-compare data-care'.split(' ');
+const ROUTES = 'dashboard customers orders appointments payments debts inventory workers expenses reports settings calendar pricing-calculator financial-center kpis portfolio commitments house-expenses loans referrals occasions activity-log trash cloud-sync pickups messages quotes season-compare data-care wall'.split(' ');
 const IGNORE = /ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|Failed to load resource|fonts\.googleapis/;
 const HEADED = process.argv.includes('--headed');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7); /* --only=tests | --only=pages | --only=narrow */

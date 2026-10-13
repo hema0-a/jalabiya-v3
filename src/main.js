@@ -158,6 +158,7 @@ async function loadPageModule(pageId) {
       case 'activity-log':       return await import('./pages/activity-log.js');
       case 'trash':              return await import('./pages/trash.js');
       case 'cloud-sync':         return await import('./pages/cloud-sync.js');
+      case 'wall':               return await import('./pages/wall.js');
       case 'tests':              return await import('./pages/tests.js');
       default:                   return null;
     }
@@ -185,6 +186,7 @@ function buildErrorPanel(title, err) {
 const SIDEBAR_SECTIONS = [
   { title: 'الرئيسية', items: [
     { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
+    { id: 'wall',      icon: '📺', label: 'شاشة الورشة' },
   ]},
   { title: 'العمليات', items: [
     { id: 'customers', icon: '👥', label: 'العملاء' },
@@ -236,6 +238,7 @@ const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
 
 const MODULE_EXPORT_MAP = {
   dashboard:            'dashboardPage',
+  wall:                 'wallPage',
   customers:            'customersPage',
   orders:               'ordersPage',
   appointments:         'appointmentsPage',
