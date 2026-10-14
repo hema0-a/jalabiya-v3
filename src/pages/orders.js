@@ -18,7 +18,8 @@ import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
-import { openSignaturePad } from '../ui/signature-pad.js';
+import { openSignaturePad, SIGNATURE_SKIPPED } from '../ui/signature-pad.js';
+import { getAskSignature, setAskSignature } from '../services/signature-pref.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
@@ -983,26 +984,54 @@ async function shareInvoiceImage(order) {
   }
 }
 
-async function deliverWithSignature(order) {
+/** نافذة تأكيد التسليم مع خانة «طلب توقيع العميل» (تحفظ اختيارها كتفضيل للجهاز). @returns {Promise<{ask:boolean}|null>} */
+function confirmDeliveryDialog(message) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; resolve(v); };
+    const box = el('input', { type: 'checkbox', id: 'deliver-ask-sig', 'aria-label': 'طلب توقيع العميل' });
+    box.checked = getAskSignature();
+    const body = el('div', {}, [
+      el('p', { style: { margin: '0 0 12px', lineHeight: '1.7' } }, message),
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' } },
+        [box, 'طلب توقيع العميل على الاستلام']),
+    ]);
+    const handle = modal.open({
+      title: 'تأكيد التسليم', body, closable: true,
+      onClose: () => finish(null),
+      actions: [
+        { text: 'إلغاء', variant: 'ghost', onClick: () => { finish(null); handle.close(); } },
+        {
+          text: '🚚 تأكيد التسليم', variant: 'primary',
+          onClick: () => { const ask = box.checked; setAskSignature(ask); finish({ ask }); handle.close(); },
+        },
+      ],
+    });
+  });
+}
+
+/** تسليم المتبقي (كامل الطلب) — التوقيع اختياري: خانة في التأكيد + زر «تخطي» داخل اللوحة. */
+export async function deliverWithSignature(order) {
   const prog = deliveryProgress(order);
-  const confirmed = await modal.confirm({
-    title: 'تأكيد التسليم',
-    message: prog.state === 'partial'
-      ? 'سيُسلَّم المتبقي (' + prog.remainingUnits + ' من ' + prog.totalUnits + ' قطعة) ويكتمل الطلب. هل العميل في انتظار التسليم الآن؟'
-      : 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟',
-    confirmText: 'نعم، ابدأ التوقيع', cancelText: 'إلغاء',
-  });
-  if (!confirmed) return;
-  const signature = await openSignaturePad({
-    title: '✍️ توقيع استلام الطلب',
-    hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
-  });
-  if (!signature) { toast.info('تم إلغاء التسليم'); return; }
+  const choice = await confirmDeliveryDialog(prog.state === 'partial'
+    ? 'سيُسلَّم المتبقي (' + prog.remainingUnits + ' من ' + prog.totalUnits + ' قطعة) ويكتمل الطلب. هل العميل في انتظار التسليم الآن؟'
+    : 'سيتم تعليم الطلب كمُسلَّم. هل العميل في انتظار التسليم الآن؟');
+  if (!choice) return;
+  let signature = null;
+  if (choice.ask) {
+    const got = await openSignaturePad({
+      title: '✍️ توقيع استلام الطلب',
+      hint: 'وقّع هنا لاستلام الطلب — سيُحفظ التوقيع مع الطلب',
+      allowSkip: true,
+    });
+    if (!got) { toast.info('تم إلغاء التسليم'); return; }
+    if (got !== SIGNATURE_SKIPPED) signature = got;
+  }
   try {
-    await orders.update(order.id, completeRemaining(order, { signature }));
-    toast.success('تم التسليم مع التوقيع ✅');
-    await refreshAll();
-  } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
+    await orders.update(order.id, completeRemaining(order, signature ? { signature } : {}));
+    toast.success(signature ? 'تم التسليم مع التوقيع ✅' : 'تم التسليم ✅');
+  } catch (err) { toast.danger('فشل التسليم: ' + err.message); return; }
+  try { await refreshAll(); } catch (err) { console.warn('[orders] refresh after delivery', err); }
 }
 
 /**
@@ -1110,9 +1139,10 @@ export function openPartialDelivery(order) {
 
   const noteInput = el('input', { type: 'text', className: 'input', placeholder: 'ملاحظة (اختياري)', style: { marginTop: '10px' } });
   const sigBox = el('input', { type: 'checkbox', id: 'partial-sig' });
-  sigBox.checked = true;
+  sigBox.checked = getAskSignature();                        /* يتذكّر اختيارك السابق */
+  sigBox.addEventListener('change', () => setAskSignature(sigBox.checked));
   const sigRow = el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px' } },
-    [sigBox, 'طلب توقيع العميل على الاستلام']);
+    [sigBox, 'طلب توقيع العميل على الاستلام (اختياري)']);
 
   const body = el('div', {}, [
     el('div', { style: { fontSize: '13px', color: '#555', marginBottom: '6px' } },
@@ -1155,11 +1185,13 @@ export function openPartialDelivery(order) {
 
           let signature = null;
           if (sigBox.checked) {
-            signature = await openSignaturePad({
+            const got = await openSignaturePad({
               title: '✍️ توقيع استلام ' + plan.units + ' قطعة',
               hint: 'وقّع هنا لاستلام هذا الجزء — سيُحفظ التوقيع مع التسليم',
+              allowSkip: true,
             });
-            if (!signature) { toast.info('تم إلغاء التسليم'); return; }
+            if (!got) { toast.info('تم إلغاء التسليم'); return; }
+            signature = got === SIGNATURE_SKIPPED ? null : got;
           }
           const res = applyDelivery(fresh, sel, { note: noteInput.value, signature });
           if (!res.ok) { toast.warning(res.error); return; }

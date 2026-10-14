@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.61 — اختيار العميل بالبحث
+   الإصدار: v3.3.62 — تخطي توقيع العميل عند التسليم
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.61';
+const CACHE_VERSION = 'v3.3.62';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -157,6 +157,7 @@ const PRECACHE_URLS = [
   './src/services/order-risk.js',
   './src/services/partial-delivery.js',
   './src/services/delivery-receipt.js',
+  './src/services/signature-pref.js',
   './src/security/pin-recovery.js',
   './src/core/day-math.js',
   './src/services/order-timing.js',
