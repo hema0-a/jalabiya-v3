@@ -14,6 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { checkAmount } from '../services/amount-guard.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
 import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
@@ -69,12 +70,7 @@ function openPaymentForm(existing = null) {
   const isEdit = existing !== null;
 
   /* العميل */
-  const customerSelect = el('select', { className: 'select' });
-  customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
-  state.customers.forEach((c) => {
-    customerSelect.appendChild(el('option', { value: c.id }, c.name));
-  });
-  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
+  const customerSelect = createCustomerPicker({ customers: state.customers, value: isEdit ? existing.customerId : '' });
 
   /* الطلب (يعتمد على العميل المختار) */
   const orderSelect = el('select', { className: 'select' });

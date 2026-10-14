@@ -26,6 +26,7 @@ import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { orderPaidBreakdown } from '../services/payments-view.js';
 import { suggestCollection } from '../services/delivery-receipt.js';
 import { openDeliveryReceipt } from '../ui/delivery-receipt-dialog.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
 import { statusNotifyAction, newOrderNotifyAction } from '../services/status-notify.js';
 import { depositGuard } from '../ui/deposit-guard.js';
 import { sinceText } from '../services/message-log.js';
@@ -410,12 +411,8 @@ function openOrderForm(existing = null) {
   const isEdit = existing !== null;
   let draftDone = false;   /* بعد الحفظ الناجح لا تُعاد كتابة المسودة عند إغلاق النافذة */
 
-  const customerSelect = el('select', { className: 'select' });
-  customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
-  state.customers.forEach((c) => {
-    customerSelect.appendChild(el('option', { value: c.id }, c.name + (c.phone ? ' (' + c.phone + ')' : '')));
-  });
-  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
+  /* اختيار بالبحث (اسم/هاتف) بدل قائمة طويلة — بنفس واجهة .value */
+  const customerSelect = createCustomerPicker({ customers: state.customers, value: isEdit ? existing.customerId : '' });
 
   const statusSelect = el('select', { className: 'select' });
   STATUS_ORDER.forEach((s) => {

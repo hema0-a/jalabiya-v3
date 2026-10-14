@@ -57,7 +57,7 @@ register('audit v3.3.42 quick order mode + discount confirm (UI)', async (t) => 
       form.classList.contains('order-form--quick') && !visible(deposit()) && !visible(m.querySelector('.order-extras')) &&
       !Array.from(m.querySelectorAll('button')).some((b) => b.textContent.includes('إضافة بند') && visible(b)));
     t.test('4. يبقى العميل والبند والتاريخ ظاهرة',
-      visible(m.querySelector('select.select')) && visible(m.querySelector('.order-item input')) && visible(m.querySelector('input[type="date"][aria-label="تاريخ التسليم"]')));
+      visible(m.querySelector('[data-role="customer-picker"]')) && visible(m.querySelector('.order-item input')) && visible(m.querySelector('input[type="date"][aria-label="تاريخ التسليم"]')));
     t.test('5. الاختيار يُحفظ', (() => { try { return localStorage.getItem(MODE_KEY) === 'quick'; } catch { return false; } })());
     t.test('6. aria-pressed صحيح', m.querySelector('[data-mode="quick"]').getAttribute('aria-pressed') === 'true' &&
       m.querySelector('[data-mode="full"]').getAttribute('aria-pressed') === 'false');
@@ -67,7 +67,7 @@ register('audit v3.3.42 quick order mode + discount confirm (UI)', async (t) => 
     try { draftMgr.clear('order-form'); } catch { /* ignore */ }
     m = await openForm();
     t.test('7. الفتح التالي يتذكر الوضع السريع', m.querySelector('.order-form').classList.contains('order-form--quick'));
-    m.querySelector('select.select').value = cust.id; fire(m.querySelector('select.select'), 'change');
+    m.querySelector('[data-role="customer-picker"]').value = cust.id; fire(m.querySelector('[data-role="customer-picker"]'), 'change');
     const nameIn = m.querySelector('.order-item input');
     nameIn.value = 'جلابية سريعة'; fire(nameIn);
     const priceIn = Array.from(m.querySelectorAll('.order-item input[type="number"]')).find((i) => i.min !== '1' && i !== nameIn);
@@ -83,7 +83,7 @@ register('audit v3.3.42 quick order mode + discount confirm (UI)', async (t) => 
     try { draftMgr.clear('order-form'); } catch { /* ignore */ }
     m = await openForm();
     m.querySelector('[data-mode="full"]').click();
-    m.querySelector('select.select').value = cust.id; fire(m.querySelector('select.select'), 'change');
+    m.querySelector('[data-role="customer-picker"]').value = cust.id; fire(m.querySelector('[data-role="customer-picker"]'), 'change');
     const n2 = m.querySelector('.order-item input'); n2.value = 'ثوب'; fire(n2);
     const p2 = Array.from(m.querySelectorAll('.order-item input[type="number"]')).find((i) => i.min !== '1' && i !== n2);
     p2.value = '1000'; fire(p2);

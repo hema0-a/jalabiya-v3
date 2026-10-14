@@ -80,7 +80,7 @@ register('audit v3.3.36 order form UX', async (t) => {
     await sleep(100);
 
     /* ملء بند + إجمالي البند */
-    const sel = modalEl.querySelector('select');
+    const sel = modalEl.querySelector('[data-role="customer-picker"]');   /* v3.3.61: اختيار العميل بالبحث */
     sel.value = cust.id; fire(sel, 'change');
     const nameIn = modalEl.querySelector('.order-item input[type=text]');
     const [priceIn, qtyIn] = modalEl.querySelectorAll('.order-item input[type=number]');

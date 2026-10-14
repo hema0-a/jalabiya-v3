@@ -15,6 +15,7 @@ import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
 import { sendLogged } from '../services/auto-messages.js';
 import {
   QUOTE_STATUS, DEFAULT_VALID_DAYS, quoteTotals, isExpired, validUntilFrom, quoteToOrderPayload, buildQuoteText,
@@ -52,11 +53,7 @@ function itemRow(item, onRemove) {
 
 function openForm(existing) {
   const isEdit = !!existing;
-  const customerSel = el('select', { className: 'input' }, [
-    el('option', { value: '' }, '— اختر العميل —'),
-    ...state.customers.map((c) => el('option', { value: c.id }, c.name + (c.phone ? ' · ' + c.phone : ''))),
-  ]);
-  if (isEdit) customerSel.value = existing.customerId || '';
+  const customerSel = createCustomerPicker({ customers: state.customers, value: isEdit ? (existing.customerId || '') : '', placeholder: '— اختر العميل —' });
   const itemsBox = el('div');
   const totalLine = el('div', { style: { fontWeight: '700', margin: '8px 0', color: '#1F6D57' } });
   const discountIn = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', value: isEdit ? (existing.discount || '') : '', placeholder: 'خصم ثابت (اختياري)' });

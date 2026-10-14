@@ -14,6 +14,7 @@ import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
 import { formatDate, formatTime, localDateInput } from '../core/utils.js';
 import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
@@ -136,12 +137,7 @@ function openAppointmentForm(existing = null) {
   });
 
   /* العميل */
-  const customerSelect = el('select', { className: 'select' });
-  customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
-  state.customers.forEach((c) => {
-    customerSelect.appendChild(el('option', { value: c.id }, c.name));
-  });
-  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
+  const customerSelect = createCustomerPicker({ customers: state.customers, value: isEdit ? existing.customerId : '' });
 
   /* التاريخ + الوقت */
   const dt = splitDateTime(isEdit ? existing.date : Date.now() + 86400000);

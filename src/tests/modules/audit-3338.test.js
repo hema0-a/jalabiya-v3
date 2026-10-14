@@ -35,7 +35,7 @@ register('audit v3.3.38 appointments & quotes forms', async (t) => {
     const price = row && row.querySelector('input[type=number]');
     t.test('5. حقل السعر عريض (' + (price ? Math.round(price.getBoundingClientRect().width) : 0) + 'px ≥ 80)', !!price && price.getBoundingClientRect().width >= 80);
 
-    const sel = modalEl.querySelector('select');
+    const sel = modalEl.querySelector('[data-role="customer-picker"]');   /* v3.3.61: اختيار العميل بالبحث */
     sel.value = cust.id; sel.dispatchEvent(new Event('change', { bubbles: true }));
     const [p, q] = modalEl.querySelectorAll('.order-item input[type=number]');
     p.value = '300'; p.dispatchEvent(new Event('input', { bubbles: true }));
