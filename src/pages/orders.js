@@ -12,7 +12,7 @@ import { consumeNew } from '../core/deeplink.js';
 import { uid, formatEGP, formatDate, parseDateInput, localDateInput, toNonNegative } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
-import { payments as paymentsRepoForDelete } from '../data/repos/payments.js';
+import { payments as paymentsRepoForDelete, payments as paymentsRepo } from '../data/repos/payments.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
@@ -24,6 +24,8 @@ import { printOrderInvoice } from '../services/invoice-print.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
 import { orderPaidBreakdown } from '../services/payments-view.js';
+import { suggestCollection } from '../services/delivery-receipt.js';
+import { openDeliveryReceipt } from '../ui/delivery-receipt-dialog.js';
 import { statusNotifyAction, newOrderNotifyAction } from '../services/status-notify.js';
 import { depositGuard } from '../ui/deposit-guard.js';
 import { sinceText } from '../services/message-log.js';
@@ -1007,13 +1009,37 @@ async function deliverWithSignature(order) {
 }
 
 /**
- * نافذة التسليم الجزئي: اختيار كمية كل بند يستلمها العميل الآن.
- * تقرأ الطلب من قاعدة البيانات عند التأكيد (لا من نسخة البطاقة) حتى لا تُسلَّم قطعة مرتين.
+ * نافذة التسليم الجزئي: اختيار كمية كل بند يستلمها العميل الآن + تحصيل نسبي اختياري.
+ * تقرأ الطلب والدفعات من قاعدة البيانات عند التأكيد (لا من نسخة البطاقة) حتى لا تُسلَّم قطعة مرتين
+ * ولا يُحصَّل أكثر من المتبقي. بعد التأكيد تُعرض نافذة إيصال التسليم (إرسال واتساب بنقرة).
  */
 export function openPartialDelivery(order) {
   const prog = deliveryProgress(order);
   const c = state.customerMap[order.customerId];
   const inputs = new Map();
+
+  /* ---- التحصيل النسبي: المبلغ المقترح = المستحق عن المسلَّم − المدفوع ---- */
+  let orderPays = [];
+  let paysLoaded = false;
+  let amountTouched = false;
+  let boxTouched = false;
+  const collectBox = el('input', { type: 'checkbox', 'aria-label': 'تحصيل دفعة الآن' });
+  const amountInput = el('input', {
+    type: 'number', className: 'input', min: '0', step: '0.01', inputmode: 'decimal',
+    'aria-label': 'المبلغ المحصَّل الآن', style: { width: '160px', textAlign: 'center', direction: 'ltr' },
+  });
+  const methodSel = el('select', { className: 'select', 'aria-label': 'طريقة الدفع' });
+  [['cash', 'نقدي'], ['instapay', 'InstaPay'], ['vodafone', 'Vodafone Cash'], ['other', 'أخرى']]
+    .forEach(([v, l]) => methodSel.appendChild(el('option', { value: v }, l)));
+  const collectInfo = el('div', { style: { fontSize: '12px', color: '#555', lineHeight: '1.9', marginTop: '6px' } }, 'اختر القطع لعرض المبلغ المستحق');
+  const collectNow = el('div', { style: { fontSize: '13px', fontWeight: '700', marginTop: '6px', minHeight: '18px' } });
+  const collectSection = el('div', { style: { marginTop: '12px', padding: '10px', background: '#F6F1E6', borderRadius: '10px' } }, [
+    el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '13px' } },
+      [collectBox, '💰 تحصيل دفعة الآن']),
+    collectInfo,
+    el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' } }, [amountInput, methodSel]),
+    collectNow,
+  ]);
 
   const summary = el('div', { role: 'status', style: { marginTop: '10px', fontSize: '13px', fontWeight: '600', minHeight: '20px' } });
   const readSelection = () => {
@@ -1021,19 +1047,46 @@ export function openPartialDelivery(order) {
     inputs.forEach((inp, id) => { sel[id] = inp.value === '' ? 0 : Number(inp.value); });
     return sel;
   };
+  const refreshCollect = () => {
+    const sg = suggestCollection(order, orderPays, readSelection());
+    if (!sg.ok) {
+      collectInfo.textContent = 'اختر القطع لعرض المبلغ المستحق';
+      collectNow.textContent = '';
+      return;
+    }
+    collectInfo.textContent = 'قيمة المسلَّم ' + formatEGP(sg.deliveredValue) + ' · المدفوع ' + formatEGP(sg.paid) +
+      ' · المستحق عن المسلَّم ' + formatEGP(sg.dueForDelivered) +
+      (sg.suggested <= 0 ? ' — ✅ ما دُفع يغطّي المسلَّم' : '');
+    if (!amountTouched) amountInput.value = sg.suggested > 0 ? String(sg.suggested) : '';
+    if (!boxTouched && paysLoaded) collectBox.checked = sg.suggested > 0;
+    const amt = Number(amountInput.value) || 0;
+    if (collectBox.checked && amt > 0) {
+      collectNow.textContent = amt > sg.balance + 0.009
+        ? '⚠️ المبلغ أكبر من المتبقي على الطلب (' + formatEGP(sg.balance) + ')'
+        : 'سيُسجَّل دفعة بمبلغ ' + formatEGP(amt);
+      collectNow.style.color = amt > sg.balance + 0.009 ? '#B3261E' : '#2E7D32';
+    } else {
+      collectNow.textContent = 'لن تُسجَّل دفعة';
+      collectNow.style.color = '#666';
+    }
+  };
+  amountInput.addEventListener('input', () => { amountTouched = true; refreshCollect(); });
+  collectBox.addEventListener('change', () => { boxTouched = true; refreshCollect(); });
+
   const refresh = () => {
     const plan = planDelivery(order, readSelection());
     if (!plan.ok) {
       const anyTyped = Array.from(inputs.values()).some((i) => Number(i.value) > 0);
       summary.textContent = anyTyped ? '⚠️ ' + plan.error : 'اختر الكميات التي يستلمها العميل الآن';
       summary.style.color = anyTyped ? '#B3261E' : '#666';
-      return;
+    } else {
+      const left = prog.remainingUnits - plan.units;
+      summary.textContent = plan.completes
+        ? '✅ هذه آخر الأجزاء — سيكتمل الطلب (' + plan.units + ' قطعة)'
+        : '🚚 سيُسلَّم ' + plan.units + ' قطعة — يتبقى ' + left;
+      summary.style.color = plan.completes ? '#2E7D32' : '#0B5A8A';
     }
-    const left = prog.remainingUnits - plan.units;
-    summary.textContent = plan.completes
-      ? '✅ هذه آخر الأجزاء — سيكتمل الطلب (' + plan.units + ' قطعة)'
-      : '🚚 سيُسلَّم ' + plan.units + ' قطعة — يتبقى ' + left;
-    summary.style.color = plan.completes ? '#2E7D32' : '#0B5A8A';
+    refreshCollect();
   };
 
   const rows = prog.lines.filter((l) => l.remaining > 0).map((l) => {
@@ -1067,9 +1120,13 @@ export function openPartialDelivery(order) {
   const body = el('div', {}, [
     el('div', { style: { fontSize: '13px', color: '#555', marginBottom: '6px' } },
       (c ? c.name + ' — ' : '') + 'سُلِّم ' + prog.deliveredUnits + ' من ' + prog.totalUnits + ' قطعة حتى الآن'),
-    ...rows, noteInput, sigRow, summary,
+    ...rows, noteInput, sigRow, collectSection, summary,
   ]);
   refresh();
+  /* الدفعات تُحمَّل بعد فتح النافذة (الفتح متزامن)؛ التحصيل لا يُفعَّل تلقائياً قبل اكتمال تحميلها */
+  paymentsRepo.findByOrder(order.id)
+    .then((list) => { orderPays = list; paysLoaded = true; refresh(); })
+    .catch(() => { paysLoaded = true; refresh(); });
 
   modal.open({
     title: '🚚 تسليم جزئي', body, closable: true,
@@ -1082,6 +1139,23 @@ export function openPartialDelivery(order) {
           const fresh = (await orders.find(order.id)) || order;       /* أحدث نسخة من قاعدة البيانات */
           const plan = planDelivery(fresh, sel);
           if (!plan.ok) { toast.warning(plan.error); return; }
+
+          /* التحصيل: يُتحقق منه قبل التوقيع حتى لا يوقّع العميل ثم يُرفض */
+          let collectAmt = 0;
+          if (collectBox.checked) {
+            collectAmt = Number(amountInput.value) || 0;
+            if (!Number.isFinite(collectAmt) || collectAmt < 0) { toast.warning('أدخل مبلغاً صحيحاً للتحصيل'); return; }
+            if (collectAmt > 0) {
+              let freshPays = [];
+              try { freshPays = await paymentsRepo.findByOrder(order.id); } catch (e) { /* نكمل */ }
+              const balance = Math.max(0, (Number(fresh.amount) || 0) - orderPaidBreakdown(fresh, freshPays).paid);
+              if (collectAmt > balance + 0.009) {
+                toast.warning('المبلغ أكبر من المتبقي على الطلب (' + formatEGP(balance) + ')');
+                return;
+              }
+            }
+          }
+
           let signature = null;
           if (sigBox.checked) {
             signature = await openSignaturePad({
@@ -1092,13 +1166,40 @@ export function openPartialDelivery(order) {
           }
           const res = applyDelivery(fresh, sel, { note: noteInput.value, signature });
           if (!res.ok) { toast.warning(res.error); return; }
+          const deliveryId = res.patch.deliveries[res.patch.deliveries.length - 1].id;
           try {
             await orders.update(order.id, res.patch);
-            modal.close();
-            toast.success(res.completes ? 'اكتمل تسليم الطلب ✅'
-              : 'تم تسليم ' + res.units + ' قطعة — يتبقى ' + res.remainingUnits);
-            await refreshAll();
-          } catch (err) { toast.danger('فشل التسليم: ' + err.message); }
+          } catch (err) { toast.danger('فشل التسليم: ' + err.message); return; }
+
+          let collected = 0;
+          if (collectAmt > 0) {
+            try {
+              await paymentsRepo.create({
+                customerId: fresh.customerId, orderId: fresh.id, amount: collectAmt,
+                method: methodSel.value, notes: 'تحصيل عند تسليم جزئي', isDeposit: false, deliveryId,
+              });
+              collected = collectAmt;
+            } catch (err) {
+              toast.warning('تم التسليم لكن تعذّر تسجيل الدفعة — سجّلها يدوياً من صفحة المدفوعات');
+            }
+          }
+
+          modal.close();
+          /* الإيصال أولاً: تعذّر تحديث القائمة لا يجوز أن يحجبه (التسليم والدفعة محفوظان).
+             النتيجة في عنوان النافذة (لا toast فوقها يغطّي زر الإرسال)؛ toast فقط إن تعذّر فتحها. */
+          const headline = (res.completes ? 'اكتمل تسليم الطلب ✅'
+            : 'تم تسليم ' + res.units + ' قطعة — يتبقى ' + res.remainingUnits) +
+            (collected > 0 ? ' · تم تحصيل ' + formatEGP(collected) : '');
+          try {
+            const updated = (await orders.find(order.id)) || { ...fresh, ...res.patch };
+            let cust = c || null;
+            if (!cust) { try { cust = await customers.find(fresh.customerId); } catch (e) { cust = null; } }   /* خريطة العملاء قد تكون قديمة */
+            openDeliveryReceipt(updated, deliveryId, cust, { collected, headline });
+          } catch (err) {
+            console.error('[orders] receipt', err);
+            toast.success(headline);
+          }
+          try { await refreshAll(); } catch (err) { console.warn('[orders] refresh after delivery', err); }
         },
       },
     ],

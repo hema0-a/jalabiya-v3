@@ -23,6 +23,7 @@ import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { deliveryProgress } from '../services/partial-delivery.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
+import { openDeliveryReceipt } from './delivery-receipt-dialog.js';
 import { orderPaidBreakdown, withDepositPayments } from '../services/payments-view.js';
 
 /* ============================================================
@@ -68,15 +69,21 @@ function _stat(label, value, color = '#123C2F') {
  * عنصر في قائمة فرعية.
  * @param {string} text
  * @param {string} [sub]
+ * @param {{label:string, onClick:Function}} [action] — زر صغير تحت العنصر (مثل «🧾 إيصال»)
  * @returns {HTMLElement}
  */
-function _listItem(text, sub) {
+function _listItem(text, sub, action) {
   return el('div', {
     style: { padding: '6px 0', borderBottom: '1px solid #F0EAE0', fontSize: '12px' },
   }, [
     el('div', { style: { color: '#123C2F', fontWeight: '500' } }, text),
     sub ? el('div', { style: { color: '#666', fontSize: '11px', marginTop: '2px' } }, sub) : null,
-  ]);
+    action ? el('button', {
+      type: 'button', className: 'btn btn--sm btn--ghost',
+      style: { marginTop: '4px', padding: '2px 8px', fontSize: '11px' },
+      onClick: action.onClick,
+    }, action.label) : null,
+  ].filter(Boolean));
 }
 
 /**
@@ -548,7 +555,8 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     _section('🚚 التسليم (' + dprog.deliveredUnits + ' من ' + dprog.totalUnits + ' قطعة)'),
     ...dprog.history.map((h) => _listItem(
       formatDate(h.at) + ' — ' + h.units + ' قطعة' + (h.hasSignature ? ' ✍️' : ''),
-      h.items.map((x) => x.qty + ' × ' + x.name).join('، ') + (h.note ? ' · ' + h.note : '')
+      h.items.map((x) => x.qty + ' × ' + x.name).join('، ') + (h.note ? ' · ' + h.note : ''),
+      { label: '🧾 إيصال', onClick: () => openDeliveryReceipt(order, h.id, customer || null, {}) }
     )),
     dprog.remainingUnits > 0
       ? _row('⏳', 'المتبقي للتسليم', dprog.remainingUnits + ' قطعة · ' + formatEGP(dprog.remainingValue))

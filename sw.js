@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.59 — حماية التخزين المحلي
+   الإصدار: v3.3.60 — إيصال تسليم جزئي مع تحصيل نسبي
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.59';
+const CACHE_VERSION = 'v3.3.60';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -95,6 +95,7 @@ const PRECACHE_URLS = [
   './src/ui/order-image-picker.js',
   './src/ui/progressive-list.js',
   './src/ui/quick-preview.js',
+  './src/ui/delivery-receipt-dialog.js',
   './src/ui/sidebar.js',
   './src/ui/signature-pad.js',
   './src/ui/sub-page.js',
@@ -154,6 +155,7 @@ const PRECACHE_URLS = [
   './src/services/item-catalog.js',
   './src/services/order-risk.js',
   './src/services/partial-delivery.js',
+  './src/services/delivery-receipt.js',
   './src/security/pin-recovery.js',
   './src/core/day-math.js',
   './src/services/order-timing.js',

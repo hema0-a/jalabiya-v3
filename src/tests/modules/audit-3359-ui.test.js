@@ -7,6 +7,7 @@ import { openPartialDelivery } from '../../pages/orders.js';
 import { orders } from '../../data/repos/orders.js';
 import { modal } from '../../ui/modal.js';
 import { deliveryProgress } from '../../services/partial-delivery.js';
+import { payments as paymentsRepo } from '../../data/repos/payments.js';
 
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 const q = (sel) => Array.from(document.body.querySelectorAll(sel));
@@ -19,7 +20,8 @@ register('audit v3.3.59 partial delivery modal', async (t) => {
   });
   try {
     openPartialDelivery(o);
-    const nums = q('input').filter((i) => i.getAttribute('type') === 'number');
+    /* حقول كميات البنود فقط (حقل مبلغ التحصيل type=number أيضاً منذ v3.3.60) */
+    const nums = q('input').filter((i) => i.getAttribute('type') === 'number' && /^كمية/.test(i.getAttribute('aria-label') || ''));
     await t.test('1. حقل كمية لكل بند', nums.length === 2);
     nums[0].value = '2'; fire(nums[0], 'input');
     await t.test('2. الملخص يوضح ما سيُسلَّم وما يتبقى',
@@ -36,6 +38,7 @@ register('audit v3.3.59 partial delivery modal', async (t) => {
       fresh.status === 'ready' && fresh.deliveries.length === 1 && deliveryProgress(fresh).deliveredUnits === 2);
   } finally {
     modal.closeAll();
+    try { for (const p of await paymentsRepo.findByOrder(o.id)) await paymentsRepo.remove(p.id); } catch (e) { /* ignore */ }
     await orders.remove(o.id);
   }
 });
