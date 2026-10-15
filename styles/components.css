@@ -1211,3 +1211,57 @@ body.wall-open { overflow: hidden; }
 }
 .collapsible--flat > .collapsible__content > .collapsible__body { padding-inline: var(--space-m); }
 .collapsible--flat.collapsible--open > .collapsible__content > .collapsible__body { padding: var(--space-s) var(--space-m) var(--space-m); }
+
+/* ============================================================
+   شاشة الورشة v3.3.64 — ملخص · تدوير صفحات · شدّة · خصوصية · تعتيم
+   ============================================================ */
+.wall { --ws: 1; }
+.wall__row-main { font-size: calc(clamp(18px, 2.4vw, 30px) * var(--ws, 1)); }
+.wall__row-sub { font-size: calc(clamp(14px, 1.8vw, 22px) * var(--ws, 1)); }
+.wall__col-title { font-size: calc(clamp(18px, 2.4vw, 30px) * var(--ws, 1)); }
+.wall__empty, .wall__more { font-size: calc(clamp(16px, 2vw, 24px) * var(--ws, 1)); }
+.wall__updated { font-size: clamp(11px, 1.3vw, 16px); opacity: .7; min-height: 1.2em; }
+.wall__btn[aria-pressed="true"] { background: rgba(255, 255, 255, .38); border-color: #fff; }
+
+.wall__strip { display: flex; flex-wrap: wrap; gap: var(--space-s); padding: var(--space-s) var(--space-m) 0; }
+.wall__chip { display: flex; align-items: baseline; gap: var(--space-s); padding: 6px 14px; background: rgba(255, 255, 255, .08); border-radius: 999px; font-size: calc(clamp(14px, 1.9vw, 24px) * var(--ws, 1)); }
+.wall__chip-label { opacity: .8; }
+.wall__chip-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.wall__chip--ok .wall__chip-value { color: #81C784; }
+.wall__chip--wide { flex: 1 1 220px; min-width: 0; }
+.wall__chip--wide .wall__chip-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wall__stale { margin: var(--space-s) var(--space-m) 0; padding: var(--space-s) var(--space-m); background: #B71C1C; color: #fff; border-radius: var(--radius-m); font-weight: 700; font-size: calc(clamp(14px, 1.9vw, 24px) * var(--ws, 1)); }
+.wall__stale[hidden] { display: none; }
+
+.wall__pager { text-align: center; opacity: .65; padding: var(--space-s) 0 0; font-size: clamp(12px, 1.5vw, 18px); }
+
+.wall__row--warn .wall__row-sub { color: #FFB74D; }
+.wall__row--critical { border-inline-start: 6px solid #E53935; padding-inline-start: var(--space-s); }
+.wall__row--critical .wall__row-sub { color: #FF8A80; font-weight: 700; }
+.wall__row--new { animation: wallNew 1.2s ease-in-out 6; }
+@keyframes wallNew { 0%, 100% { background: transparent; } 50% { background: rgba(255, 213, 79, .28); } }
+
+.wall--dim { filter: brightness(.55); }
+.wall__body { transition: transform 1s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wall__row--new { animation: none; background: rgba(255, 213, 79, .22); }
+  .wall__body { transition: none; }
+}
+
+/* عنوان العمود يرث لون h2 العام (أخضر غامق) فيختفي على خلفية الشاشة الداكنة */
+.wall__col-title { color: inherit; }
+
+/* شاشات قصيرة (تابلت أفقي ~800px): رأس أنحف وخط صفوف أصغر قليلاً → صفوف أكثر في الصفحة */
+@media (min-width: 768px) and (max-height: 900px) {
+  .wall__head { padding: var(--space-s) var(--space-l); }
+  .wall__clock { font-size: clamp(24px, 3.4vw, 44px); }
+  .wall__title { font-size: clamp(18px, 2.4vw, 32px); }
+  .wall__date { font-size: clamp(12px, 1.5vw, 18px); }
+  .wall__col { padding: var(--space-s) var(--space-m); }
+  .wall__col-title { margin-bottom: var(--space-s); font-size: calc(clamp(16px, 1.9vw, 26px) * var(--ws, 1)); }
+  .wall__row { padding: 6px 0; }
+  .wall__row-main { font-size: calc(clamp(16px, 2vw, 26px) * var(--ws, 1)); }
+  .wall__row-sub { font-size: calc(clamp(12px, 1.5vw, 19px) * var(--ws, 1)); }
+}
