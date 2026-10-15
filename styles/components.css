@@ -485,6 +485,24 @@
   }
 }
 
+/* مقبض السحب + تركيز النافذة (ملحقات v3.3.63) */
+.modal:focus { outline: none; }
+.modal__grabber { display: none; }
+@media (max-width: 767px) {
+  .modal__grabber {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: var(--space-s) auto 0;
+    border-radius: var(--radius-full);
+    background: var(--color-text);
+    opacity: 0.22;
+    flex-shrink: 0;
+  }
+  .modal__draggable { touch-action: none; }
+  .modal-backdrop--sheet .modal__grabber { cursor: grab; }
+}
+
 @keyframes sheetSlideUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
@@ -496,7 +514,10 @@
   }
 }
 /* ============================================================
-   Collapsible (Accordion)
+   Collapsible (Accordion) — v2
+   - الحركة: grid-template-rows 0fr → 1fr (بلا قياس JS).
+   - الـ padding على .collapsible__body (داخل الـ grid) فلا قفزة عند الفتح.
+   - visibility تتأخر بعد الإغلاق: المحتوى المغلق خارج Tab حتى بلا inert.
    ============================================================ */
 .collapsible {
   background: var(--color-surface);
@@ -504,6 +525,7 @@
   box-shadow: var(--shadow-s);
   margin-bottom: var(--space-m);
   overflow: hidden;
+  scroll-margin-top: calc(var(--topbar-height, 56px) + var(--space-s));
 }
 
 .collapsible__header {
@@ -511,6 +533,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-s);
+  min-height: 48px;                      /* هدف لمس مريح على الجوال */
   padding: var(--space-m);
   background: transparent;
   border: none;
@@ -519,35 +542,123 @@
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
-  text-align: right;
+  text-align: start;
+  -webkit-tap-highlight-color: transparent;
   transition: background-color var(--duration-fast) var(--ease-out);
 }
 .collapsible__header:hover { background: rgba(31, 109, 87, 0.05); }
+.collapsible__header:active { background: rgba(31, 109, 87, 0.09); }
+.collapsible__header:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: -2px;
+  border-radius: var(--radius-xl);
+}
 
+.collapsible__icon { font-size: 1.1em; line-height: 1; flex-shrink: 0; }
+
+.collapsible__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.collapsible__title { text-align: start; }
+.collapsible__summary {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text);
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.collapsible__summary[hidden] { display: none; }
+
+.collapsible__badge {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 22px;
+  text-align: center;
+}
+.collapsible__badge[hidden] { display: none; }
+
+/* سهم chevron بالـ CSS: محايد للاتجاه (RTL/LTR) — ↓ مغلق، ↑ مفتوح */
 .collapsible__arrow {
   display: inline-block;
-  font-size: 14px;
-  color: var(--color-primary-light);
-  transition: transform var(--duration-normal) var(--ease-out);
   flex-shrink: 0;
-  line-height: 1;
+  width: 8px;
+  height: 8px;
+  margin-inline: 4px;
+  /* حدود فيزيائية عمداً: المنطقية (inline-end) تنعكس في RTL فيدور السهم للجهة الخطأ */
+  border-right: 2px solid var(--color-primary-light);
+  border-bottom: 2px solid var(--color-primary-light);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--duration-normal) var(--ease-out);
 }
-.collapsible--open .collapsible__arrow { transform: rotate(90deg); }
-
-.collapsible__title { flex: 1; text-align: right; }
+.collapsible--open > .collapsible__header .collapsible__arrow {
+  transform: translateY(2px) rotate(-135deg);
+}
 
 .collapsible__content {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows var(--duration-slow) var(--ease-out);
-  padding: 0 var(--space-m);
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--duration-slow) var(--ease-out),
+    visibility 0s linear var(--duration-slow);
 }
-.collapsible__content > * { overflow: hidden; min-height: 0; }
-
-.collapsible--open .collapsible__content {
+.collapsible--open > .collapsible__content {
   grid-template-rows: 1fr;
-  padding: var(--space-m);
+  visibility: visible;
+  transition-delay: 0s;
   border-top: 1px solid var(--color-border);
+}
+
+.collapsible__body {
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 var(--space-m);
+  transition: padding var(--duration-slow) var(--ease-out);
+}
+.collapsible--open > .collapsible__content > .collapsible__body {
+  padding: var(--space-m);
+}
+
+.collapsible__loading {
+  padding: var(--space-m);
+  text-align: center;
+  color: var(--color-primary-light);
+  animation: collapsiblePulse 1s ease-in-out infinite;
+}
+@keyframes collapsiblePulse { 50% { opacity: 0.35; } }
+
+.collapsible__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+  padding: var(--space-s);
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
+}
+.collapsible__retry {
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  padding: 6px 12px;
+  min-height: 36px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .collapsible--highlight {
@@ -560,8 +671,18 @@
 
 @media (prefers-reduced-motion: reduce) {
   .collapsible__arrow,
-  .collapsible__content { transition: none; }
-  .collapsible--highlight { animation: none; }
+  .collapsible__content,
+  .collapsible__body,
+  .collapsible__header { transition: none; }
+  .collapsible--highlight,
+  .collapsible__loading { animation: none; }
+}
+
+/* الطباعة: كل الأقسام مفتوحة (فواتير/تقارير) */
+@media print {
+  .collapsible__content { grid-template-rows: 1fr; visibility: visible; transition: none; }
+  .collapsible__body { padding: var(--space-m); }
+  .collapsible__arrow { display: none; }
 }
 /* ============================================================
    Sub-Page Navigation (Master → Detail)

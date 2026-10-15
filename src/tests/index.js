@@ -23,6 +23,7 @@ import './modules/commitments.test.js';
 import './modules/house-expenses.test.js';
 import './modules/loans.test.js';
 import './modules/collapsible.test.js';
+import './modules/modal-sheet.test.js';
 import './modules/sub-page.test.js';
 import './modules/audit-3310.test.js';
 import './modules/audit-3312.test.js';

@@ -17,25 +17,90 @@ import { events } from '../core/events.js';
 const stack = [];
 let _idCounter = 0;
 
-/* --- إغلاق النافذة العلوية --- */
-function closeTop() {
-  if (stack.length === 0) return;
-  const top = stack.pop();
-  if (top.node && top.node.parentNode) {
-    top.node.parentNode.removeChild(top.node);
+/* --- إنهاء نافذة: إزالة + استعادة التركيز + onClose (مصدر واحد للمسارين) --- */
+function finalize(item) {
+  if (item.node && item.node.parentNode) {
+    item.node.parentNode.removeChild(item.node);
   }
   if (stack.length === 0) {
     document.body.style.overflow = '';
   }
-  if (typeof top.onClose === 'function') {
-    try { top.onClose(); } catch (e) { console.error(e); }
+  /* ♿ إعادة التركيز للعنصر الذي فتح النافذة (إن كان ما زال في الصفحة) */
+  const back = item.restoreFocus;
+  if (back && typeof back.focus === 'function' && document.contains(back)) {
+    try { back.focus({ preventScroll: true }); } catch { /* ignore */ }
   }
-  events.emit('modal:closed', { id: top.id });
+  if (typeof item.onClose === 'function') {
+    try { item.onClose(); } catch (e) { console.error(e); }
+  }
+  events.emit('modal:closed', { id: item.id });
+}
+
+/* --- إغلاق النافذة العلوية --- */
+function closeTop() {
+  if (stack.length === 0) return;
+  finalize(stack.pop());
 }
 
 /* --- إغلاق كل النوافذ --- */
 function closeAll() {
   while (stack.length > 0) closeTop();
+}
+
+/* --- عناصر قابلة للتركيز (لحبس Tab) --- */
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+/**
+ * سحب الـ bottom-sheet للأسفل لإغلاقه (جوال فقط، من المقبض أو الرأس).
+ * - يتبع الإصبع، ويُغلق عند تجاوز 100px أو سرعة سحب عالية، وإلا يرتدّ.
+ * - لا يتعارض مع تمرير المحتوى (السحب من المقبض/الرأس فقط، touch-action:none).
+ */
+function attachSheetSwipe({ modalNode, grabber, header, handle }) {
+  const mq = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
+  let startY = 0;
+  let startT = 0;
+  let dy = 0;
+  let dragging = false;
+
+  const onDown = (e) => {
+    if (!mq || !mq.matches) return;
+    if (e.target.closest && e.target.closest('.modal__close')) return;
+    dragging = true;
+    startY = e.clientY;
+    startT = e.timeStamp;
+    dy = 0;
+    modalNode.style.animation = 'none';     // fill-mode:both في CSS يطغى على transform المُدخَل
+    modalNode.style.transition = 'none';
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    dy = Math.max(0, e.clientY - startY);          // للأسفل فقط
+    modalNode.style.transform = 'translateY(' + dy + 'px)';
+  };
+  const onUp = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const velocity = dy / Math.max(1, e.timeStamp - startT);   // px/ms
+    modalNode.style.transition = 'transform 200ms var(--ease-out, ease-out)';
+    if (dy > 100 || (dy > 30 && velocity > 0.6)) {
+      modalNode.style.transform = 'translateY(100%)';
+      setTimeout(() => handle.close(), 180);
+    } else {
+      modalNode.style.transform = '';
+    }
+  };
+
+  [grabber, header].forEach((n) => {
+    n.classList.add('modal__draggable');
+    n.addEventListener('pointerdown', onDown);
+    n.addEventListener('pointermove', onMove);
+    n.addEventListener('pointerup', onUp);
+    n.addEventListener('pointercancel', onUp);
+  });
 }
 
 /**
@@ -70,7 +135,7 @@ export function open(options = {}) {
   }, '×');
 
   const header = el('div', { className: 'modal__header' }, [
-    el('h3', { className: 'modal__title', text: title }),
+    el('h3', { className: 'modal__title', id: 'modal-title-' + id, text: title }),
     closable ? closeBtn : null,
   ]);
 
@@ -106,12 +171,20 @@ export function open(options = {}) {
       }))
     : null;
 
+  /* مقبض السحب — يظهر فقط في bottom-sheet على الجوال (CSS) */
+  const isSheet = variant === 'sheet';
+  const grabber = (isSheet && closable)
+    ? el('div', { className: 'modal__grabber', 'aria-hidden': 'true' })
+    : null;
+
   /* Modal */
   const modalNode = el('div', {
     className: 'modal',
     role: 'dialog',
     'aria-modal': 'true',
-  }, [header, bodyWrap, footer]);
+    'aria-labelledby': title ? 'modal-title-' + id : null,
+    tabindex: '-1',
+  }, [grabber, header, bodyWrap, footer]);
 
   /* Backdrop */
 const backdrop = el('div', {
@@ -126,6 +199,7 @@ const backdrop = el('div', {
     });
   }
 
+  const restoreFocus = document.activeElement;
   document.body.appendChild(backdrop);
   document.body.style.overflow = 'hidden';
 
@@ -135,17 +209,30 @@ const backdrop = el('div', {
     close: () => {
       const idx = stack.findIndex((m) => m.id === id);
       if (idx === -1) return;
-      const item = stack.splice(idx, 1)[0];
-      if (item.node.parentNode) item.node.parentNode.removeChild(item.node);
-      if (stack.length === 0) document.body.style.overflow = '';
-      if (typeof item.onClose === 'function') {
-        try { item.onClose(); } catch (e) { console.error(e); }
-      }
-      events.emit('modal:closed', { id });
+      finalize(stack.splice(idx, 1)[0]);
     },
   };
 
-  stack.push({ id, node: backdrop, onClose });
+  stack.push({ id, node: backdrop, onClose, restoreFocus });
+
+  /* ♿ تركيز النافذة نفسها (لا أول حقل: لا نُظهر لوحة المفاتيح تلقائياً على الجوال) */
+  try { modalNode.focus({ preventScroll: true }); } catch { /* ignore */ }
+
+  /* ♿ حبس Tab داخل النافذة العلوية فقط */
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || stack[stack.length - 1]?.id !== id) return;
+    const items = Array.from(modalNode.querySelectorAll(FOCUSABLE))
+      .filter((n) => n.offsetParent !== null || n === document.activeElement);
+    if (items.length === 0) { e.preventDefault(); modalNode.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === modalNode)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  });
+
+  if (grabber) attachSheetSwipe({ modalNode, grabber, header, handle });
+
   events.emit('modal:opened', { id });
   return handle;
 }
