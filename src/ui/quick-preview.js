@@ -15,7 +15,7 @@ import { toast } from './toast.js';
 import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
-import { customers as customersRepo, walletOf, loyaltyConfig } from '../data/repos/customers.js';
+import { customers as customersRepo, walletOf, loyaltyConfig, postureLabels } from '../data/repos/customers.js';
 import { settings as settingsRepo } from '../data/repos/settings.js';
 import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
@@ -159,13 +159,16 @@ function _closeAction() {
  */
 function _orderMeasurementRows(order) {
   const snap = order && order.measurementsSnapshot;
-  if (!snap || !Array.isArray(snap.fields) || snap.fields.length === 0) {
+  const fields = snap && Array.isArray(snap.fields) ? snap.fields : [];
+  const posture = snap && Array.isArray(snap.posture) ? snap.posture : [];
+  if (fields.length === 0 && posture.length === 0) {
     return [el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } },
       'لا توجد نسخة مقاسات محفوظة لهذا الطلب (طلب قديم)')];
   }
   return [
-    ...snap.fields.map((f) => _row('📏', f.name,
+    ...fields.map((f) => _row('📏', f.name,
       f.value + (f.unit ? ' ' + (f.unit === 'cm' ? 'سم' : f.unit) : ''))),
+    posture.length > 0 ? _row('🧍', 'القوام', posture.join('، ')) : null,
     snap.at ? el('div', { style: { fontSize: '11px', color: '#999', padding: '4px 0' } },
       'مأخوذة بتاريخ ' + formatDate(snap.at)) : null,
   ].filter(Boolean);
@@ -396,8 +399,20 @@ function _customerMeasureRows(c, fields) {
   return rows;
 }
 
+/** سطر مختصر: مقاسات الطلب + القوام (أو null لو لا نسخة). */
+function _orderSnapLine(o) {
+  const snap = o && o.measurementsSnapshot;
+  const fields = snap && Array.isArray(snap.fields) ? snap.fields : [];
+  const posture = snap && Array.isArray(snap.posture) ? snap.posture : [];
+  if (fields.length === 0 && posture.length === 0) return null;
+  const parts = [];
+  if (fields.length > 0) parts.push('📏 مقاسات الطلب: ' + fields.map((f) => f.name + ' ' + f.value).join(' · '));
+  if (posture.length > 0) parts.push('🧍 القوام: ' + posture.join('، '));
+  return el('div', { style: { fontSize: '12px', color: '#1F6D57', marginTop: '8px', lineHeight: '1.6' } }, parts.join(' — '));
+}
+
 /**
- * نافذة إدخال رقم (مبلغ/نقاط). تُرجع الرقم أو null عند الإلغاء.
+ * نافذة إدخال رقم (مبلغ/نقاط).. تُرجع الرقم أو null عند الإلغاء.
  * @param {{title:string, message?:string, value?:number, max?:number, unit?:string}} o
  * @returns {Promise<number|null>}
  */
@@ -453,6 +468,8 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
   } catch { fields = []; }
 
   const measureRows = _customerMeasureRows(c, fields);
+  const postureRows = postureLabels(c);
+  if (postureRows.length > 0) measureRows.push(_row('🧍', 'القوام', postureRows.join('، ')));
 
   const statusLabels = { pending: '⏳ قيد الانتظار', in_progress: '🧵 قيد التنفيذ',
     ready: '✅ جاهز', delivered: '📦 تم التسليم', cancelled: '❌ ملغي' };
@@ -480,10 +497,7 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
         _stat('المدفوع', formatEGP(paid), '#2E7D32'),
         _stat('المتبقي', formatEGP(Math.max(0, total - paid)), total - paid > 0 ? '#F57C00' : '#666'),
       ]),
-      o.measurementsSnapshot && Array.isArray(o.measurementsSnapshot.fields) && o.measurementsSnapshot.fields.length > 0
-        ? el('div', { style: { fontSize: '12px', color: '#1F6D57', marginTop: '8px', lineHeight: '1.6' } },
-            '📏 مقاسات الطلب: ' + o.measurementsSnapshot.fields.map((f) => f.name + ' ' + f.value).join(' · '))
-        : null,
+      _orderSnapLine(o),
       o.notes ? el('p', { style: { fontSize: '12px', color: '#666', margin: '8px 0 0', lineHeight: '1.5' } },
         '📝 ' + o.notes) : null,
     ].filter(Boolean);
@@ -706,6 +720,8 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
 
   const measureCount = (order.measurementsSnapshot && Array.isArray(order.measurementsSnapshot.fields))
     ? order.measurementsSnapshot.fields.length : 0;
+  const postureCount = (order.measurementsSnapshot && Array.isArray(order.measurementsSnapshot.posture))
+    ? order.measurementsSnapshot.posture.length : 0;
 
   /* الأساسي ظاهر دائماً (بيانات + المبالغ)، والتفاصيل أقسام قابلة للطي */
   const body = el('div', {}, [
@@ -735,7 +751,9 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
       ? _acc({ id: 'qp-order-calc', title: '🧮 تفاصيل الحساب', summary: calcSummary, children: calcRows })
       : null,
     _acc({ id: 'qp-order-measures', title: '📏 مقاسات وقت الطلب',
-      summary: measureCount > 0 ? measureCount + ' مقاس' : 'لا توجد نسخة محفوظة',
+      summary: (measureCount > 0 || postureCount > 0)
+        ? [measureCount > 0 ? measureCount + ' مقاس' : null, postureCount > 0 ? 'قوام' : null].filter(Boolean).join(' + ')
+        : 'لا توجد نسخة محفوظة',
       children: _orderMeasurementRows(order) }),
     order.notes
       ? _acc({ id: 'qp-order-notes', title: '📝 ملاحظات', defaultOpen: true,

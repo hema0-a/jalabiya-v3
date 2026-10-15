@@ -11,7 +11,7 @@ import { withDepositPayments } from '../services/payments-view.js';
 import { loadVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
-import { customers, walletOf } from '../data/repos/customers.js';
+import { customers, walletOf, POSTURE_OPTIONS, buildContactsVcf } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { quotes } from '../data/repos/quotes.js';
@@ -293,6 +293,61 @@ function openMeasureStepper(fields, inputs) {
   show();
 }
 
+/**
+ * تصدير العملاء كملف جهات اتصال (vCard) يُفتح في الموبايل فتظهر الأسماء في واتساب والمكالمات (v3.3.51).
+ */
+async function openContactsExport() {
+  let prefix = 'ورشة';
+  try {
+    const st = await settings.get();
+    const n = st && st.workshop && st.workshop.name ? String(st.workshop.name).trim() : '';
+    if (n) prefix = n;
+  } catch { /* الافتراضي */ }
+
+  const list = state.customers;
+  const prefixInput = el('input', { className: 'input', type: 'text', value: prefix, placeholder: 'ورشة' });
+  const info = el('div', { style: { fontSize: '13px', color: '#123C2F', lineHeight: '1.7', marginTop: '10px' } });
+  const refreshInfo = () => {
+    const r = buildContactsVcf(list, { prefix: prefixInput.value });
+    const sample = list.find((c) => c && c.name && c.phone);
+    info.textContent = '📇 ' + r.count + ' جهة اتصال جاهزة'
+      + (r.skippedNoPhone ? ' · ' + r.skippedNoPhone + ' عميل بلا رقم (لن يُصدَّروا)' : '')
+      + (r.skippedDuplicate ? ' · ' + r.skippedDuplicate + ' رقم مكرر' : '')
+      + (sample ? '\nمثال: «' + (prefixInput.value.trim() ? prefixInput.value.trim() + ' - ' : '') + sample.name + '»' : '');
+    info.style.whiteSpace = 'pre-line';
+  };
+  prefixInput.addEventListener('input', refreshInfo);
+  refreshInfo();
+
+  const body = el('div', {}, [
+    el('p', { style: { fontSize: '13px', color: '#666', lineHeight: '1.6', margin: '0 0 8px' } },
+      'ينتج ملف جهات اتصال تفتحه في الموبايل فيحفظ الأسماء، فيظهر اسم العميل في واتساب والمكالمات بدل رقم مجهول. اكتب البادئة اللي تحب تتميّز بيها (أو اتركها فاضية).'),
+    el('label', { className: 'field__label' }, 'البادئة قبل الاسم'),
+    prefixInput,
+    info,
+  ]);
+
+  const handle = modal.open({
+    title: '📇 تصدير جهات الاتصال', body, closable: true,
+    actions: [
+      { text: '⬇️ تنزيل الملف', variant: 'primary',
+        onClick: () => {
+          const r = buildContactsVcf(list, { prefix: prefixInput.value });
+          if (r.count === 0) { toast.warning('لا يوجد عملاء لهم أرقام هاتف'); return; }
+          const blob = new Blob([r.vcf], { type: 'text/vcard;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'jalabiya-contacts.vcf';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+          toast.success('تم تنزيل ' + r.count + ' جهة اتصال — افتح الملف من التنزيلات لاستيرادها');
+          handle.close();
+        } },
+      { text: 'إغلاق', variant: 'ghost', onClick: () => handle.close() },
+    ],
+  });
+}
+
 function openCustomerForm(existing = null) {
   const isEdit = existing !== null;
 
@@ -333,6 +388,27 @@ function openCustomerForm(existing = null) {
   const measurements = buildMeasurementsSection(
     isEdit ? existing.measurements : null
   );
+
+  /* --- ملاحظات القوام (v3.3.51): اختيارات سريعة + ملاحظة حرة --- */
+  const postureChecks = POSTURE_OPTIONS.map((o) => {
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = !!(isEdit && Array.isArray(existing.posture) && existing.posture.includes(o.id));
+    return { id: o.id, cb, label: o.label };
+  });
+  const postureNoteInput = el('input', {
+    className: 'input', type: 'text', placeholder: 'ملاحظة أخرى عن القوام (اختياري)',
+    value: isEdit ? (existing.postureNote || '') : '',
+  });
+  const postureField = el('div', { className: 'field' }, [
+    el('label', { className: 'field__label' }, '🧍 ملاحظات القوام'),
+    el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginBottom: '8px' } },
+      postureChecks.map(({ cb, label }) => el('label', {
+        style: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' },
+      }, [cb, el('span', {}, label)]))),
+    postureNoteInput,
+    el('div', { style: { fontSize: '11px', color: '#999', marginTop: '3px' } },
+      'تظهر مع المقاسات في الطلب وملف العميل، وتُحفظ نسخة منها مع كل طلب جديد.'),
+  ]);
 
   /* --- ملف العيلة (v3.3.51): ربط العميل برب أسرة. يُسمح فقط برب أسرة ليس تابعاً لغيره،
          ولا يُسمح لمن له أفراد تابعون أن يصير تابعاً (لا سلاسل). --- */
@@ -378,6 +454,7 @@ function openCustomerForm(existing = null) {
     familyField,
     imagePicker.node,
     measurements.node,
+    postureField,
   ]);
 
   const handle = modal.open({
@@ -401,6 +478,8 @@ function openCustomerForm(existing = null) {
             image: imagePicker.getValue() || '',
             measurements: measurements.getValues(),
             familyHeadId: familySelect.value || '',
+            posture: postureChecks.filter((x) => x.cb.checked).map((x) => x.id),
+            postureNote: postureNoteInput.value.trim(),
           };
           /* تطابق الهاتف مع عميل آخر: نسأل قبل الحفظ (عند التعديل فقط إن تغيّر الرقم) */
           const phoneChanged = !isEdit || phoneKey(data.phone) !== phoneKey(existing.phone);
@@ -913,6 +992,12 @@ export const customersPage = {
       style: { marginBottom: '16px' },
       onClick: () => openCustomerForm(),
     }, '➕ إضافة عميل'));
+
+    container.appendChild(el('button', {
+      className: 'btn btn--secondary btn--block',
+      style: { marginBottom: '16px' },
+      onClick: () => openContactsExport(),
+    }, '📇 تصدير العملاء لجهات الاتصال'));
 
     container.appendChild(el('div', { id: 'customers-list' }));
 

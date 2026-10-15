@@ -6,7 +6,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
-import { customers as customersRepo, walletOf, loyaltyConfig, pointsForAmount } from './customers.js';
+import { customers as customersRepo, walletOf, loyaltyConfig, pointsForAmount, postureLabels } from './customers.js';
 import { payments as paymentsRepo } from './payments.js';
 import { settings as settingsRepo } from './settings.js';
 
@@ -46,7 +46,10 @@ export function buildMeasurementsSnapshot(customer, fields) {
   Object.keys(m).forEach((k) => {
     if (!known.has(k) && has(m[k])) out.push({ id: k, name: k, unit: '', value: m[k] });
   });
-  return out.length > 0 ? { at: Date.now(), fields: out } : null;
+  const posture = postureLabels(customer);   /* ملاحظات القوام تُحفظ مع المقاسات */
+  return (out.length > 0 || posture.length > 0)
+    ? { at: Date.now(), fields: out, posture }
+    : null;
 }
 
 async function _snapshotFor(customerId) {

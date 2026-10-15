@@ -8,6 +8,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
+import { normalizePhone } from '../../core/utils.js';
 
 const base = createRepository(STORES.CUSTOMERS);
 
@@ -140,3 +141,73 @@ customers.walletTopUp = async function walletTopUp(id, amount, note) {
   if (!(a > 0) || a > MAX_TOPUP) throw new Error('مبلغ غير صالح');
   return customers.walletAdjust(id, { balance: a, type: 'topup', note: note || 'شحن رصيد' });
 };
+
+/* ==========================================================================
+   ملاحظات القوام (v3.3.51)
+   ==========================================================================
+   خيارات سريعة تظهر مع المقاسات في الطلب وفي ملف العميل، لأن المقاس المظبوط على الورق
+   قد لا يناسب الجسم (كتف واطي، بطن بارز...). تُحفظ كمعرّفات + ملاحظة حرة. */
+
+export const POSTURE_OPTIONS = [
+  { id: 'low_shoulder',   label: 'كتف واطي' },
+  { id: 'high_shoulder',  label: 'كتف عالي' },
+  { id: 'uneven_shoulders', label: 'كتفين غير متساويين' },
+  { id: 'belly',          label: 'بطن بارز' },
+  { id: 'stooped',        label: 'ظهر محني' },
+  { id: 'arm_longer',     label: 'ذراع أطول من الأخرى' },
+  { id: 'short_neck',     label: 'رقبة قصيرة' },
+  { id: 'broad_chest',    label: 'صدر عريض' },
+];
+
+/**
+ * ملاحظات قوام العميل كنصوص (الخيارات المعروفة + الملاحظة الحرة).
+ * @param {Object} c
+ * @returns {string[]}
+ */
+export function postureLabels(c) {
+  if (!c) return [];
+  const ids = Array.isArray(c.posture) ? c.posture : [];
+  const out = POSTURE_OPTIONS.filter((o) => ids.includes(o.id)).map((o) => o.label);
+  const note = String(c.postureNote || '').trim();
+  if (note) out.push(note);
+  return out;
+}
+
+/* ==========================================================================
+   تصدير جهات الاتصال (vCard) (v3.3.51)
+   ========================================================================== */
+
+const vEsc = (v) => String(v == null ? '' : v)
+  .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+
+/**
+ * بناء ملف vCard (3.0، UTF-8) لعملاء لهم رقم هاتف، الاسم «بادئة - اسم العميل».
+ * يتجاهل من بلا رقم، ويدمج المكرر برقمه.
+ * @param {Array} list — العملاء
+ * @param {{prefix?:string}} [opts]
+ * @returns {{vcf:string, count:number, skippedNoPhone:number, skippedDuplicate:number}}
+ */
+export function buildContactsVcf(list, opts = {}) {
+  const prefix = String(opts.prefix == null ? 'ورشة' : opts.prefix).trim();
+  const seen = new Set();
+  const cards = [];
+  let skippedNoPhone = 0; let skippedDuplicate = 0;
+  (Array.isArray(list) ? list : []).forEach((c) => {
+    if (!c || !c.name) return;
+    const phone = normalizePhone(c.phone);
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (digits.length < 8) { skippedNoPhone++; return; }
+    if (seen.has(digits)) { skippedDuplicate++; return; }
+    seen.add(digits);
+    const full = prefix ? prefix + ' - ' + c.name : String(c.name);
+    cards.push([
+      'BEGIN:VCARD', 'VERSION:3.0',
+      'FN:' + vEsc(full),
+      'N:' + vEsc(full) + ';;;;',
+      'TEL;TYPE=CELL:' + (String(phone).startsWith('+') ? phone : digits),
+      c.address ? 'ADR;TYPE=HOME:;;' + vEsc(c.address) + ';;;;' : null,
+      'END:VCARD',
+    ].filter(Boolean).join('\r\n'));
+  });
+  return { vcf: cards.join('\r\n') + (cards.length ? '\r\n' : ''), count: cards.length, skippedNoPhone, skippedDuplicate };
+}
