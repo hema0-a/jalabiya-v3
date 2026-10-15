@@ -11,7 +11,7 @@ import { withDepositPayments } from '../services/payments-view.js';
 import { loadVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
-import { customers } from '../data/repos/customers.js';
+import { customers, walletOf } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { quotes } from '../data/repos/quotes.js';
@@ -672,6 +672,18 @@ function buildCustomerCard(c) {
         padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
       },
     }, headOf ? '👨‍👩‍👧 تابع لـ ' + headOf.name : '👨‍👩‍👧 عيلة (' + membersCount + ')'));
+  }
+
+  /* شارة الرصيد/النقاط */
+  const wal = walletOf(c);
+  if (wal.balance > 0 || wal.points > 0) {
+    badges.appendChild(el('span', {
+      style: {
+        fontSize: '11px', color: '#1F6D57', background: '#E3F4EC',
+        padding: '3px 8px', borderRadius: '6px', fontWeight: '600',
+      },
+    }, [wal.balance > 0 ? '💳 ' + Math.round(wal.balance) + ' ج.م' : null, wal.points > 0 ? '⭐ ' + wal.points : null]
+      .filter(Boolean).join(' · ')));
   }
 
   if (ordersCount > 0) {

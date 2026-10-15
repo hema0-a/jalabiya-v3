@@ -215,7 +215,9 @@ async function loadData() {
     customers.list(),
     settings.get().catch(() => ({})),
   ]);
-  ordersList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  /* العاجل (غير المسلَّم/الملغى) أولاً، ثم الأحدث (v3.3.51) */
+  const urgentRank = (o) => (o.urgent && o.status !== 'delivered' && o.status !== 'cancelled') ? 1 : 0;
+  ordersList.sort((a, b) => (urgentRank(b) - urgentRank(a)) || ((b.createdAt || 0) - (a.createdAt || 0)));
   state.orders = ordersList;
   state.customers = customersList;
   state.customerMap = {};
@@ -550,6 +552,24 @@ function openOrderForm(existing = null) {
     onClick: () => { addFeeRow({ id: uid(), feeType: 'urgency', type: 'percent', value: 20 }); recalc(); },
   }, '➕ إضافة رسم');
 
+  /* --- عاجل (v3.3.51): شارة حمراء + يتقدّم القوائم + يقترح رسم استعجال --- */
+  const urgentInput = el('input', { type: 'checkbox' });
+  urgentInput.checked = !!(isEdit && existing.urgent);
+  urgentInput.addEventListener('change', () => {
+    if (!urgentInput.checked) return;
+    const hasUrgencyFee = Array.from(feesContainer.children).some((r) => {
+      try { return r._getValues().feeType === 'urgency'; } catch { return false; }
+    });
+    if (!hasUrgencyFee) {
+      addFeeRow({ id: uid(), feeType: 'urgency', type: 'percent', value: 20 });
+      recalc();
+      toast.info('⚡ أُضيف رسم استعجال 20% — عدّله أو احذفه من «رسوم إضافية»');
+    }
+  });
+  const urgentField = el('label', {
+    style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: '#B3261E', padding: '6px 0' },
+  }, [urgentInput, el('span', {}, '⚡ طلب عاجل')]);
+
   /* --- المقدم --- */
   const depositInput = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
@@ -616,7 +636,7 @@ function openOrderForm(existing = null) {
   const hasExtras = isEdit && (
     (existing.discountType && existing.discountType !== 'none' && Number(existing.discountValue) > 0) ||
     (Array.isArray(existing.extraFees) && existing.extraFees.length > 0) ||
-    Number(existing.cost) > 0 || !!existing.notes || !!existing.referenceImage || !!existing.receivedDate
+    Number(existing.cost) > 0 || !!existing.notes || !!existing.referenceImage || !!existing.receivedDate || !!existing.urgent
   );
   const extras = el('details', { className: 'order-extras' }, [
     el('summary', { className: 'order-extras__summary' }, [
@@ -625,6 +645,7 @@ function openOrderForm(existing = null) {
     ]),
     el('div', { className: 'order-extras__body' }, [
       ...(isEdit ? [] : [statusField]),
+      urgentField,
       fieldOf('📥 تاريخ استلام القماش', receivedDateInput),
       fieldOf('🎁 خصم', discountTypeSelect, discountValueInput),
       fieldOf('➕ رسوم إضافية', feesContainer, addFeeBtn),
@@ -746,6 +767,7 @@ function openOrderForm(existing = null) {
             cost: toNonNegative(costInput.value),
             notes: notesInput.value.trim(),
             referenceImage: imagePicker.getValue() || '',
+            urgent: urgentInput.checked,
           };
           /* تاريخ التسليم الفعلي (تعتمد عليه مؤشرات الأداء): يُحفظ عند التحوّل لـ delivered ويُمسح عند الرجوع منها */
           if (data.status === 'delivered') {
@@ -1489,6 +1511,13 @@ function buildOrderCard(o) {
   const badgesRow = el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' },
   });
+
+  if (o.urgent && o.status !== 'delivered' && o.status !== 'cancelled') {
+    badgesRow.appendChild(el('span', {
+      style: { fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '10px',
+        color: '#fff', background: '#C62828' },
+    }, '⚡ عاجل'));
+  }
 
   if (!isDelivered) {
     badgesRow.appendChild(el('span', {

@@ -272,8 +272,19 @@ function buildWorkshopHeader(workshop, docTitle, docNumber, docDate) {
  * @param {Object} workshop
  * @returns {string}
  */
-function buildFooter(workshop) {
+function buildFooter(workshop, withTerms = false) {
+  /* شروط الورشة (v3.3.51): سطر لكل بند، تظهر على الفاتورة فقط */
+  const termLines = withTerms
+    ? String((workshop && workshop.terms) || '').split('\n').map((l) => l.trim()).filter(Boolean)
+    : [];
+  const termsHtml = termLines.length > 0
+    ? '<div class="terms" style="text-align:right;font-size:11px;color:#555;line-height:1.8;' +
+      'border-top:1px dashed #ccc;margin-top:14px;padding-top:8px;">' +
+      '<div style="font-weight:700;margin-bottom:2px;">شروط الورشة:</div>' +
+      termLines.map((l) => '<div>• ' + esc(l) + '</div>').join('') + '</div>'
+    : '';
   return (
+    termsHtml +
     '<div class="footer">' +
       '<div class="thanks">شكراً لتعاملكم معنا 🌹</div>' +
       (workshop.phone    ? '<div>📞 ' + esc(workshop.phone) + '</div>' : '') +
@@ -477,7 +488,7 @@ export async function printOrderInvoice(order, customer) {
           '</div>'
         : '') +
 
-      buildFooter(workshop) +
+      buildFooter(workshop, true) +
     '</div>';
 
   openPrintWindow('فاتورة #' + String(order.id).slice(-6), html);

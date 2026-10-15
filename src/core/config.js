@@ -179,6 +179,8 @@ export const WEEKDAYS = [
 /* --- 17. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '', pickupHours: '' },
+  /* الولاء (v3.3.51): نقطة لكل earnEvery ج.م من الطلب المسلَّم، وقيمة النقطة عند الاستبدال pointValue ج.م */
+  loyalty: { enabled: true, earnEvery: 20, pointValue: 1 },
   appearance: {
     theme: 'classic', primaryColor: '#1F6D57', accentColor: '#B8863B',
     backgroundColor: '#F6F1E6', backgroundPattern: 'none', iconStyle: 'default',

@@ -73,6 +73,58 @@ const workshopInfoSection = {
     body.appendChild(textField('رقم WhatsApp', 'whatsapp', '+20xxxxxxxxxx'));
     body.appendChild(textField('مواعيد الاستلام (تظهر في الرسائل)', 'pickupHours', 'مثال: يومياً من 10 ص إلى 9 م'));
 
+    /* شروط الورشة (v3.3.51): تُطبع أسفل الفاتورة، سطر لكل شرط */
+    {
+      const termsArea = el('textarea', {
+        className: 'textarea', rows: '4',
+        placeholder: 'مثال:\nالمقدم غير مسترد بعد القص\nالتعديلات مجانية خلال 7 أيام من التسليم\nنحتفظ بالجلابية 30 يوماً بعد الجهوزية',
+      });
+      termsArea.value = ws.terms || '';
+      let termsSaved = String(ws.terms || '');
+      let termsTimer = null;
+      const saveTerms = () => {
+        const v = termsArea.value.trim();
+        if (v === termsSaved) return;
+        termsSaved = v;
+        saveFn({ workshop: { terms: v } });
+      };
+      termsArea.addEventListener('blur', () => { if (termsTimer) { clearTimeout(termsTimer); termsTimer = null; } saveTerms(); });
+      termsArea.addEventListener('input', () => { if (termsTimer) clearTimeout(termsTimer); termsTimer = setTimeout(saveTerms, 800); });
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, 'شروط الورشة (تظهر أسفل الفاتورة — سطر لكل شرط)'),
+        termsArea,
+      ]));
+    }
+
+    /* نقاط الولاء (v3.3.51) */
+    {
+      const loy = currentSettings.loyalty || {};
+      const enabledCb = el('input', { type: 'checkbox' });
+      enabledCb.checked = loy.enabled !== false;
+      const earnIn = el('input', { className: 'input', type: 'number', min: '1', step: '1', inputmode: 'numeric' });
+      earnIn.value = String(Number(loy.earnEvery) > 0 ? loy.earnEvery : 20);
+      const valIn = el('input', { className: 'input', type: 'number', min: '0.01', step: '0.01', inputmode: 'decimal' });
+      valIn.value = String(Number(loy.pointValue) > 0 ? loy.pointValue : 1);
+      let loyTimer = null;
+      const saveLoy = () => {
+        const earnEvery = Math.max(1, Number(earnIn.value) || 20);
+        const pointValue = Math.max(0.01, Number(valIn.value) || 1);
+        saveFn({ loyalty: { enabled: enabledCb.checked, earnEvery, pointValue } });
+      };
+      const later = () => { if (loyTimer) clearTimeout(loyTimer); loyTimer = setTimeout(saveLoy, 800); };
+      [earnIn, valIn].forEach((i) => { i.addEventListener('input', later); i.addEventListener('blur', saveLoy); });
+      enabledCb.addEventListener('change', saveLoy);
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, '⭐ نقاط الولاء'),
+        el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '4px 0' } },
+          [enabledCb, el('span', {}, 'تفعيل النقاط (تُمنح عند تسليم الطلب)')]),
+        el('div', { style: { fontSize: '12px', color: '#666', margin: '6px 0 2px' } }, 'نقطة واحدة لكل كذا ج.م من إجمالي الطلب:'),
+        earnIn,
+        el('div', { style: { fontSize: '12px', color: '#666', margin: '8px 0 2px' } }, 'قيمة النقطة الواحدة عند الاستبدال (ج.م خصم):'),
+        valIn,
+      ]));
+    }
+
     /* الشعار */
     const logoPreview = el('div', {
       style: {

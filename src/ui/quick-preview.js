@@ -15,7 +15,7 @@ import { toast } from './toast.js';
 import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
-import { customers as customersRepo } from '../data/repos/customers.js';
+import { customers as customersRepo, walletOf, loyaltyConfig } from '../data/repos/customers.js';
 import { settings as settingsRepo } from '../data/repos/settings.js';
 import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
@@ -397,6 +397,49 @@ function _customerMeasureRows(c, fields) {
 }
 
 /**
+ * نافذة إدخال رقم (مبلغ/نقاط). تُرجع الرقم أو null عند الإلغاء.
+ * @param {{title:string, message?:string, value?:number, max?:number, unit?:string}} o
+ * @returns {Promise<number|null>}
+ */
+function _askNumber(o) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; resolve(v); };
+    const input = el('input', {
+      className: 'input', type: 'number', min: '0', step: '0.01', inputmode: 'decimal',
+      style: { fontSize: '26px', textAlign: 'center', padding: '12px 8px', height: 'auto' },
+    });
+    if (o.value != null) input.value = String(o.value);
+    const body = el('div', {}, [
+      o.message ? el('p', { style: { fontSize: '13px', color: '#666', lineHeight: '1.6', margin: '0 0 10px' } }, o.message) : null,
+      input,
+      o.unit ? el('div', { style: { textAlign: 'center', fontSize: '12px', color: '#666', marginTop: '6px' } }, o.unit) : null,
+    ].filter(Boolean));
+    const ok = () => {
+      const n = Number(input.value);
+      if (!(n > 0)) { toast.warning('أدخل رقماً أكبر من صفر'); return; }
+      if (o.max != null && n > o.max) { toast.warning('الحد الأقصى ' + o.max); return; }
+      finish(n); handle.close();
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+    const handle = modal.open({
+      title: o.title, body, closable: true,
+      onClose: () => finish(null),
+      actions: [
+        { text: 'تأكيد', variant: 'primary', onClick: ok },
+        { text: 'إلغاء', variant: 'ghost', onClick: () => { finish(null); handle.close(); } },
+      ],
+    });
+    setTimeout(() => { try { input.focus(); input.select(); } catch { /* ignore */ } }, 60);
+  });
+}
+
+const WALLET_TYPE_LABELS = {
+  topup: '➕ شحن رصيد', spend: '💳 خصم من الرصيد', earn: '⭐ نقاط من طلب',
+  redeem: '🎁 استبدال نقاط', adjust: '🔧 تعديل',
+};
+
+/**
  * «التفاصيل الكاملة» للعميل: كل المقاسات + كل الطلبات بتفاصيلها.
  * @param {Object} c — العميل
  * @param {Array} orders — طلبات العميل
@@ -506,6 +549,28 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
     }
   } catch (e) { console.warn('[customer family]', e); familyNodes = []; }
 
+  /* الرصيد والنقاط (v3.3.51) */
+  let wcust = c;
+  try { wcust = (await customersRepo.find(c.id)) || c; } catch { wcust = c; }
+  const wal = walletOf(wcust);
+  const walletNode = _acc({
+    id: 'qp-cust-wallet', title: '💳 الرصيد والنقاط', defaultOpen: wal.balance > 0 || wal.points > 0,
+    summary: formatEGP(wal.balance) + ' · ' + wal.points + ' نقطة',
+    children: [
+      el('div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } }, [
+        _stat('الرصيد', formatEGP(wal.balance), '#1F6D57'),
+        _stat('النقاط', String(wal.points), '#B8863B'),
+      ]),
+      ...(wal.log.length > 0
+        ? wal.log.slice(0, 8).map((e) => _listItem(
+            (WALLET_TYPE_LABELS[e.type] || e.type) + ' · ' + formatDate(e.at),
+            [e.balance ? (e.balance > 0 ? '+' : '−') + formatEGP(Math.abs(e.balance)) : null,
+              e.points ? (e.points > 0 ? '+' : '−') + Math.abs(e.points) + ' نقطة' : null,
+              e.note || null].filter(Boolean).join(' · ')))
+        : [el('div', { style: { fontSize: '12px', color: '#999', padding: '4px 0' } }, 'لا توجد حركات بعد')]),
+    ],
+  });
+
   const body = el('div', {}, [
     c.vip ? el('div', { style: { fontSize: '12px', color: '#B8863B', fontWeight: '600', marginBottom: '6px' } },
       '⭐ عميل VIP') : null,
@@ -513,6 +578,7 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
     c.address ? _row('🏠', 'العنوان', c.address) : null,
     c.notes ? _row('📝', 'ملاحظات', c.notes) : null,
     ...familyNodes,
+    walletNode,
     _acc({
       id: 'qp-cust-measures', title: '📏 المقاسات', defaultOpen: true,
       summary: measureRows.length > 0 ? measureRows.length + ' مقاس' : 'لا توجد مقاسات',
@@ -530,6 +596,17 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
     title: '👤 ' + c.name + ' — التفاصيل الكاملة',
     body,
     actions: [
+      { text: '➕ شحن رصيد', variant: 'primary',
+        onClick: async () => {
+          modal.close();
+          const amt = await _askNumber({ title: 'شحن رصيد — ' + c.name,
+            message: 'المبلغ المدفوع مقدّماً. يُخصم من طلبات العميل لاحقاً بزر «💳 خصم من الرصيد» في الطلب.', unit: 'ج.م' });
+          if (amt) {
+            try { await customersRepo.walletTopUp(c.id, amt); toast.success('تم شحن ' + formatEGP(amt)); }
+            catch (e) { toast.danger('تعذّر الشحن: ' + e.message); }
+          }
+          _openCustomerFullDetails((await customersRepo.find(c.id)) || c, orders, onEdit);
+        } },
       onEdit ? { text: '✏️ تعديل', variant: 'secondary', onClick: () => { modal.close(); onEdit(); } } : null,
       _closeAction(),
     ].filter(Boolean),
@@ -618,6 +695,15 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     extraFeesTotal > 0 ? 'رسوم ' + formatEGP(extraFeesTotal) : null,
   ].filter(Boolean).join(' · ');
 
+  /* الرصيد والنقاط (v3.3.51) */
+  let wal = { balance: 0, points: 0 };
+  let loy = { enabled: false, earnEvery: 20, pointValue: 1 };
+  try {
+    if (customer && customer.id) wal = walletOf(await customersRepo.find(customer.id));
+    loy = loyaltyConfig(await settingsRepo.get());
+  } catch { /* بدون محفظة */ }
+  const canPay = remaining > 0 && order.status !== 'cancelled' && !!customer;
+
   const measureCount = (order.measurementsSnapshot && Array.isArray(order.measurementsSnapshot.fields))
     ? order.measurementsSnapshot.fields.length : 0;
 
@@ -626,6 +712,7 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     _row('👤', 'العميل', customer ? customer.name : 'عميل محذوف'),
     customer && customer.phone ? _row('📞', 'الهاتف', customer.phone) : null,
     _row('🔖', 'الحالة', statusLabels[order.status] || order.status),
+    order.urgent ? el('div', { style: { fontSize: '12px', fontWeight: '700', color: '#C62828', margin: '4px 0' } }, '⚡ طلب عاجل') : null,
     order.receivedDate ? _row('🧵', 'استلام القماش', formatDate(order.receivedDate)) : null,
     order.dueDate ? _row('📅', 'تاريخ التسليم', formatDate(order.dueDate)) : null,
     order.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(order.createdAt)) : null,
@@ -676,6 +763,33 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
       } },
     customer && customer.phone ? { text: '📱 واتساب', variant: 'secondary',
       onClick: () => _whatsapp(customer.phone, 'بخصوص طلبك #' + String(order.id).slice(-6)) } : null,
+    canPay && wal.balance > 0 ? { text: '💳 من الرصيد (' + formatEGP(wal.balance) + ')', variant: 'secondary',
+      onClick: async () => {
+        modal.close();
+        const max = Math.min(wal.balance, remaining);
+        const amt = await _askNumber({ title: 'خصم من رصيد العميل',
+          message: 'الرصيد المتاح ' + formatEGP(wal.balance) + ' · المتبقي على الطلب ' + formatEGP(remaining),
+          value: max, max, unit: 'ج.م' });
+        if (amt) {
+          try { const got = await ordersRepo.spendCredit(order.id, amt, remaining); toast.success('تم خصم ' + formatEGP(got) + ' من الرصيد'); }
+          catch (e) { toast.danger('تعذّر الخصم: ' + e.message); }
+        }
+        previewOrder(order.id, customer, editCb);
+      } } : null,
+    canPay && loy.enabled && wal.points > 0 ? { text: '🎁 نقاط (' + wal.points + ')', variant: 'secondary',
+      onClick: async () => {
+        modal.close();
+        const needPts = Math.ceil(remaining / loy.pointValue - 1e-9);
+        const max = Math.min(wal.points, needPts);
+        const pts = await _askNumber({ title: 'استبدال نقاط بخصم',
+          message: 'نقاط العميل ' + wal.points + ' · كل نقطة = ' + formatEGP(loy.pointValue) + ' خصم على الطلب',
+          value: max, max: wal.points, unit: 'نقطة' });
+        if (pts) {
+          try { const r = await ordersRepo.redeemPoints(order.id, pts, remaining); toast.success('تم خصم ' + formatEGP(r.value) + ' (' + r.points + ' نقطة)'); }
+          catch (e) { toast.danger('تعذّر الاستبدال: ' + e.message); }
+        }
+        previewOrder(order.id, customer, editCb);
+      } } : null,
     customer && order.status !== 'delivered' && order.status !== 'cancelled' ? { text: '🔄 تحديث المقاسات', variant: 'secondary',
       onClick: async () => {
         const ok = await modal.confirm({
