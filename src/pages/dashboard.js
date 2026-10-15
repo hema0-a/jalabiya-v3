@@ -27,6 +27,7 @@ import { depositGuard } from '../ui/deposit-guard.js';
 import { referrals as referralsRepo } from '../data/repos/referrals.js';
 import { isDemoRecord, clearDemoData } from '../services/demo-data.js';
 import { modal } from '../ui/modal.js';
+import { createCollapsible, openAll, closeAll } from '../ui/collapsible.js'; /* v3.3.63 */
 import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
@@ -564,63 +565,75 @@ function buildAttention(data) {
   return card;
 }
 
+/* ==========================================================================
+   أقسام اللوحة القابلة للطي (v3.3.63)
+   - «يحتاج إجراءك» تبقى بطاقة ظاهرة دائماً (الأهم).
+   - الباقي أكورديون: الملخص + شارة العدّاد يُظهران المحتوى دون فتح القسم،
+     والمفتوح افتراضياً هو القوائم التي فيها عناصر فقط، والحالة تُحفظ بعدها.
+   ========================================================================== */
+function dashSection({ id, icon, title, summary, badge, defaultOpen, body, action, cls }) {
+  const inner = el('div', { className: 'dash-section__body' }, [
+    body,
+    action ? el('div', { className: 'dash-section__action' }, [action]) : null,
+  ]);
+  const c = createCollapsible({ id, icon, title, summary, badge, defaultOpen: !!defaultOpen, content: inner });
+  c.node.classList.add('dash-section');
+  if (cls) c.node.classList.add(cls);
+  return c.node;
+}
+
+const emptyNote = (text) => el('p', { className: 'dash-note', style: { margin: '0' } }, text);
+
 function buildDueSoonSection(rows) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '⏰ طلبات مستحقة قريباً'),
-  ]));
+  const body = el('div');
   if (rows.length === 0) {
-    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا توجد طلبات مستحقة خلال 7 أيام.'));
-    return card;
+    body.appendChild(emptyNote('لا توجد طلبات مستحقة خلال 7 أيام.'));
   }
   rows.forEach((r) => {
     const o = r.order;
     const next = NEXT_STATUS[o.status];
-    card.appendChild(dashRow(
+    body.appendChild(dashRow(
       r.name,
       (o.status === 'ready' ? '✅ جاهز للتسليم' : '⏳ ' + (o.status === 'pending' ? 'قيد الانتظار' : 'قيد التنفيذ')) +
         (o.dueDate ? ' · 📅 ' + formatDate(o.dueDate) : '') + (o.amount ? ' · ' + formatEGP(o.amount) : ''),
       [callBtn(r.phone), next ? actBtn(next.label, () => advanceOrder(o, r.remaining), false) : null],
       () => go('#/orders'), o.customerId));
   });
-  return card;
+  const ready = rows.filter((r) => r.order.status === 'ready').length;
+  return dashSection({
+    id: 'dash-due', icon: '⏰', title: 'طلبات مستحقة قريباً',
+    summary: rows.length ? (ready ? ready + ' جاهز · ' : '') + (rows.length - ready) + ' قيد التنفيذ' : 'لا شيء خلال 7 أيام',
+    badge: rows.length, defaultOpen: rows.length > 0, body,
+  });
 }
 
 function buildTodayAppointmentsSection(rows) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '📅 مواعيد اليوم'),
-    el('a', { className: 'dash-link', href: '#/appointments/new' }, '＋ موعد'),
-  ]));
-  if (rows.length === 0) {
-    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا توجد مواعيد اليوم.'));
-    return card;
-  }
+  const body = el('div');
+  if (rows.length === 0) body.appendChild(emptyNote('لا توجد مواعيد اليوم.'));
   rows.forEach((r) => {
     const a = r.appt;
     const done = a.status === 'done';
-    card.appendChild(dashRow(
+    body.appendChild(dashRow(
       (done ? '✔ ' : '🕐 ') + formatTime(a.date) + ' — ' + (a.title || 'موعد'),
       r.name || null,
       [callBtn(r.phone), done ? null : actBtn('✔ تم', () => markApptDone(a), false)],
       () => go('#/appointments'), a.customerId));
   });
-  return card;
+  const pending = rows.filter((r) => r.appt.status !== 'done').length;
+  return dashSection({
+    id: 'dash-appts', icon: '📅', title: 'مواعيد اليوم',
+    summary: rows.length ? (pending ? pending + ' متبقية' : 'كلها منتهية') + ' من ' + rows.length : 'لا مواعيد اليوم',
+    badge: pending, defaultOpen: rows.length > 0, body,
+    action: el('a', { className: 'dash-link', href: '#/appointments/new' }, '＋ موعد'),
+  });
 }
 
 const WEEK_ROWS = 6;
 const REASON_ICON = { appt: '🗓️', due: '📅', ready: '📦' };
 
 function buildWeekVisitsSection(rows, wn) {
-  const card = el('div', { className: 'card dash-week', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '👣 عملاء هذا الأسبوع'),
-    el('span', { className: 'badge badge--info' }, String(rows.length)),
-  ]));
-  if (rows.length === 0) {
-    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا حضور متوقّع خلال 7 أيام.'));
-    return card;
-  }
+  const body = el('div');
+  if (rows.length === 0) body.appendChild(emptyNote('لا حضور متوقّع خلال 7 أيام.'));
   rows.slice(0, WEEK_ROWS).forEach((r) => {
     const sub = r.reasons.slice(0, 3).map((x) => REASON_ICON[x.type] + ' ' + dayLabel(x.ts) + ' — ' + x.label).join('\n');
     const row = dashRow(
@@ -629,30 +642,66 @@ function buildWeekVisitsSection(rows, wn) {
       [callBtn(r.phone), waBtn(r.phone, () => buildVisitText(r, wn), { kind: 'week_visit', customerId: r.customerId })],
       () => go('#/customers'), r.customerId);
     row.querySelector('.dash-row__sub')?.classList.add('dash-row__sub--lines');
-    card.appendChild(row);
+    body.appendChild(row);
   });
-  if (rows.length > WEEK_ROWS) card.appendChild(el('p', { className: 'dash-note', style: { margin: 'var(--space-s) 0 0' } }, '+' + (rows.length - WEEK_ROWS) + ' آخرون'));
-  return card;
+  if (rows.length > WEEK_ROWS) body.appendChild(el('p', { className: 'dash-note', style: { margin: 'var(--space-s) 0 0' } }, '+' + (rows.length - WEEK_ROWS) + ' آخرون'));
+  return dashSection({
+    id: 'dash-week', icon: '👣', title: 'عملاء هذا الأسبوع', cls: 'dash-week',
+    summary: rows.length ? rows[0].name + (rows.length > 1 ? ' و' + (rows.length - 1) + ' آخرين' : '') : 'لا حضور متوقّع',
+    badge: rows.length, defaultOpen: rows.length > 0, body,
+  });
 }
 
 function buildRecentCustomersSection(list, wn) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '👥 أحدث العملاء'),
-    el('a', { className: 'dash-link', href: '#/customers/new' }, '＋ عميل'),
-  ]));
-  if (list.length === 0) {
-    card.appendChild(el('p', { className: 'dash-note', style: { margin: '0' } }, 'لا يوجد عملاء بعد.'));
-    return card;
-  }
+  const body = el('div');
+  if (list.length === 0) body.appendChild(emptyNote('لا يوجد عملاء بعد.'));
   list.forEach((c) => {
-    card.appendChild(dashRow(
+    body.appendChild(dashRow(
       (c.name || 'بدون اسم') + (c.vip ? '  ⭐ VIP' : ''),
       c.phone || null,
       [callBtn(c.phone), waBtn(c.phone, () => 'السلام عليكم ' + (c.name || '') + '،' + (wn ? ' معكم ' + wn + '.' : ''))],
       () => go('#/customers'), c.id));
   });
-  return card;
+  return dashSection({
+    id: 'dash-recent', icon: '👥', title: 'أحدث العملاء',
+    summary: list.length ? list.slice(0, 2).map((c) => c.name || 'بدون اسم').join('، ') + (list.length > 2 ? '…' : '') : 'لا عملاء بعد',
+    defaultOpen: false, body,
+    action: el('a', { className: 'dash-link', href: '#/customers/new' }, '＋ عميل'),
+  });
+}
+
+/* --- الرسوم البيانية: قسم لكل رسم (مطويّ افتراضياً، الملخص يغني عن فتحه) --- */
+function buildChartSections(data) {
+  const out = [];
+  const add = (spec, make) => {
+    try { out.push(dashSection({ ...spec, body: make() })); }
+    catch (e) { console.warn('[Dashboard] chart section failed:', spec.id, e); }
+  };
+  const salesTotal = (data.salesLast7Days || []).reduce((s, d) => s + (Number(d.value) || 0), 0);
+  add({ id: 'dash-sales', icon: '📊', title: 'مبيعات آخر 7 أيام', summary: 'الإجمالي ' + formatEGP(salesTotal) },
+    () => createSalesBarChart(data.salesLast7Days, { bare: true }));
+  const fin = data.finance || {};
+  add({ id: 'dash-finance', icon: '💰', title: 'الملخص المالي (30 يوماً)', summary: 'الربح ' + formatEGP(Number(fin.profit) || 0) },
+    () => createFinanceChart(data.finance, { bare: true }));
+  const ordersTotal = Object.values(data.ordersByStatus || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+  add({ id: 'dash-orders', icon: '🥧', title: 'توزيع الطلبات', summary: ordersTotal + ' طلب' },
+    () => createOrdersDonutChart(data.ordersByStatus, { bare: true }));
+  return out;
+}
+
+/* شريط «فتح الكل / طيّ الكل»: التسمية تعكس الحالة الفعلية دائماً */
+function buildSectionsBar(host) {
+  const btn = el('button', { type: 'button', className: 'dash-sections__toggle' }, 'فتح الكل');
+  const allOpen = () => {
+    const list = Array.from(host.querySelectorAll('.dash-section'));
+    return list.length > 0 && list.every((n) => n.classList.contains('collapsible--open'));
+  };
+  const sync = () => { btn.textContent = allOpen() ? 'طيّ الكل' : 'فتح الكل'; };
+  btn.addEventListener('click', () => { (allOpen() ? closeAll : openAll)(host); sync(); });
+  host.addEventListener('click', () => setTimeout(sync, 0));   // أي فتح/طيّ فردي يحدّث التسمية
+  const bar = el('div', { className: 'dash-sections__bar' }, [btn]);
+  bar.update = sync;
+  return bar;
 }
 
 /* ==========================================================================
@@ -675,38 +724,17 @@ export const dashboardPage = {
     container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data));
 
-    /* 📅 مواعيد اليوم */
-    container.appendChild(buildTodayAppointmentsSection(data.todayApptsRows));
-
-    /* 👣 عملاء هذا الأسبوع */
-    container.appendChild(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
-
-    /* ⏰ طلبات مستحقة */
-    container.appendChild(buildDueSoonSection(data.dueSoonRows));
-
-    /* 📊 رسم المبيعات — آخر 7 أيام */
-    try {
-      container.appendChild(createSalesBarChart(data.salesLast7Days));
-    } catch (e) {
-      console.warn('[Dashboard] sales chart failed:', e);
-    }
-
-    /* 💰 الملخص المالي — آخر 30 يومًا */
-    try {
-      container.appendChild(createFinanceChart(data.finance));
-    } catch (e) {
-      console.warn('[Dashboard] finance chart failed:', e);
-    }
-
-    /* 🥧 توزيع الطلبات */
-    try {
-      container.appendChild(createOrdersDonutChart(data.ordersByStatus));
-    } catch (e) {
-      console.warn('[Dashboard] donut chart failed:', e);
-    }
-
-    /* 👥 أحدث العملاء */
-    container.appendChild(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
+    /* أقسام قابلة للطي: مواعيد · عملاء الأسبوع · مستحقة · رسوم · أحدث العملاء */
+    const sections = el('div', { className: 'dash-sections' });
+    const bar = buildSectionsBar(sections);
+    sections.appendChild(bar);
+    sections.appendChild(buildTodayAppointmentsSection(data.todayApptsRows));
+    sections.appendChild(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
+    sections.appendChild(buildDueSoonSection(data.dueSoonRows));
+    buildChartSections(data).forEach((n) => sections.appendChild(n));
+    sections.appendChild(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
+    bar.update();
+    container.appendChild(sections);
   },
 
   destroy() {

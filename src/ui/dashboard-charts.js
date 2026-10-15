@@ -41,6 +41,10 @@ function svgEl(tag, attrs = {}, text) {
  * @returns {HTMLElement}
  */
 function chartCard(title, content, opts = {}) {
+  /* bare: داخل قسم أكورديون يحمل العنوان بنفسه — لا بطاقة ولا عنوان مكرر */
+  if (opts.bare) {
+    return el('div', { className: 'dash-chart' }, [content]);
+  }
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '16px', padding: '12px' },
@@ -66,7 +70,7 @@ function chartCard(title, content, opts = {}) {
  * @param {Array<{label:string, value:number}>} days
  * @returns {HTMLElement}
  */
-export function createSalesBarChart(days) {
+export function createSalesBarChart(days, opts = {}) {
   const list = Array.isArray(days) ? days : [];
   const W = 320;
   const H = 140;
@@ -164,7 +168,7 @@ export function createSalesBarChart(days) {
     }, 'لا توجد مبيعات في آخر 7 أيام'));
   }
 
-  return chartCard('📊 مبيعات آخر 7 أيام', svg);
+  return chartCard('📊 مبيعات آخر 7 أيام', svg, opts);
 }
 
 /* ==========================================================================
@@ -176,7 +180,7 @@ export function createSalesBarChart(days) {
  * @param {Object} stats — { pending, in_progress, ready, delivered, cancelled }
  * @returns {HTMLElement}
  */
-export function createOrdersDonutChart(stats) {
+export function createOrdersDonutChart(stats, opts = {}) {
   const s = stats || {};
   const items = [
     { key: 'pending',     label: 'قيد الانتظار', color: '#F57C00', value: Number(s.pending) || 0 },
@@ -288,7 +292,7 @@ export function createOrdersDonutChart(stats) {
   const wrap = el('div', {}, [svg]);
   if (items.length > 0) wrap.appendChild(legend);
 
-  return chartCard('🥧 توزيع الطلبات', wrap);
+  return chartCard('🥧 توزيع الطلبات', wrap, opts);
 }
 
 /* ==========================================================================
@@ -300,7 +304,7 @@ export function createOrdersDonutChart(stats) {
  * @param {Object} finance — { revenue, expenses, profit }
  * @returns {HTMLElement}
  */
-export function createFinanceChart(finance) {
+export function createFinanceChart(finance, opts = {}) {
   const f = finance || { revenue: 0, expenses: 0, profit: 0 };
   const items = [
     { label: 'إيرادات', value: Number(f.revenue) || 0, color: '#2E7D32' },
@@ -368,7 +372,7 @@ export function createFinanceChart(finance) {
     }, it.label));
   });
 
-  return chartCard('💰 الملخص المالي (آخر 30 يوماً)', svg);
+  return chartCard('💰 الملخص المالي (آخر 30 يوماً)', svg, opts);
 }
 
 /* --- تصدير داخلي للاختبار --- */

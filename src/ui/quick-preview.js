@@ -10,6 +10,7 @@
 
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
+import { createCollapsible } from './collapsible.js'; /* v3.3.63 */
 import { toast } from './toast.js';
 import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 import { orders as ordersRepo } from '../data/repos/orders.js';
@@ -96,6 +97,20 @@ function _section(text) {
     style: { fontSize: '13px', fontWeight: '600', color: '#1F6D57',
       margin: '12px 0 6px 0', paddingBottom: '4px', borderBottom: '2px solid #1F6D57' },
   }, text);
+}
+
+/**
+ * قسم قابل للطي داخل نافذة المعاينة (حالته تُحفظ وتنطبق على كل المعاينات).
+ * @param {{id:string, title:string, children:Array, summary?:string, badge?:number, defaultOpen?:boolean}} o
+ * @returns {HTMLElement}
+ */
+function _acc({ id, title, children, summary, badge, defaultOpen }) {
+  const c = createCollapsible({
+    id, title, summary, badge, defaultOpen: !!defaultOpen,
+    content: el('div', {}, children.filter(Boolean)),
+  });
+  c.node.classList.add('collapsible--flat');
+  return c.node;
 }
 
 /**
@@ -401,7 +416,7 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
 
   const sorted = [...(orders || [])].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const orderBlocks = [];
-  for (const o of sorted) {
+  for (const [idx, o] of sorted.entries()) {
     let paid = 0;
     try {
       const pays = await paymentsRepo.findByOrder(o.id);
@@ -409,9 +424,8 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
     } catch { paid = Number(o.deposit) || 0; }
     const total = Number(o.amount) || 0;
     const items = _orderItems(o);
-    orderBlocks.push(el('div', {
-      style: { border: '1px solid #E5DDD0', borderRadius: '10px', padding: '8px 10px', marginTop: '8px' },
-    }, [
+    const remainingOrder = Math.max(0, total - paid);
+    const orderRows = [
       _row('🔖', 'الحالة', statusLabels[o.status] || o.status || '—'),
       o.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(o.createdAt)) : null,
       o.receivedDate ? _row('🧵', 'استلام القماش', formatDate(o.receivedDate)) : null,
@@ -429,7 +443,19 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
         : null,
       o.notes ? el('p', { style: { fontSize: '12px', color: '#666', margin: '8px 0 0', lineHeight: '1.5' } },
         '📝 ' + o.notes) : null,
-    ].filter(Boolean)));
+    ].filter(Boolean);
+
+    /* كل طلب قسم مطويّ بملخصه؛ وضع حصري (واحد مفتوح) وأحدث طلب مفتوح افتراضياً.
+       persist:false حتى لا تتراكم معرّفات الطلبات في التخزين. */
+    const oc = createCollapsible({
+      id: 'qp-corder-' + o.id,
+      title: (statusLabels[o.status] || o.status || '—') + (o.createdAt ? ' · ' + formatDate(o.createdAt) : ''),
+      summary: 'الإجمالي ' + formatEGP(total) + (remainingOrder > 0 ? ' · المتبقي ' + formatEGP(remainingOrder) : ' · مدفوع'),
+      content: el('div', {}, orderRows),
+      group: 'qp-corders', persist: false, defaultOpen: idx === 0,
+    });
+    oc.node.classList.add('collapsible--flat');
+    orderBlocks.push(oc.node);
   }
 
   /* ملف العيلة: رب الأسرة يرى أفراده (مقاساتهم وحسابهم)، والتابع يرى رب أسرته */
@@ -487,10 +513,13 @@ async function _openCustomerFullDetails(c, orders, onEdit) {
     c.address ? _row('🏠', 'العنوان', c.address) : null,
     c.notes ? _row('📝', 'ملاحظات', c.notes) : null,
     ...familyNodes,
-    _section('📏 المقاسات'),
-    ...(measureRows.length > 0 ? measureRows : [
-      el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } }, 'لا توجد مقاسات مسجلة لهذا العميل'),
-    ]),
+    _acc({
+      id: 'qp-cust-measures', title: '📏 المقاسات', defaultOpen: true,
+      summary: measureRows.length > 0 ? measureRows.length + ' مقاس' : 'لا توجد مقاسات',
+      children: measureRows.length > 0 ? measureRows : [
+        el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } }, 'لا توجد مقاسات مسجلة لهذا العميل'),
+      ],
+    }),
     _section('📦 الطلبات (' + sorted.length + ')'),
     ...(orderBlocks.length > 0 ? orderBlocks : [
       el('div', { style: { fontSize: '12px', color: '#999', padding: '6px 0' } }, 'لا توجد طلبات لهذا العميل'),
@@ -541,18 +570,14 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     ready: '✅ جاهز', delivered: '📦 تم التسليم', cancelled: '❌ ملغي' };
 
   const items = _orderItems(order);
-  const itemsSection = items.length > 0 ? [
-    _section('📦 البنود (' + items.length + ')'),
-    ...items.map((it) => _listItem(
-      it.name,
-      it.quantity + ' × ' + formatEGP(it.price) + ' = ' + formatEGP(it.price * it.quantity)
-    )),
-  ] : [];
+  const itemsRows = items.map((it) => _listItem(
+    it.name,
+    it.quantity + ' × ' + formatEGP(it.price) + ' = ' + formatEGP(it.price * it.quantity)
+  ));
 
   /* التسليم الجزئي: التقدم وسجل التسليمات (يظهر فقط إن وُجدت تسليمات) */
   const dprog = deliveryProgress(order);
-  const deliverySection = dprog.history.length > 0 ? [
-    _section('🚚 التسليم (' + dprog.deliveredUnits + ' من ' + dprog.totalUnits + ' قطعة)'),
+  const deliveryRows = dprog.history.length > 0 ? [
     ...dprog.history.map((h) => _listItem(
       formatDate(h.at) + ' — ' + h.units + ' قطعة' + (h.hasSignature ? ' ✍️' : ''),
       h.items.map((x) => x.qty + ' × ' + x.name).join('، ') + (h.note ? ' · ' + h.note : ''),
@@ -568,29 +593,35 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
   const hasBreakdown = subtotal > 0 && (discountAmount > 0 || extraFeesTotal > 0);
 
-  const breakdown = hasBreakdown ? [
-    _section('💰 تفاصيل الحساب'),
+  const breakdownRows = hasBreakdown ? [
     _row('📊', 'المجموع الفرعي', formatEGP(subtotal)),
     discountAmount > 0 ? _row('🎁', 'الخصم', '− ' + formatEGP(discountAmount)) : null,
     extraFeesTotal > 0 ? _row('➕', 'رسوم إضافية', '+ ' + formatEGP(extraFeesTotal)) : null,
   ].filter(Boolean) : [];
 
-  const extraFeesList = (Array.isArray(order.extraFees) && order.extraFees.length > 0)
+  const feeTypeMap = {
+    urgency: '⚡ استعجال', modify: '✏️ تعديلات',
+    delivery: '🚚 توصيل', packaging: '📦 تغليف', other: '📌 أخرى',
+  };
+  const feeRows = (Array.isArray(order.extraFees) && order.extraFees.length > 0)
     ? [
         _section('➕ الرسوم الإضافية'),
         ...order.extraFees.map((f) => {
-          const val = (f.type === 'percent')
-            ? (Number(f.value) || 0) + '%'
-            : formatEGP(f.value);
-          const feeTypeMap = {
-            urgency: '⚡ استعجال', modify: '✏️ تعديلات',
-            delivery: '🚚 توصيل', packaging: '📦 تغليف', other: '📌 أخرى',
-          };
+          const val = (f.type === 'percent') ? (Number(f.value) || 0) + '%' : formatEGP(f.value);
           return _listItem(feeTypeMap[f.feeType] || 'رسم', val);
         }),
       ]
     : [];
+  const calcRows = [...breakdownRows, ...feeRows];
+  const calcSummary = [
+    discountAmount > 0 ? 'خصم ' + formatEGP(discountAmount) : null,
+    extraFeesTotal > 0 ? 'رسوم ' + formatEGP(extraFeesTotal) : null,
+  ].filter(Boolean).join(' · ');
 
+  const measureCount = (order.measurementsSnapshot && Array.isArray(order.measurementsSnapshot.fields))
+    ? order.measurementsSnapshot.fields.length : 0;
+
+  /* الأساسي ظاهر دائماً (بيانات + المبالغ)، والتفاصيل أقسام قابلة للطي */
   const body = el('div', {}, [
     _row('👤', 'العميل', customer ? customer.name : 'عميل محذوف'),
     customer && customer.phone ? _row('📞', 'الهاتف', customer.phone) : null,
@@ -599,23 +630,30 @@ export async function previewOrder(idOrObj, customerOrOnEdit, onEdit) {
     order.dueDate ? _row('📅', 'تاريخ التسليم', formatDate(order.dueDate)) : null,
     order.createdAt ? _row('📆', 'تاريخ الطلب', formatDate(order.createdAt)) : null,
 
-    ...itemsSection,
-    ...deliverySection,
-    ...breakdown,
-    ...extraFeesList,
-
     _section('💰 المبالغ'),
-    el('div', { style: { display: 'flex', gap: '6px' } }, [
+    el('div', { style: { display: 'flex', gap: '6px', marginBottom: '10px' } }, [
       _stat('الإجمالي', formatEGP(total)),
       _stat('المدفوع', formatEGP(paidTotal), '#2E7D32'),
       _stat('المتبقي', formatEGP(remaining), remaining > 0 ? '#F57C00' : '#666'),
     ]),
 
-    _section('📏 مقاسات وقت الطلب'),
-    ..._orderMeasurementRows(order),
-
-    order.notes ? _section('📝 ملاحظات') : null,
-    order.notes ? el('p', { style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' } }, order.notes) : null,
+    items.length > 0
+      ? _acc({ id: 'qp-order-items', title: '📦 البنود', badge: items.length > 1 ? items.length : 0, defaultOpen: true, children: itemsRows })
+      : null,
+    deliveryRows.length > 0
+      ? _acc({ id: 'qp-order-delivery', title: '🚚 التسليم', defaultOpen: true,
+          summary: dprog.deliveredUnits + ' من ' + dprog.totalUnits + ' قطعة', children: deliveryRows })
+      : null,
+    calcRows.length > 0
+      ? _acc({ id: 'qp-order-calc', title: '🧮 تفاصيل الحساب', summary: calcSummary, children: calcRows })
+      : null,
+    _acc({ id: 'qp-order-measures', title: '📏 مقاسات وقت الطلب',
+      summary: measureCount > 0 ? measureCount + ' مقاس' : 'لا توجد نسخة محفوظة',
+      children: _orderMeasurementRows(order) }),
+    order.notes
+      ? _acc({ id: 'qp-order-notes', title: '📝 ملاحظات', defaultOpen: true,
+          children: [el('p', { style: { fontSize: '13px', color: '#666', margin: '0', lineHeight: '1.5' } }, order.notes)] })
+      : null,
   ].filter(Boolean));
 
   const actions = [
