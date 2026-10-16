@@ -7,6 +7,7 @@
 
 import { DB_CONFIG, STORES } from '../core/config.js';
 import { SCHEMA, validateSchema } from './schema.js';
+import { stampForWrite, isRecordStore } from './record-meta.js';
 
 let dbInstance = null;
 
@@ -19,6 +20,13 @@ const writeListeners = [];
 export function onWrite(cb) { if (typeof cb === 'function') writeListeners.push(cb); }
 function notifyWrite(names) {
   for (const cb of writeListeners) { try { cb(names); } catch (e) { console.warn('[idb] onWrite listener:', e); } }
+}
+
+/* مستمعو الكتابة الدفعية فقط (المزامنة/الاستعادة/الاستيراد/الترحيل): يُستعمل لإعادة ترحيل السجلات القديمة */
+const batchListeners = [];
+export function onBatchWrite(cb) { if (typeof cb === 'function') batchListeners.push(cb); }
+function notifyBatch(names) {
+  for (const cb of batchListeners) { try { cb(names); } catch (e) { console.warn('[idb] onBatchWrite listener:', e); } }
 }
 
 function wrap(request) {
@@ -237,8 +245,48 @@ function notifyRec(list, storeName, id) {
   for (const cb of list) { try { cb(storeName, id); } catch (e) { console.warn('[idb] record listener:', e); } }
 }
 
+/**
+ * كتابة سجل واحد. لمخازن السجلات المتزامنة: قراءة السجل الحالي ثم الكتابة في معاملة واحدة،
+ * وختم نسخة المخطط (_v) وأزمنة الحقول المتغيرة (_ft/_fb) — انظر record-meta.js.
+ * (الدمج المجمّع writeBatch لا يختم: يحمل سجلات جاهزة من السحابة/النسخة الاحتياطية.)
+ */
+async function putStamped(storeName, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction(storeName, 'readwrite'); }
+    catch (e) { reject(e); return; }
+    let result;
+    tx.oncomplete = () => { writeVersion++; notifyWrite([storeName]); resolve(result); };
+    tx.onerror = () => reject(tx.error || new Error('[idb] write failed'));
+    tx.onabort = () => reject(tx.error || new Error('[idb] write aborted'));
+    const fail = (e) => { try { tx.abort(); } catch (_) { /* ignore */ } reject(e); };
+    try {
+      const store = tx.objectStore(storeName);
+      const writeIt = (existing) => {
+        try {
+          let toWrite = value;
+          try { toWrite = stampForWrite(storeName, existing, value, Date.now()); }
+          catch (e) { console.warn('[idb] ختم السجل فشل — يُكتب كما هو:', e); toWrite = value; }
+          const req = store.put(toWrite);
+          req.onsuccess = () => { result = req.result; };
+        } catch (e) { fail(e); }
+      };
+      const key = value && store.keyPath ? value[store.keyPath] : undefined;
+      if (isRecordStore(storeName) && key !== undefined && key !== null) {
+        const g = store.get(key);
+        g.onsuccess = () => writeIt(g.result);
+      } else {
+        writeIt(undefined);
+      }
+    } catch (e) { fail(e); }
+  });
+}
+
 export async function put(storeName, value) {
-  const res = await writeOp(storeName, (store) => store.put(value));
+  const res = isRecordStore(storeName)
+    ? await putStamped(storeName, value)
+    : await writeOp(storeName, (store) => store.put(value));
   notifyRec(putListeners, storeName, value ? value.id : undefined);
   return res;
 }
@@ -290,7 +338,7 @@ export async function writeBatch(plan) {
     try {
       tx = db.transaction(names, 'readwrite');
     } catch (e) { reject(e); return; }
-    tx.oncomplete = () => { writeVersion++; notifyWrite(names); resolve(counts); };
+    tx.oncomplete = () => { writeVersion++; notifyWrite(names); notifyBatch(names); resolve(counts); };
     tx.onerror = () => reject(tx.error || new Error('[idb] batch failed'));
     tx.onabort = () => reject(tx.error || new Error('[idb] batch aborted'));
     try {

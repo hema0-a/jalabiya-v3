@@ -13,8 +13,8 @@ register('pages/settings.js', async (t) => {
     c1.querySelector('.settings-page') !== null &&
     c1.querySelector('.sub-page') !== null);
 
-  await t.test('2. list contains 23 sections',
-    c1.querySelectorAll('.sub-page__item').length === 23);
+  await t.test('2. list contains 24 sections',
+    c1.querySelectorAll('.sub-page__item').length === 24);
 
   await t.test('3. detail view hidden when no subRoute',
     !c1.querySelector('.sub-page').classList.contains('sub-page--open'));
@@ -22,12 +22,12 @@ register('pages/settings.js', async (t) => {
   const ids = Array.from(c1.querySelectorAll('.sub-page__item'))
     .map((i) => i.getAttribute('data-section-id'));
 
-  await t.test('4. all 23 required section IDs present',
+  await t.test('4. all required section IDs present (24 sections)',
     ['workshop', 'appearance', 'measurements', 'security', 'danger-zone', 'pricing-calculator', 'deposit-policy']
       .every((id) => ids.includes(id)));
 
   await t.test('5. each item has icon span',
-    c1.querySelectorAll('.sub-page__item-icon').length === 23);
+    c1.querySelectorAll('.sub-page__item-icon').length === 24);
 
   const c2 = document.createElement('div');
   await settingsPage.render(c2, 'workshop');
@@ -47,7 +47,7 @@ register('pages/settings.js', async (t) => {
   const c3 = document.createElement('div');
   await settingsPage.render(c3);
   await t.test('9. re-render after destroy works',
-    c3.querySelectorAll('.sub-page__item').length === 23);
+    c3.querySelectorAll('.sub-page__item').length === 24);
 
   settingsPage.destroy();
   await settingsRepo.clear();

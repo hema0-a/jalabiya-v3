@@ -21,6 +21,7 @@ import { STORAGE_KEYS } from '../core/config.js';
 import { createBackup } from '../services/auto-backup.js';
 import * as firestoreSync from './firestore-sync.js';
 import { onManualSyncDone } from './auto-sync.js';
+import { recordConflicts } from './conflict-log.js';
 
 function markSynced() {
   try { localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now())); } catch (e) { /* ignore */ }
@@ -60,6 +61,19 @@ async function safetyBackup(label) {
 }
 
 /**
+ * تسجيل تعارضات الدمج (حقل عُدّل على الجهازين) وتنبيه المستخدم. لا يرمي أبداً.
+ * @param {Object} stats — apply().merge
+ * @returns {Promise<number>} عدد التعارضات
+ */
+async function noteMergeResult(stats) {
+  const list = (stats && Array.isArray(stats.conflictList)) ? stats.conflictList : [];
+  if (list.length === 0) return 0;
+  try { await recordConflicts(list); } catch (e) { console.warn('[sync] تعذّر تسجيل التعارضات:', e); }
+  toast.warning('🔀 دُمجت تعديلات من جهازين. تعارض ' + list.length + ' حقل (عُدّل على الجهازين) فاخترنا الأحدث — راجعها من صفحة المزامنة.', { duration: 10000 });
+  return list.length;
+}
+
+/**
  * تنزيل ودمج مع بيانات الجهاز (يحفظ كل شيء). يُستعمل من pullFlow ومن pushFlow عند التعارض.
  * @returns {Promise<{ok:boolean, error?:string}>}
  */
@@ -71,6 +85,7 @@ async function pullAndMerge(uid) {
   if (!(await safetyBackup('قبل الدمج مع السحابة'))) return { ok: false, error: 'تعذّر إنشاء نسخة أمان', handled: true };
   const ap = await firestoreSync.apply(res.data, { mode: 'merge' });
   if (!ap.ok) return { ok: false, error: ap.error || 'فشل الدمج' };
+  await noteMergeResult(ap.merge);
   return { ok: true, stats: ap.merge };
 }
 
@@ -187,6 +202,7 @@ export async function pullFlow(uid) {
     return { ok: false, error: ap.error };
   }
   markSynced();
+  if (mode === 'merge') await noteMergeResult(ap.merge);
   toast.success(mode === 'merge'
     ? 'تم الدمج — ارفع الآن لتحديث السحابة بالنتيجة'
     : 'تم التنزيل — افتح أي صفحة لرؤية البيانات');

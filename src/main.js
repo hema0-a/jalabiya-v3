@@ -38,12 +38,13 @@ let mountOffline;
 let startAutoSync, mountSyncIndicator, requestPersistence;
 let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
+let createBackup, runRecordMigrations, installBatchMigrationHook;
 let APP_CONFIG;
 try {
   /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
   const [
     cfg, dom, toastMod, layoutMod, eventsMod, searchMod, backupMod, pwaMod, onboardingMod,
-    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod,
+    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod, schemaMod,
   ] = await Promise.all([
     import('./core/config.js'),
     import('./core/dom.js'),
@@ -65,6 +66,7 @@ try {
     import('./ui/notifications-center.js'),
     import('./ui/lock-screen.js'),
     import('./services/storage-health.js'),
+    import('./data/record-schema.js'),
   ]);
   ({ APP_CONFIG } = cfg);
   ({ el } = dom);
@@ -72,7 +74,7 @@ try {
   ({ createLayout } = layoutMod);
   ({ events } = eventsMod);
   ({ openUniversalSearch } = searchMod);
-  ({ runAutoBackupIfDue, verifyLatestBackupIfDue } = backupMod);
+  ({ runAutoBackupIfDue, verifyLatestBackupIfDue, createBackup } = backupMod);
   ({ registerServiceWorker } = pwaMod);
   ({ maybeStartOnboarding } = onboardingMod);
   ({ toggleClientMode, isClientMode, applyClientMode } = clientMod);
@@ -86,6 +88,7 @@ try {
   ({ mount: mountNotifications, open: openNotifications } = notifCenterMod);
   ({ ensureUnlocked, installAutoLock } = lockMod);
   ({ requestPersistence } = storageMod);
+  ({ runRecordMigrations, installBatchMigrationHook } = schemaMod);
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -124,6 +127,20 @@ try {
     }
     throw e;
   }
+}
+
+/* 🧬 ترحيل السجلات القديمة لآخر شكل بيانات — بعد القفل وقبل رسم أي صفحة.
+   لا يفعل شيئاً (ولا يقرأ شيئاً) ما دام سجل الترحيلات فارغاً. فشله لا يمنع فتح التطبيق. */
+try {
+  const mig = await runRecordMigrations({ backup: createBackup });
+  if (mig.migrated > 0) console.log('[RecordSchema] ✅ رُحِّل ' + mig.migrated + ' سجل');
+  if (mig.aborted || mig.failed > 0) {
+    console.warn('[RecordSchema] ⚠️ لم يكتمل الترحيل:', mig.error || (mig.failed + ' سجل فشل'));
+    toast.warning('⚠️ تعذّر تحديث شكل بعض البيانات القديمة — تعمل كما هي، وسيُعاد المحاولة لاحقاً', { duration: 8000 });
+  }
+  installBatchMigrationHook();   /* وبعد كل مزامنة/استعادة/استيراد */
+} catch (e) {
+  console.warn('[RecordSchema] تعذّر تشغيل الترحيل:', e);
 }
 
 async function loadPageModule(pageId) {

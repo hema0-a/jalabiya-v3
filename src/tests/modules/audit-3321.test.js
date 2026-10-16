@@ -220,7 +220,7 @@ register('audit v3.3.23 big records', async (t) => {
 
   const p = await fsync.pull('u3323');
   const got = p.ok && p.data.stores.orders;
-  const same = got && got.length === 3 && JSON.stringify(got.find((o) => o.id === 'big1')) === JSON.stringify(big);
+  const same = got && got.length === 3 && JSON.stringify((({ _v, _ft, _fb, ...rest }) => rest)(got.find((o) => o.id === 'big1'))) === JSON.stringify(big); /* بلا الحقول الوصفية _v/_ft/_fb (v3.3.65) */
   await t.test('2. التنزيل يعيد السجل الكبير مطابقاً حرفاً بحرف (إيموجي/عربي/صور) وبقية السجلات سليمة',
     !!same && got.some((o) => o.id === 'a') && got.some((o) => o.id === 'z'));
 

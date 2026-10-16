@@ -10,6 +10,7 @@ import { customers as customersRepo } from '../../data/repos/customers.js';
 import { orders as ordersRepo } from '../../data/repos/orders.js';
 import { payments as paymentsRepo } from '../../data/repos/payments.js';
 import { appointments as appointmentsRepo } from '../../data/repos/appointments.js';
+import { startOfNextDay } from '../../core/day-math.js';
 
 register('pages/dashboard.js', async (t) => {
   /* تنظيف كل المخازن */
@@ -85,7 +86,7 @@ register('pages/dashboard.js', async (t) => {
   await appointmentsRepo.create({
     customerId: cust.id,
     orderId: 'fake',
-    date: Date.now() + 3600000,
+    date: Math.min(Date.now() + 3600000, startOfNextDay(Date.now()) - 60000),   /* ضمن اليوم الحالي دائماً (كان now+1h فيفشل بعد 23:00) */
     status: 'scheduled',
     title: 'قياس',
   });

@@ -10,6 +10,7 @@ import { _internal } from '../../ui/collapsible.js';
 import { customers as customersRepo } from '../../data/repos/customers.js';
 import { orders as ordersRepo } from '../../data/repos/orders.js';
 import { appointments as appointmentsRepo } from '../../data/repos/appointments.js';
+import { startOfNextDay } from '../../core/day-math.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const D = 86400000;
@@ -23,7 +24,7 @@ register('accordion integration: dashboard (v3.3.63)', async (t) => {
   localStorage.removeItem(_internal.STATE_KEY);
   const cust = await customersRepo.create({ name: 't3363-dash', phone: '01063630001' });
   const o = await ordersRepo.create({ customerId: cust.id, status: 'in_progress', amount: 700, deposit: 100, dueDate: Date.now() + 2 * D });
-  const ap = await appointmentsRepo.create({ customerId: cust.id, date: Date.now() + 3600000, status: 'scheduled', title: 't3363-appt' });
+  const ap = await appointmentsRepo.create({ customerId: cust.id, date: Math.min(Date.now() + 3600000, startOfNextDay(Date.now()) - 60000) /* دائماً ضمن اليوم الحالي (كان now+1h فيفشل بعد الساعة 23:00) */, status: 'scheduled', title: 't3363-appt' });
   const box = document.createElement('div');
   document.body.appendChild(box);
   try {

@@ -1265,3 +1265,40 @@ body.wall-open { overflow: hidden; }
   .wall__row-main { font-size: calc(clamp(16px, 2vw, 26px) * var(--ws, 1)); }
   .wall__row-sub { font-size: calc(clamp(12px, 1.5vw, 19px) * var(--ws, 1)); }
 }
+
+/* ==========================================================================
+   شريط «تحديث جديد متاح» (v3.3.65) — فوق الشريط العلوي وتحت النوافذ والتنبيهات
+   ========================================================================== */
+.update-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s, 8px);
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) var(--space-m, 16px) 8px;
+  background: var(--color-primary, #1F6D57);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.update-banner__text { flex: 1; font-size: 14px; line-height: 1.4; font-weight: 600; }
+.update-banner__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.update-banner__btn {
+  min-height: 44px;
+  min-width: 64px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.update-banner__btn--primary { background: #fff; color: var(--color-primary-dark, #123C2F); border-color: #fff; font-weight: 700; }
+.update-banner__btn:disabled { opacity: 0.7; cursor: default; }
+@media (prefers-reduced-motion: no-preference) {
+  .update-banner { animation: update-banner-in 0.25s ease-out; }
+  @keyframes update-banner-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+}

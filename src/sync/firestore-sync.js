@@ -27,6 +27,7 @@ import * as idb from '../data/idb.js';
 import { markClean, markCleanIfUnchanged } from './dirty-state.js';
 import * as tombstones from './tombstones.js';
 import * as settingsSync from './settings-sync.js';
+import { mergeRecords } from './record-merge.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -415,13 +416,16 @@ function recTime(r) { return Number(r && r.updatedAt) || 0; }
 /**
  * مقارنة سجلات سحابية بالمحلية في مخزن واحد مع مراعاة شواهد الحذف.
  * قاعدة الشاهد (وقت الحذف d): السجل الذي updatedAt ≤ d يُعدّ محذوفاً؛ الأحدث من d يبقى.
+ * السجل الموجود في الطرفين يُدمج على مستوى الحقول (record-merge.js): تعديلات حقول مختلفة على
+ * جهازين تجتمع، وتعديل الحقل نفسه على الجهازين بعد آخر مزامنة يُسجَّل «تعارضاً» (الأحدث يفوز).
  * @param {Array} local
  * @param {Array} cloud
  * @param {string} store
  * @param {Map<string,number>} tomb — اتحاد شواهد الجهاز والسحابة
- * @returns {{toPut:Array, toDelete:Array, added:number, updated:number, localOnly:number, localNewer:number, deleted:number, survivors:Map<string,number>}}
+ * @param {number} [since=0] — وقت آخر مزامنة لهذا الجهاز (لكشف التعارض الحقيقي)
+ * @returns {{toPut:Array, toDelete:Array, added:number, updated:number, localOnly:number, localNewer:number, deleted:number, merged:number, conflicts:Array, survivors:Map<string,number>}}
  */
-function compareStore(local, cloud, store, tomb) {
+function compareStore(local, cloud, store, tomb, since = 0) {
   const dOf = (id) => (tomb ? tomb.get(store + ':' + id) : undefined);
   const localMap = new Map();
   for (const r of local) if (r && r.id != null) localMap.set(r.id, r);
@@ -429,7 +433,8 @@ function compareStore(local, cloud, store, tomb) {
   const toPut = [];
   const toDelete = [];
   const survivors = new Map();
-  let added = 0, updated = 0, localNewer = 0, deleted = 0, localOnly = 0;
+  const conflicts = [];
+  let added = 0, updated = 0, localNewer = 0, deleted = 0, localOnly = 0, merged = 0;
 
   for (const c of cloud) {
     if (!c || typeof c !== 'object' || c.id == null) continue;
@@ -437,9 +442,23 @@ function compareStore(local, cloud, store, tomb) {
     const d = dOf(c.id);
     if (d !== undefined && d >= recTime(c)) continue;          /* حُذف بعد آخر تعديل له */
     const l = localMap.get(c.id);
-    if (!l) { toPut.push(c); added++; survivors.set(String(c.id), recTime(c)); }
-    else if (recTime(c) > recTime(l)) { toPut.push(c); updated++; survivors.set(String(c.id), recTime(c)); }
-    else if (recTime(l) > recTime(c)) { localNewer++; }
+    if (!l) { toPut.push(c); added++; survivors.set(String(c.id), recTime(c)); continue; }
+
+    const m = mergeRecords(l, c, { since, store });
+    if (!m.dataDiffers) {
+      /* بيانات متطابقة: محاسبة الأقدمية كما كانت (مواءمة updatedAt فقط) */
+      if (recTime(c) > recTime(l)) { toPut.push(c); updated++; survivors.set(String(c.id), recTime(c)); }
+      else if (recTime(l) > recTime(c)) { localNewer++; }
+    } else if (m.source === 'cloud') {
+      toPut.push(c); updated++; survivors.set(String(c.id), recTime(c));
+    } else if (m.source === 'local') {
+      localNewer++;                                   /* عند هذا الجهاز ما ليس في السحابة: يحتاج رفعاً */
+    } else {
+      /* دمج حقول من الطرفين: يُكتب محلياً ويحتاج رفعاً ليصل للسحابة والجهاز الآخر */
+      toPut.push(m.record); updated++; localNewer++; merged++;
+      survivors.set(String(c.id), recTime(m.record));
+    }
+    for (const cf of m.conflicts) conflicts.push({ store, recordId: c.id, ...cf });
   }
   for (const [id, l] of localMap) {
     const d = dOf(id);
@@ -447,7 +466,7 @@ function compareStore(local, cloud, store, tomb) {
     survivors.set(String(id), Math.max(survivors.get(String(id)) || 0, recTime(l)));
     if (!cloudIds.has(id)) localOnly++;
   }
-  return { toPut, toDelete, added, updated, localOnly, localNewer, deleted, survivors };
+  return { toPut, toDelete, added, updated, localOnly, localNewer, deleted, merged, conflicts, survivors };
 }
 
 /**
@@ -465,15 +484,19 @@ async function buildMergePlan(snapshot) {
 
   const perStore = {};
   const survivorsByStore = {};
-  const totals = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0 };
+  const totals = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0 };
+  const conflictList = [];
+  const since = getKnownRev() || 0;
   for (const s of SYNC_STORES) {
     if (!Array.isArray(snapshot.stores[s])) continue;
     const local = await idb.getAll(s);
-    const r = compareStore(Array.isArray(local) ? local : [], snapshot.stores[s], s, union);
+    const r = compareStore(Array.isArray(local) ? local : [], snapshot.stores[s], s, union, since);
     perStore[s] = r;
     survivorsByStore[s] = r.survivors;
-    for (const k of Object.keys(totals)) totals[k] += r[k];
+    for (const k of ['added', 'updated', 'localOnly', 'localNewer', 'deleted', 'merged']) totals[k] += r[k];
+    conflictList.push(...r.conflicts);
   }
+  totals.conflicts = conflictList.length;
 
   /* تنقية الشواهد: يسقط الشاهد إن وُجد سجل ناجٍ أحدث منه */
   const finalTombs = [];
@@ -489,7 +512,7 @@ async function buildMergePlan(snapshot) {
   /* إعدادات العمل: دمج لكل مفتاح بوقت آخر تعديل */
   const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
   const settingsPlan = await settingsSync.planApply(cloudSets, 'merge');
-  return { perStore, finalTombs, tombPending, totals, settingsPlan };
+  return { perStore, finalTombs, tombPending, totals, settingsPlan, conflictList };
 }
 
 /**
@@ -512,7 +535,8 @@ export async function analyzeLocalVsCloud(snapshot) {
  * تطبيق بيانات السحابة محلياً (ذرّياً).
  *  - mode 'replace' (الافتراضي): استبدال مخازن الـ snapshot بالسحابة (وشواهد الحذف أيضاً).
  *  - mode 'merge': لا يُمسح سجل محلي إلا بشاهد حذف أحدث منه؛ سجلات السحابة الجديدة تُضاف،
- *    وفي التعارض يفوز الأحدث updatedAt (والمحلي عند التساوي). الحذف على أي جهاز ينتقل للآخر.
+ *    والسجل الموجود في الطرفين يُدمج حقلاً حقلاً (الأحدث لكل حقل — record-merge.js) وتُرجَع التعارضات
+ *    الحقيقية في merge.conflictList. الحذف على أي جهاز ينتقل للآخر.
  * @param {Object} snapshot — { stores: {...}, updatedAt }
  * @param {{mode?:'replace'|'merge'}} [opts]
  * @returns {Promise<{ok:boolean, counts?:Object, merge?:Object, error?:string}>}
@@ -526,9 +550,10 @@ export async function apply(snapshot, opts = {}) {
     tombstones.install(SYNC_STORES);
     /* استبدال/دمج ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
     const plan = {};
-    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, tombPending: 0, settingsPending: 0 };
+    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0, tombPending: 0, settingsPending: 0 };
     if (merge) {
       const mp = await buildMergePlan(snapshot);
+      stats.conflictList = mp.conflictList.slice(0, 200);
       for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
       Object.assign(stats, mp.totals, { tombPending: mp.tombPending, settingsPending: mp.settingsPlan.pending });
       plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs), ...mp.settingsPlan.records] };

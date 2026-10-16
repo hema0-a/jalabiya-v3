@@ -16,6 +16,7 @@ import * as authSync from '../sync/auth-sync.js';
 import { pushFlow, pullFlow } from '../sync/sync-flow.js';
 import * as autoSync from '../sync/auto-sync.js';
 import { requestPersistence, getStorageStatus, formatBytes } from '../services/storage-health.js';
+import { getConflicts, removeConflict, clearConflicts, restoreLosingValue, previewValue, fieldLabel, STORE_LABELS } from '../sync/conflict-log.js';
 
 /* --- الحالة --- */
 let state = {
@@ -304,6 +305,52 @@ function buildActionsCard() {
   return card;
 }
 
+/** قسم «تعارضات المزامنة»: حقول عُدّلت على جهازين فاخترنا الأحدث — مع زر استرجاع القيمة الأخرى. */
+function buildConflictsCard() {
+  const list = getConflicts();
+  if (list.length === 0) return null;
+  const card = el('div', { className: 'card', id: 'sync-conflicts', style: { padding: '12px', marginBottom: '16px' } });
+  card.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' } }, [
+    el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#E65100' } }, '🔀 تعارضات المزامنة (' + list.length + ')'),
+    el('button', {
+      className: 'btn btn--sm btn--ghost', type: 'button',
+      onClick: () => { clearConflicts(); renderPage(); },
+    }, 'تجاهل الكل'),
+  ]));
+  card.appendChild(el('div', { style: { fontSize: '11px', color: '#666', marginBottom: '8px', lineHeight: '1.6' } },
+    'عُدّلت هذه الحقول على جهازين بقيمتين مختلفتين. اخترنا الأحدث تلقائياً — استرجع القيمة الأخرى إن كانت هي الصحيحة.'));
+
+  list.forEach((e) => {
+    const winnerVal = e.winner === 'local' ? e.localValue : e.cloudValue;
+    const otherVal = e.winner === 'local' ? e.cloudValue : e.localValue;
+    const row = el('div', { className: 'sync-conflict', dataset: { conflictId: e.id }, style: { padding: '8px 0', borderTop: '1px solid #eee' } }, [
+      el('div', { style: { fontSize: '13px', fontWeight: '600' } },
+        (STORE_LABELS[e.store] || e.store) + ' ' + e.label + ' — ' + fieldLabel(e.field)),
+      el('div', { style: { fontSize: '12px', marginTop: '3px', lineHeight: '1.7' } }, [
+        el('span', { style: { color: '#2E7D32' } }, '✔ المعتمد: ' + previewValue(winnerVal)),
+        el('br'),
+        el('span', { style: { color: '#999' } }, '↩ القيمة الأخرى: ' + previewValue(otherVal)),
+      ]),
+      el('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } }, [
+        e.restorable ? el('button', {
+          className: 'btn btn--sm btn--secondary', type: 'button', dataset: { action: 'restore' },
+          onClick: async () => {
+            const r = await restoreLosingValue(e.id);
+            if (r.ok) toast.success('تم استرجاع القيمة — ارفع لتحديث السحابة'); else toast.warning(r.error || 'تعذّر الاسترجاع');
+            renderPage();
+          },
+        }, 'استرجاع القيمة الأخرى') : null,
+        el('button', {
+          className: 'btn btn--sm btn--ghost', type: 'button', dataset: { action: 'dismiss' },
+          onClick: () => { removeConflict(e.id); renderPage(); },
+        }, 'تجاهل'),
+      ].filter(Boolean)),
+    ]);
+    card.appendChild(row);
+  });
+  return card;
+}
+
 function renderPage() {
   const c = state.container;
   if (!c) return;
@@ -317,6 +364,8 @@ function renderPage() {
 
   c.appendChild(buildStatusCards());
   c.appendChild(buildStorageCard());
+  const conflictsCard = buildConflictsCard();
+  if (conflictsCard) c.appendChild(conflictsCard);
 
   if (!authSync.isConfigured()) {
     c.appendChild(el('div', {

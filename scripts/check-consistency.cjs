@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* check-consistency.cjs — فحص اتساق المشروع (بدون متصفح):
    1) رقم الإصدار واحد في: package.json · config.js · sw.js · README · CHANGELOG · أحدث ملف audit
-   2) كل ملف في PRECACHE_URLS موجود فعلاً، وكل ملف في src (عدا tests) موجود في القائمة
+   2) كل ملف في PRECACHE_URLS موجود فعلاً، وكل ملف في src (عدا tests) موجود في القائمة، والقائمة مطابقة لناتج gen-precache
    3) كل وحدة اختبار في tests/modules مستوردة في tests/index.js (وكل استيراد له ملف)
    4) كل مسار في icons/manifest موجود
    5) أي ملف مصدر به أخطاء ترميز شائعة (BOM / علامات دمج Git) */
@@ -50,6 +50,11 @@ else {
     if (!set.has(f)) fail(`ملف غير موجود في PRECACHE_URLS (لن يعمل offline): ${f}`);
   }
   for (const f of walk('styles')) if (!set.has(f)) fail(`ملف CSS غير موجود في PRECACHE_URLS: ${f}`);
+
+  /* القائمة مولَّدة آلياً: يجب أن تطابق ناتج المولّد حرفياً (الترتيب والتنسيق أيضاً) */
+  const pre = require('./lib/precache.cjs');
+  const generated = pre.applyToSw(sw, pre.computeList(ROOT).groups);
+  if (generated !== null && generated !== sw) fail('قائمة PRECACHE_URLS في sw.js ليست مطابقة للمولَّدة — شغّل: npm run gen:precache');
 }
 
 /* 3) الاختبارات */

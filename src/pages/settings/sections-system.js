@@ -17,12 +17,14 @@ import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
-import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
+import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS, APP_CONFIG as APP_INFO } from '../../core/config.js';
 import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
 import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
 import * as autoSync from '../../sync/auto-sync.js';
 import { seedDemoData, clearDemoData, countDemoData } from '../../services/demo-data.js';
+import { openReportIssue } from '../../ui/report-issue.js';
+import { getRecent as getRecentErrors } from '../../core/error-handler.js';
 import {
   DEFAULT_TEMPLATES, VARIABLE_DEFS, MAX_TEMPLATE_LENGTH, MAX_CUSTOM_TEMPLATES,
   variablesFor, interpolate, findUnknownVariables, sampleVars, newCustomId,
@@ -1226,6 +1228,25 @@ const demoDataSection = {
 };
 
 /* --- تصدير --- */
+/** 🛟 الدعم: تقرير مشكلة جاهز للإرسال (إصدار + جهاز + آخر الأخطاء + أعداد السجلات). */
+const supportSection = {
+  id: 'support',
+  icon: '🛟',
+  title: 'الدعم وحل المشاكل',
+  async render(body) {
+    const errCount = getRecentErrors(15).length;
+    body.appendChild(el('p', { style: { fontSize: '13px', color: '#123C2F', lineHeight: '1.7', margin: '0 0 10px 0' } },
+      'لو حدث عطل أو سلوك غريب: اضغط الزر لتجهيز رسالة فيها رقم الإصدار ونوع الجهاز وآخر الأخطاء وأعداد السجلات، وأرسلها بدل وصف العطل أو تصوير الشاشة. ' +
+      'لا تحتوي أسماء عملاء ولا أرقام هواتف ولا مبالغ، وتراها كاملة قبل الإرسال.'));
+    body.appendChild(el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '10px' } },
+      'الإصدار الحالي: v' + APP_INFO.version + ' · أخطاء مسجّلة في هذه الجلسة: ' + errCount));
+    body.appendChild(el('button', {
+      className: 'btn btn--primary btn--block', type: 'button', id: 'btn-report-issue',
+      onClick: () => { openReportIssue(); },
+    }, '🛟 أبلغ عن مشكلة'));
+  },
+};
+
 export const SYSTEM_SECTIONS = [
   notificationsSection,
   occasionsSection,
@@ -1234,4 +1255,5 @@ export const SYSTEM_SECTIONS = [
   cloudSyncSection,
   imageCompressionSection,
   demoDataSection,
+  supportSection,
 ];
