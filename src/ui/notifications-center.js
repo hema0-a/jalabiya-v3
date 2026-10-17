@@ -355,8 +355,9 @@ export function mount(options = {}) {
   isMounted = true;
   badgeCallback = typeof options.onBadgeChange === 'function' ? options.onBadgeChange : null;
 
-  /* تحديث فوري */
-  refreshBadge();
+  /* أول حساب للعدّاد يُؤجَّل لوقت الفراغ: كان يقرأ الطلبات والعملاء والدفعات والمواعيد بالتوازي مع رسم الصفحة الأولى فيبطّئها */
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => refreshBadge(), { timeout: 1500 });
+  else setTimeout(refreshBadge, 300);
 
   /* تحديث دوري كل 60 ثانية */
   refreshTimer = setInterval(refreshBadge, REFRESH_INTERVAL_MS);

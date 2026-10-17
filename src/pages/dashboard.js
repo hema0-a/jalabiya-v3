@@ -31,7 +31,7 @@ import { createCollapsible, openAll, closeAll } from '../ui/collapsible.js'; /* 
 import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
-import { startOfDayPlus } from '../core/day-math.js';
+import { startOfDayPlus, startOfDay, startOfNextDay } from '../core/day-math.js';
 import { buildWeekVisits, buildVisitText, dayLabel } from '../services/week-visits.js'; /* v3.3.55 */
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -151,17 +151,22 @@ function computeFinance(paymentsList, expensesList) {
 async function loadKPIs() {
   const monthStart = startOfMonth();
 
-  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList, referralsList, allAppts] = await Promise.all([
+  const [customersList, ordersList, rawPayments, rawExpenses, s, workerPaysList, referralsList, allAppts] = await Promise.all([
     customers.list(),
     orders.list(),
     payments.list(),
     expenses.list().catch(() => []),
-    appointments.getToday(),
     settings.get().catch(() => ({})),
     workerPayments.list().catch(() => []),
     referralsRepo.list().catch(() => []),
     appointments.list().catch(() => []),
   ]);
+  /* مواعيد اليوم من نفس القراءة (كانت قراءة ثانية لنفس المخزن) — نفس شرط appointments.getToday */
+  const _dayStart = startOfDay(Date.now());
+  const _dayEnd = startOfNextDay(_dayStart);
+  const todayAppts = allAppts
+    .filter((a) => a.date && a.date >= _dayStart && a.date < _dayEnd)
+    .sort((a, b) => a.date - b.date);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
   const paymentsList = withDepositPayments(rawPayments, ordersList);
 

@@ -35,8 +35,10 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-let el, toast, createLayout, events, openUniversalSearch;
-let runAutoBackupIfDue, verifyLatestBackupIfDue, registerServiceWorker, maybeStartOnboarding;
+let el, toast, createLayout, events;
+let runAutoBackupIfDue, verifyLatestBackupIfDue, registerServiceWorker;
+/* البحث الشامل والجولة التعريفية لا يلزمان قبل أول رسم: تُحمَّلان عند الحاجة فقط (أقل ملفات عند الفتح) */
+const openUniversalSearch = (...args) => import('./ui/universal-search.js').then((m) => m.openUniversalSearch(...args));
 let toggleClientMode, isClientMode, applyClientMode;
 let startNotificationCheck;
 let installErrorHandler;
@@ -51,7 +53,7 @@ let APP_CONFIG;
 try {
   /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
   const [
-    cfg, dom, toastMod, layoutMod, eventsMod, searchMod, backupMod, pwaMod, onboardingMod,
+    cfg, dom, toastMod, layoutMod, eventsMod, backupMod, pwaMod,
     clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod, schemaMod,
   ] = await Promise.all([
     import('./core/config.js'),
@@ -59,10 +61,8 @@ try {
     import('./ui/toast.js'),
     import('./ui/layout.js'),
     import('./core/events.js'),
-    import('./ui/universal-search.js'),
     import('./services/auto-backup.js'),
     import('./pwa.js'),
-    import('./ui/onboarding.js'),
     import('./ui/client-mode.js'),
     import('./services/notifications.js'),
     import('./core/error-handler.js'),
@@ -81,10 +81,8 @@ try {
   ({ toast } = toastMod);
   ({ createLayout } = layoutMod);
   ({ events } = eventsMod);
-  ({ openUniversalSearch } = searchMod);
   ({ runAutoBackupIfDue, verifyLatestBackupIfDue, createBackup } = backupMod);
   ({ registerServiceWorker } = pwaMod);
-  ({ maybeStartOnboarding } = onboardingMod);
   ({ toggleClientMode, isClientMode, applyClientMode } = clientMod);
   ({ startAutoCheck: startNotificationCheck } = notifMod);
   ({ install: installErrorHandler } = errMod);
@@ -628,15 +626,11 @@ try {
 }
 
 /* ✨ الجولة التعريفية — تظهر عند أول فتح */
-try {
-  maybeStartOnboarding({
-    onFinish: ({ skipped }) => {
-      console.log('[Onboarding]', skipped ? '⏭️ تم التخطّي' : '✅ تم الإكمال');
-    },
-  });
-} catch (err) {
-  console.warn('[Onboarding] فشل التشغيل:', err);
-}
+import('./ui/onboarding.js').then((m) => m.maybeStartOnboarding({
+  onFinish: ({ skipped }) => {
+    console.log('[Onboarding]', skipped ? '⏭️ تم التخطّي' : '✅ تم الإكمال');
+  },
+})).catch((err) => console.warn('[Onboarding] فشل التشغيل:', err));
 
 /* 🔔 الإشعارات — فحص دوري كل 30 دقيقة */
 try {
