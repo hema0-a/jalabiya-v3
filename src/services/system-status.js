@@ -19,7 +19,7 @@ export function ageText(ts, now = Date.now()) {
   return 'منذ ' + Math.floor(d / DAY) + ' يوم';
 }
 
-const fmtMB = (n) => (Number.isFinite(n) ? (n / 1048576).toFixed(1) + ' MB' : '—');
+const fmtMB = (n) => (Number.isFinite(n) ? (n / 1048576).toFixed(1) + ' ميغابايت' : '—');
 
 /**
  * @param {Object} s لقطة الحالة (انظر collectStatus)
@@ -58,7 +58,7 @@ export function evaluateStatus(s = {}, now = Date.now()) {
   /* التخزين */
   const st = s.storage || {};
   if (st.percent != null) {
-    add('storage', 'مساحة التخزين', fmtMB(st.usage) + ' من ' + fmtMB(st.quota) + ' (' + st.percent + '%)',
+    add('storage', 'مساحة التخزين', fmtMB(st.usage) + ' من ' + fmtMB(st.quota) + ' — ' + st.percent + '٪',
       st.percent >= 90 ? 'bad' : st.percent >= 75 ? 'warn' : 'ok',
       st.percent >= 75 ? 'المساحة تمتلئ — احذف صوراً قديمة أو انقل نسخة احتياطية خارجياً.' : '');
   }

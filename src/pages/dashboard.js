@@ -248,6 +248,7 @@ async function loadKPIs() {
     }),
     totalCustomers: customersList.length,
     totalOrders: ordersList.length,
+    realRecords: customersList.filter((r) => !isDemoRecord(r)).length + ordersList.filter((r) => !isDemoRecord(r)).length,
     activeOrders: activeOrders.length,
     monthRevenue,
     todayAppointments: todayAppts.length,
@@ -456,7 +457,7 @@ async function buildBackupNudge(data) {
     const { getLastExternalBackupAt } = await import('../services/auto-backup.js');
     let snoozedAt = 0;
     try { snoozedAt = Number(localStorage.getItem(NUDGE_SNOOZE_KEY)) || 0; } catch (_) { /* اختياري */ }
-    const recordCount = (data.totalCustomers || 0) + (data.totalOrders || 0);
+    const recordCount = data.realRecords || 0;
     const n = backupNudge({ externalAt: getLastExternalBackupAt(), recordCount, snoozedAt });
     if (!n.show) return null;
     const box = el('div', { className: 'dash-demo', role: 'status', 'data-role': 'backup-nudge' }, [
