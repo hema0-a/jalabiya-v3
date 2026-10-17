@@ -438,6 +438,26 @@ function openOrderForm(existing = null) {
   /* آخر خطة عمل اقترحها زر ✨ (تُحفظ مع الطلب إن بقي المبلغ والتاريخ كما هما) */
   let suggestedPlan = null;
 
+  /* لقطة الطلبات لحسابات السعة داخل هذا النموذج (v3.3.71).
+     state.orders لقطة وقت آخر تحميل للصفحة: لا ترى طلباً وصل بعدها (مزامنة سحابية من جهاز آخر،
+     أو تبويب ثانٍ، أو حفظ من شاشة أخرى)، فكان الاقتراح يقترح يوماً صار ممتلئاً. لذلك نعيد القراءة
+     من قاعدة البيانات عند فتح النموذج، وقبل الاقتراح، وقبل بناء خطة الحفظ. */
+  let capOrders = state.orders;
+  let capSeq = 0;        /* رقم آخر قراءة بدأت */
+  let capApplied = 0;    /* رقم آخر قراءة طُبِّقت (لا تُطبَّق قراءة أقدم بعد أحدث) */
+  /**
+   * إعادة قراءة الطلبات من القاعدة وتحديث لقطة النموذج.
+   * @returns {Promise<Array>} أحدث لقطة متاحة (القديمة إن فشلت القراءة)
+   */
+  const refreshCapOrders = async () => {
+    const seq = ++capSeq;
+    try {
+      const list = await orders.list();
+      if (Array.isArray(list) && seq > capApplied) { capApplied = seq; capOrders = list; }
+    } catch (e) { /* نكتفي باللقطة الحالية */ }
+    return capOrders;
+  };
+
   /* نتيجة الاقتراح تظهر تحت الحقل نفسه (بدل إشعارات عائمة تختفي وتتراكب مع النموذج) */
   const dueHint = el('div', { className: 'order-hint', role: 'status', 'aria-live': 'polite' });
   const setHint = (lines, warn) => {
@@ -463,7 +483,7 @@ function openOrderForm(existing = null) {
   });
   const dueTsOf = () => (dueDateInput.value ? new Date(dueDateInput.value + 'T12:00:00').getTime() : null);
   const capStrip = buildCapacityStripView({
-    getOrders: () => state.orders,
+    getOrders: () => capOrders,
     getConfig: capConfig,
     getSelectedTs: dueTsOf,
     onPick: (ts) => {
@@ -475,7 +495,7 @@ function openOrderForm(existing = null) {
   dueDateInput.addEventListener('change', () => {
     const ts = dueTsOf();
     if (ts == null) { capStrip.refresh(); return; }
-    const d = describeChosenDay(state.orders, capConfig(), ts);
+    const d = describeChosenDay(capOrders, capConfig(), ts);
     if (d.level !== 'none') setHint([d.text], d.level !== 'ok');
     capStrip.refresh();
   });
@@ -484,12 +504,14 @@ function openOrderForm(existing = null) {
     className: 'btn btn--sm btn--secondary btn--block', type: 'button',
     title: 'اقتراح أقرب موعد تسليم يناسب الحد اليومي',
     onClick: async () => {
+      suggestBtn.disabled = true;   /* يمنع ضغطتين متتاليتين أثناء القراءة */
       try {
         const _items = Array.from(itemsContainer.children).map((r) => r._getValues());
         const _fees = Array.from(feesContainer.children).map((r) => r._getValues());
         const _t = computeTotals(_items, discountTypeSelect.value, discountValueInput.value, _fees);
         const _orderAmount = Number(_t.amount) || 0;
-        const suggestion = suggestDueDate(state.orders, {
+        const latestOrders = await refreshCapOrders();
+        const suggestion = suggestDueDate(latestOrders, {
           dayOffWeekday: state.scheduleConfig.dayOffWeekday,
           dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
           minDays: 1, maxLookaheadDays: 60,
@@ -506,9 +528,14 @@ function openOrderForm(existing = null) {
             ' وينتهي ' + formatDate(suggestion.timestamp));
         }
         setHint(lines, suggestion.overLimit);
+        capStrip.refresh();   /* الشريط يعكس نفس اللقطة الحديثة */
       } catch (e) { setHint(['تعذّر اقتراح موعد — اختر التاريخ يدوياً'], true); }
+      finally { suggestBtn.disabled = false; }
     },
   }, '✨ اقتراح أقرب موعد متاح');
+
+  /* تحديث الشريط بعد فتح النموذج بقراءة حديثة (لا يعطّل فتح النموذج) */
+  refreshCapOrders().then(() => { try { capStrip.refresh(); } catch (e) { /* النموذج أُغلق */ } });
 
   /* --- الصورة المرجعية --- */
   const imagePicker = createOrderImagePicker({
@@ -840,7 +867,8 @@ function openOrderForm(existing = null) {
                        cents(suggestedPlan.amount) === cents(data.amount) && suggestedPlan.plan.length > 0) {
               data.workPlan = suggestedPlan.plan;                /* الخطة التي اقترحها ✨ */
             } else {
-              const pl = planOrder(state.orders, {
+              const latestOrders = await refreshCapOrders();   /* قراءة حديثة قبل بناء الخطة */
+              const pl = planOrder(latestOrders, {
                 orderAmount: data.amount, dailyOrderLimit: planLimit,
                 dayOffWeekday: state.scheduleConfig.dayOffWeekday,
                 endDate: data.dueDate, excludeOrderId: isEdit ? existing.id : null, minDays: 0,
@@ -849,7 +877,7 @@ function openOrderForm(existing = null) {
                 data.workPlan = pl.plan;
               } else {
                 data.workPlan = null;
-                const alt = suggestDueDate(state.orders, {
+                const alt = suggestDueDate(latestOrders, {
                   dayOffWeekday: state.scheduleConfig.dayOffWeekday, dailyOrderLimit: planLimit,
                   minDays: 1, maxLookaheadDays: 60, excludeOrderId: isEdit ? existing.id : null,
                   orderAmount: data.amount,

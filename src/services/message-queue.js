@@ -117,6 +117,10 @@ const byOrder = (a, b) => (a.priority - b.priority) || (a.weight - b.weight) || 
  * @param {Object} [p.workshop] — settings.workshop
  * @param {Array} [p.log] — سجل الرسائل
  * @param {number} [p.now]
+ * @param {boolean} [p.countOnly=false] — للعدّادات فقط: لا تُبنى نصوص الرسائل (text = '')،
+ *   فلا يصلح الناتج للإرسال. لوحة التحكم تحتاج الأرقام فقط، وبناء النص لكل مهمة كان هدراً.
+ * @param {{pickups?:Object, receivables?:Object}} [p.precomputed] — نتيجتا computePickups/
+ *   computeReceivables إن حُسبتا مسبقاً لنفس البيانات (تتجنّب حسابهما مرة ثانية). شكل غير صالح ⇐ يُعاد الحساب.
  * @returns {{tasks:Array, counts:Object}}
  */
 export function buildQueue(p = {}) {
@@ -126,14 +130,19 @@ export function buildQueue(p = {}) {
   const log = Array.isArray(p.log) ? p.log : [];
   const customers = Array.isArray(p.customers) ? p.customers : [];
   const tasks = [];
+  const pre = p.precomputed || {};
+  /* نص الرسالة يُبنى فقط عند الحاجة (countOnly يتخطّاه) */
+  const textOf = (build) => (p.countOnly ? '' : build());
 
   /* 1) جاهز للاستلام */
-  const pk = computePickups(p.orders, p.payments, customers, now, DEFAULT_PICKUP_DAYS);
+  const pk = (pre.pickups && Array.isArray(pre.pickups.items))
+    ? pre.pickups
+    : computePickups(p.orders, p.payments, customers, now, DEFAULT_PICKUP_DAYS);
   for (const it of pk.items) {
     tasks.push(makeTask({
       key: 'pickup:' + it.orderId, type: 'pickup', priority: it.late ? 1 : 3, weight: -it.ageDays,
       customerId: it.customerId, name: it.name, phone: it.phone, kind: KIND.PICKUP, ref: it.orderId,
-      text: renderTemplate(KIND.PICKUP, pickupVars(it, ws), cfg),
+      text: textOf(() => renderTemplate(KIND.PICKUP, pickupVars(it, ws), cfg)),
       detail: '#' + String(it.orderId).slice(-6) + ' · جاهز منذ ' + it.ageDays + ' يوم' +
         (it.remaining > 0 ? ' · متبقي ' + formatEGP(it.remaining) : ' · مسدَّد'),
       badge: it.late ? 'متأخر' : '',
@@ -143,13 +152,15 @@ export function buildQueue(p = {}) {
   }
 
   /* 2) مستحقات */
-  const rc = computeReceivables(p.orders, p.payments, customers, now);
+  const rc = (pre.receivables && Array.isArray(pre.receivables.customers))
+    ? pre.receivables
+    : computeReceivables(p.orders, p.payments, customers, now);
   for (const c of rc.customers) {
     if (!(c.overdue > 0.009)) continue;
     tasks.push(makeTask({
       key: 'debt:' + c.customerId, type: 'debt', priority: 2, weight: -c.overdue,
       customerId: c.customerId, name: c.name, phone: c.phone, kind: KIND.DEBT, ref: null,
-      text: renderTemplate(KIND.DEBT, debtVars(c.name, formatEGP(c.overdue), ws, c.phone), cfg),
+      text: textOf(() => renderTemplate(KIND.DEBT, debtVars(c.name, formatEGP(c.overdue), ws, c.phone), cfg)),
       detail: 'عليه ' + formatEGP(c.overdue) + (c.oldestDays != null ? ' منذ ' + c.oldestDays + ' يوم' : ''),
       badge: '',
       lastAt: lastSentIn(log, { kinds: [KIND.DEBT, 'payment_due'], customerId: c.customerId }),
@@ -169,7 +180,7 @@ export function buildQueue(p = {}) {
         name: (it.referrer && it.referrer.name) || r.referrerName || 'مُرشِّح',
         phone: it.referrer ? it.referrer.phone : '',
         kind: KIND.REFERRAL, ref: r.id,
-        text: renderTemplate(KIND.REFERRAL, referralVars(it, ws), cfg),
+        text: textOf(() => renderTemplate(KIND.REFERRAL, referralVars(it, ws), cfg)),
         detail: '🎁 ' + (r.referredName || 'عميل مُحال') + ' أتمّ أول طلب' +
           (it.reward > 0 ? ' · المكافأة ' + formatEGP(it.reward) : '') +
           (it.referrer ? '' : ' · المُرشِّح غير مربوط بعميل'),
@@ -190,7 +201,7 @@ export function buildQueue(p = {}) {
         tasks.push(makeTask({
           key: 'greet:' + g.ref + ':' + c.id, type: 'greeting', priority: 4, weight: g.daysLeft,
           customerId: c.id, name: c.name, phone: c.phone, kind: KIND.GREETING, ref: g.ref,
-          text: renderTemplate(KIND.GREETING, { customer: c.name || 'عميلنا', occasion: g.occ.name || '', ...workshopVars(ws) }, cfg),
+          text: textOf(() => renderTemplate(KIND.GREETING, { customer: c.name || 'عميلنا', occasion: g.occ.name || '', ...workshopVars(ws) }, cfg)),
           detail: (g.occ.icon || '🎉') + ' ' + (g.occ.name || 'مناسبة') + (g.daysLeft === 0 ? ' — اليوم' : ' — بعد ' + g.daysLeft + ' يوم'),
           badge: 'VIP',
           lastAt: lastSentIn(log, { kinds: [KIND.GREETING], ref: g.ref, customerId: c.id }),

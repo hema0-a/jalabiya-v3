@@ -18,6 +18,9 @@ import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput }
 import {
   getLoansWithPayments,
   getLoansStats,
+  validateLoanPayment,
+  defaultPaymentValue,
+  getLoanRemaining,
 } from '../services/loans-calculator.js';
 
 /* --- الحالة --- */
@@ -149,10 +152,13 @@ function openLoanForm(existing = null) {
    ========================================================================== */
 
 function openPaymentForm(loan) {
+  /* الافتراضي = المتبقي بمليمين (كان يُقرَّب لأقرب جنيه فيتجاوز المتبقي، ويرجع لمبلغ القرض إن سُدِّد) */
   const amountInput = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
-    value: String(Math.round(loan.remaining || loan.amount || 0)),
+    max: String(Math.max(0, Number(loan.remaining) || 0)),
+    value: defaultPaymentValue(loan),
   });
+  let saving = false;   /* يمنع حفظ الدفعة مرتين بضغطتين متتاليتين */
 
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = localDateInput();
@@ -167,7 +173,11 @@ function openPaymentForm(loan) {
       el('div', { style: { color: '#666', fontSize: '12px', marginTop: '2px' } },
         'المتبقي: ' + formatEGP(loan.remaining) + ' من ' + formatEGP(loan.amount)),
     ]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ *'), amountInput]),
+    el('div', { className: 'field' }, [
+      el('label', { className: 'field__label' }, 'المبلغ *'), amountInput,
+      el('div', { style: { fontSize: '11px', color: '#888', marginTop: '4px' } },
+        'الحد الأقصى: ' + formatEGP(loan.remaining)),
+    ]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التاريخ *'), dateInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), noteInput]),
   ]);
@@ -180,10 +190,20 @@ function openPaymentForm(loan) {
       {
         text: 'حفظ الدفعة', variant: 'primary', action: 'save',
         onClick: async () => {
+          if (saving) return;
           const amount = Number(amountInput.value);
           if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           if (!dateInput.value) return toast.warning('التاريخ مطلوب');
+          saving = true;
           try {
+            /* المتبقي يُقرأ من القاعدة الآن (قد تكون دفعة سُجّلت من جهاز آخر بعد فتح النافذة) */
+            const check = validateLoanPayment(amount, await getLoanRemaining(loan));
+            if (!check.ok) {
+              toast.warning(check.code === 'settled'
+                ? 'القرض مسدَّد بالكامل — لا حاجة لدفعة جديدة'
+                : 'المبلغ أكبر من المتبقي (' + formatEGP(check.remaining) + ')');
+              return;
+            }
             await loanPayments.create({
               loanId: loan.id,
               amount,
@@ -194,6 +214,7 @@ function openPaymentForm(loan) {
             handle.close();
             await refreshAll();
           } catch (e) { toast.danger('فشل: ' + e.message); }
+          finally { saving = false; }
         },
       },
     ],
@@ -277,6 +298,8 @@ async function openLoanDetail(loan) {
   }, [
     el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
+      disabled: loan.remaining > 0.009 ? null : 'disabled',
+      title: loan.remaining > 0.009 ? '' : 'القرض مسدَّد بالكامل',
       onClick: () => { handle.close(); openPaymentForm(loan); },
     }, '💵 دفعة جديدة'),
     el('button', {
@@ -373,6 +396,8 @@ function buildLoanCard(loan) {
   }, [
     el('button', {
       className: 'btn btn--sm btn--primary', type: 'button',
+      disabled: loan.remaining > 0.009 ? null : 'disabled',
+      title: loan.remaining > 0.009 ? '' : 'القرض مسدَّد بالكامل',
       onClick: () => openPaymentForm(loan),
     }, '💵 دفعة'),
     loan.phone ? el('button', {

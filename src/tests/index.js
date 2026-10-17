@@ -79,5 +79,8 @@ import './modules/v3365-record-merge.test.js';
 import './modules/v3365-diagnostics.test.js';
 import './modules/v3366-features.test.js';
 import './modules/v3367-features.test.js';
+import './modules/v3371-queue-count-only.test.js';
+import './modules/v3371-loan-payment.test.js';
+import './modules/v3371-fresh-orders.test.js';
 
 export { runAll, register } from './registry.js';

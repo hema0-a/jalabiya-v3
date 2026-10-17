@@ -39,6 +39,8 @@ import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { appointments } from '../data/repos/appointments.js';
 import { settings } from '../data/repos/settings.js';
+import { backupNudge } from '../services/backup-nudge.js';
+import { getLastExternalBackupAt } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
 import {
   createSalesBarChart,
@@ -237,7 +239,8 @@ async function loadKPIs() {
       try {
         if (!isEnabledCfg(s.autoMessages)) return null;
         return buildQueue({ orders: ordersList, payments: rawPayments, customers: customersList,
-          occasions: s.occasions || [], referrals: referralsList, cfg: s.autoMessages || null, workshop: s.workshop || {}, log: loadLog() }).counts;
+          occasions: s.occasions || [], referrals: referralsList, cfg: s.autoMessages || null, workshop: s.workshop || {}, log: loadLog(),
+          countOnly: true, precomputed: { pickups, receivables } }).counts;   /* أرقام فقط وبلا إعادة حساب (v3.3.71) */
       } catch (e) { return null; }
     })(),
     dueSoonRows: dueSoonOrders.map(withCust),
@@ -453,8 +456,6 @@ function buildHeader(data) {
 const NUDGE_SNOOZE_KEY = 'jalabiya_v3_backup_nudge_snoozed';
 async function buildBackupNudge(data) {
   try {
-    const { backupNudge } = await import('../services/backup-nudge.js');
-    const { getLastExternalBackupAt } = await import('../services/auto-backup.js');
     let snoozedAt = 0;
     try { snoozedAt = Number(localStorage.getItem(NUDGE_SNOOZE_KEY)) || 0; } catch (_) { /* اختياري */ }
     const recordCount = data.realRecords || 0;
