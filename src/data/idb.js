@@ -316,6 +316,38 @@ export async function count(storeName) {
   return wrap(store.count());
 }
 
+/**
+ * قراءة دفعة سجلات من مخزن بترتيب المفتاح — قراءة فقط (معاملة readonly، لا تكتب شيئاً).
+ * تُستخدم لفحص مخازن كبيرة (مثل الطلبات ذات الصور) دون تحميلها كلها في الذاكرة دفعة واحدة
+ * ودون تجميد الواجهة: كل دفعة معاملة مستقلة، فيمكن إرخاء التحكم للمتصفح بين الدفعات.
+ * @param {string} storeName
+ * @param {*} [afterKey] — يُقرأ ما بعد هذا المفتاح (غير شامل)؛ undefined/null = من البداية
+ * @param {number} [limit=25] — أقصى عدد سجلات في الدفعة
+ * @returns {Promise<{records:Array, lastKey:*, done:boolean}>} done=true حين انتهى المخزن
+ */
+export async function readBatchAfter(storeName, afterKey, limit = 25) {
+  const db = await openDB();
+  const max = Math.max(1, Math.floor(Number(limit)) || 25);
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(storeName, 'readonly');
+      const range = (afterKey === undefined || afterKey === null) ? null : IDBKeyRange.lowerBound(afterKey, true);
+      const records = [];
+      let lastKey = afterKey;
+      const req = tx.objectStore(storeName).openCursor(range);
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) { resolve({ records, lastKey, done: true }); return; }
+        records.push(cur.value);
+        lastKey = cur.key;
+        if (records.length >= max) { resolve({ records, lastKey, done: false }); return; }
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    } catch (e) { reject(e); }
+  });
+}
+
 export async function getByIndex(storeName, indexName, value) {
   const store = await getStore(storeName);
   return wrap(store.index(indexName).getAll(value));

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.70 — تطوير شاشة الورشة
+   الإصدار: v3.3.72 — أداة تشخيص حجم الصور والتوقيعات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.70';
+const CACHE_VERSION = 'v3.3.72';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -172,6 +172,7 @@ const PRECACHE_URLS = [
   './src/services/size-clusters.js',
   './src/services/status-notify.js',
   './src/services/storage-health.js',
+  './src/services/media-diagnostic.js',
   './src/services/system-status.js',
   './src/services/vip-rules.js',
   './src/services/wall-board.js',

@@ -5,6 +5,7 @@
    1) ترقية VIP تلقائية (ترقية فقط، لا تُنزِّل VIP يدوياً).
    2) فحص سلامة البيانات + إصلاح آمن (لا يمسّ أي مبلغ مالي).
    3) دمج العملاء المكررين (يعيد نسبة الطلبات والدفعات والمواعيد للسجل الباقي).
+   4) تشخيص حجم الصور والتوقيعات داخل الطلبات (v3.3.72) — للقراءة فقط وعند الضغط فقط.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -24,9 +25,17 @@ import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vi
 import { listBackups, verifyBackup, getLastVerification } from '../services/auto-backup.js';
 import { formatDate } from '../core/utils.js';
 import { buildSystemStatusCard } from '../ui/system-status-card.js';
+import { diagnoseOrderMedia, assessMedia, formatKB } from '../services/media-diagnostic.js';
+import { getStorageStatus, formatBytes } from '../services/storage-health.js';
 
 const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
-let state = { container: null, data: null, scan: null, backups: null, verifyResult: null };
+/** حالة الصفحة (تُعاد كاملة عند الفتح والإغلاق). حقول media* لأداة تشخيص الوسائط. */
+const freshState = (container = null) => ({
+  container, data: null, scan: null, backups: null, verifyResult: null,
+  media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null,
+  mediaError: '', mediaUsage: null, mediaProgressNode: null,
+});
+let state = freshState();
 
 async function loadData() {
   const [cus, ord, pay, apt, qts] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
@@ -206,12 +215,108 @@ function mergeSection() {
     : [el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '6px' } }, groups.length + ' مجموعة'), ...groups.map(groupCard)]);
 }
 
+/* ---------- 4) تشخيص حجم الصور والتوقيعات (للقراءة فقط) ---------- */
+
+/** نص تقدم الفحص. */
+function mediaProgressText() {
+  return 'جارٍ الفحص… ' + state.mediaScanned + (state.mediaTotal !== null ? ' / ' + state.mediaTotal : '') + ' طلب';
+}
+
+/**
+ * يشغّل الفحص عند ضغط المستخدم فقط. لا يكتب شيئاً: يقرأ الطلبات على دفعات ويحسب الأحجام.
+ * إغلاق الصفحة أو زر الإيقاف يوقفانه.
+ */
+async function runMediaScan() {
+  if (state.mediaRunning) return;
+  const mine = state;                                     /* إن غادر المستخدم الصفحة يتغير state فنتوقف */
+  mine.mediaRunning = true; mine.mediaCancel = false; mine.mediaScanned = 0;
+  mine.mediaTotal = null; mine.mediaError = ''; mine.media = null; mine.mediaUsage = null;
+  draw();
+  try {
+    mine.mediaTotal = await orders.count();
+    const report = await diagnoseOrderMedia({
+      shouldCancel: () => mine.mediaCancel || state !== mine,
+      onProgress: (p) => {
+        mine.mediaScanned = p.scanned;
+        if (state === mine && mine.mediaProgressNode) mine.mediaProgressNode.textContent = mediaProgressText();
+      },
+    });
+    mine.media = report;
+    try { mine.mediaUsage = (await getStorageStatus()).usage; } catch (e) { mine.mediaUsage = null; }
+  } catch (err) {
+    console.error('[data-care] media scan:', err);
+    mine.mediaError = 'تعذّر الفحص: ' + (err && err.message || err);
+  } finally {
+    mine.mediaRunning = false;
+    if (state === mine) draw();
+  }
+}
+
+/** صف «عنوان: قيمة». */
+const statRow = (label, value) => el('div', {
+  style: { display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '5px 0', borderBottom: '1px solid #F0EAE0', fontSize: '13px' },
+}, [el('span', { style: { color: '#555' } }, label), el('strong', {}, String(value))]);
+
+/** نتائج الفحص. */
+function mediaResultNodes(r) {
+  const verdict = assessMedia(r, state.mediaUsage);
+  const palette = { ok: ['#2E7D32', '#E8F5E9'], info: ['#8A5A00', '#FFF3D6'], warn: ['#B3261E', '#FDECEA'] }[verdict.level];
+  const names = new Map((state.data ? state.data.customers : []).map((c) => [c.id, c.name]));
+  const rows = [
+    statRow('إجمالي الطلبات', r.totalOrders),
+    statRow('طلبات تحتوي صورة مرجعية', r.ordersWithImage),
+    statRow('طلبات تحتوي توقيعاً', r.ordersWithSignature),
+    statRow('طلبات تحتوي أيّاً منهما', r.ordersWithMedia),
+    statRow('حجم الصور', formatKB(r.imageBytes)),
+    statRow('حجم التوقيعات', formatKB(r.signatureBytes)),
+    statRow('الإجمالي', formatKB(r.totalBytes) + (r.totalBytes >= 1048576 ? ' (' + formatBytes(r.totalBytes) + ')' : '')),
+    r.ordersWithMedia > 0 ? statRow('متوسط الوسائط للطلب الواحد (ممّن له وسائط)', formatKB(r.avgBytesPerMediaOrder)) : null,
+    verdict.sharePercent !== null ? statRow('نسبتها من تخزين التطبيق', verdict.sharePercent + '%') : null,
+    statRow('مدة الفحص', r.durationMs + ' ms'),
+  ].filter(Boolean);
+  const out = [];
+  if (r.cancelled) {
+    out.push(el('div', { style: { color: '#8A5A00', fontSize: '13px', margin: '8px 0' } }, '⚠️ أُوقف الفحص قبل الانتهاء — الأرقام جزئية.'));
+  }
+  out.push(el('div', { style: { marginTop: '10px' } }, rows));
+  out.push(el('div', {
+    style: { marginTop: '10px', padding: '8px 10px', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6', color: palette[0], background: palette[1] },
+  }, verdict.text));
+  if (r.topOrders.length > 0) {
+    out.push(el('div', { style: { fontWeight: '600', fontSize: '13px', margin: '12px 0 4px' } }, '🏷️ أكبر الطلبات حجماً'));
+    r.topOrders.forEach((t) => out.push(el('div', { style: { fontSize: '12px', color: '#555', padding: '3px 0' } },
+      (names.get(t.customerId) || 'عميل غير معروف') + ' — ' + formatKB(t.totalBytes) +
+      ' (صورة ' + formatKB(t.imageBytes) + ' · توقيع ' + formatKB(t.signatureBytes) + ')')));
+  }
+  return out;
+}
+
+function mediaDiagSection() {
+  const kids = [
+    el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.7' } },
+      'يحسب حجم الصور المرجعية والتوقيعات المخزّنة داخل سجلات الطلبات — وهي سبب بطء قراءة قائمة الطلبات. ' +
+      'للقراءة فقط: لا يعدّل أي بيانات، ولا يعمل إلا عند الضغط، ويقرأ على دفعات صغيرة دون تجميد التطبيق.'),
+  ];
+  if (state.mediaRunning) {
+    const prog = el('div', { role: 'status', style: { fontSize: '13px', fontWeight: '600', color: '#0B5A8A', marginBottom: '8px' } }, mediaProgressText());
+    state.mediaProgressNode = prog;
+    kids.push(prog, btn('⏹️ إيقاف', () => { state.mediaCancel = true; }, 'secondary'));
+  } else {
+    state.mediaProgressNode = null;
+    kids.push(btn(state.media ? '🔄 إعادة الفحص' : '📊 افحص حجم الصور والتوقيعات', runMediaScan));
+  }
+  if (state.mediaError) kids.push(el('div', { style: { color: '#B3261E', fontSize: '13px', marginTop: '8px' } }, state.mediaError));
+  if (state.media) kids.push(...mediaResultNodes(state.media));
+  return section('📊 تشخيص حجم الصور والتوقيعات', kids);
+}
+
 function draw() {
   const c = state.container;
   if (!c || !state.data) return;
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));
   c.appendChild(buildSystemStatusCard());
+  c.appendChild(mediaDiagSection());
   c.appendChild(vipSection());
   c.appendChild(integritySection());
   c.appendChild(mergeSection());
@@ -220,7 +325,7 @@ function draw() {
 
 export const dataCarePage = {
   async render(container) {
-    state = { container, data: null, scan: null, backups: null, verifyResult: null };
+    state = freshState(container);
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[data-care] render:', err);
@@ -228,5 +333,5 @@ export const dataCarePage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state = { container: null, data: null, scan: null, backups: null, verifyResult: null }; },
+  destroy() { state.mediaCancel = true; state = freshState(); },
 };
