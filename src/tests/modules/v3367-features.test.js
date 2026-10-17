@@ -85,3 +85,17 @@ register('v3.3.67 debts age filter', async (t) => {
   t.test('5. مدخلات سيئة آمنة', filterOverdueByAge(null, 5).length === 0 && filterOverdueByAge(list, 'x').length === 4);
   t.test('6. لا تعدّل الأصل', list.length === 5);
 });
+
+register('v3.3.68 backup nudge', async (t) => {
+  const { backupNudge, NUDGE_MIN_RECORDS, NUDGE_AFTER_DAYS, NUDGE_SNOOZE_DAYS } = await import('../../services/backup-nudge.js');
+  const now = Date.now(); const D = 86400000;
+  t.test('1. بيانات قليلة ⟵ لا تذكير', backupNudge({ recordCount: NUDGE_MIN_RECORDS - 1 }, now).show === false);
+  const never = backupNudge({ recordCount: 50 }, now);
+  t.test('2. لم تُحفظ نسخة خارجية قط ⟵ تذكير never', never.show && never.never && never.text.includes('50'));
+  t.test('3. نسخة حديثة ⟵ لا تذكير', backupNudge({ recordCount: 50, externalAt: now - 3 * D }, now).show === false);
+  const old = backupNudge({ recordCount: 50, externalAt: now - (NUDGE_AFTER_DAYS + 2) * D }, now);
+  t.test('4. نسخة قديمة ⟵ تذكير بعدد الأيام', old.show && !old.never && old.days === NUDGE_AFTER_DAYS + 2 && old.text.includes(String(NUDGE_AFTER_DAYS + 2)));
+  t.test('5. التأجيل يُسكت', backupNudge({ recordCount: 50, snoozedAt: now - D }, now).show === false);
+  t.test('6. انتهاء التأجيل يعيد التذكير', backupNudge({ recordCount: 50, snoozedAt: now - (NUDGE_SNOOZE_DAYS + 1) * D }, now).show === true);
+  t.test('7. مدخلات فارغة آمنة', backupNudge().show === false && backupNudge(null, now).show === false);
+});

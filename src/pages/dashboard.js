@@ -247,6 +247,7 @@ async function loadKPIs() {
       return { appt: a, name: c ? c.name : '', phone: c ? (c.phone || '') : '' };
     }),
     totalCustomers: customersList.length,
+    totalOrders: ordersList.length,
     activeOrders: activeOrders.length,
     monthRevenue,
     todayAppointments: todayAppts.length,
@@ -447,6 +448,32 @@ function buildHeader(data) {
 
 
 /** شريط تنبيه: توجد بيانات تجريبية (تدخل في الأرقام والتقارير حتى تُحذف). */
+/* تذكير بنسخة خارج الجهاز: يظهر بعد الرسم الأول ولا يؤخّره، ويُسكَت 3 أيام بزر «لاحقاً» */
+const NUDGE_SNOOZE_KEY = 'jalabiya_v3_backup_nudge_snoozed';
+async function buildBackupNudge(data) {
+  try {
+    const { backupNudge } = await import('../services/backup-nudge.js');
+    const { getLastExternalBackupAt } = await import('../services/auto-backup.js');
+    let snoozedAt = 0;
+    try { snoozedAt = Number(localStorage.getItem(NUDGE_SNOOZE_KEY)) || 0; } catch (_) { /* اختياري */ }
+    const recordCount = (data.totalCustomers || 0) + (data.totalOrders || 0);
+    const n = backupNudge({ externalAt: getLastExternalBackupAt(), recordCount, snoozedAt });
+    if (!n.show) return null;
+    const box = el('div', { className: 'dash-demo', role: 'status', 'data-role': 'backup-nudge' }, [
+      el('span', {}, n.text),
+      el('a', { className: 'btn btn--sm btn--primary', href: '#/data-care', 'data-action': 'nudge-open' }, 'احفظ نسخة'),
+      el('button', {
+        className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'nudge-snooze',
+        onClick: () => {
+          try { localStorage.setItem(NUDGE_SNOOZE_KEY, String(Date.now())); } catch (_) { /* اختياري */ }
+          box.remove();
+        },
+      }, 'لاحقاً'),
+    ]);
+    return box;
+  } catch (e) { return null; }
+}
+
 function buildDemoBanner() {
   return el('div', { className: 'dash-demo', role: 'status' }, [
     el('span', {}, '🧪 تعرض بيانات تجريبية — تدخل في الأرقام والتقارير حتى تحذفها'),
@@ -725,6 +752,9 @@ export const dashboardPage = {
     /* بناء */
     container.appendChild(buildHeader(data));
     if (data.hasDemo) container.appendChild(buildDemoBanner());
+    const nudgeSlot = el('div', { 'data-role': 'nudge-slot' });
+    container.appendChild(nudgeSlot);
+    buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
     container.appendChild(buildQuickActions());
     container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data));
