@@ -75,6 +75,9 @@ export function normalizePhone(phone) {
    ========================================================================== */
 
 const AR_LOCALE = 'ar-EG-u-nu-latn';
+/* إنشاء Intl.*Format مكلف جداً (مئات المرات في الصفحة الواحدة) — نُنشئه مرة ونعيد استخدامه */
+const _dateCache = new Map();
+let _dateFmt = null, _timeFmt = null, _egpFmt = null;
 
 /**
  * صياغة عدد بالعربية حسب قواعد التمييز.
@@ -105,9 +108,15 @@ export function formatDate(date) {
   if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(AR_LOCALE, {
+  const ts = d.getTime();
+  const hit = _dateCache.get(ts);
+  if (hit !== undefined) return hit;
+  const out = (_dateFmt || (_dateFmt = new Intl.DateTimeFormat(AR_LOCALE, {
     year: 'numeric', month: 'long', day: 'numeric',
-  }).format(d);
+  }))).format(d);
+  if (_dateCache.size > 3000) _dateCache.clear();
+  _dateCache.set(ts, out);
+  return out;
 }
 
 /**
@@ -119,9 +128,9 @@ export function formatTime(date) {
   if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(AR_LOCALE, {
+  return (_timeFmt || (_timeFmt = new Intl.DateTimeFormat(AR_LOCALE, {
     hour: '2-digit', minute: '2-digit', hour12: true,
-  }).format(d);
+  }))).format(d);
 }
 
 /**
@@ -170,10 +179,10 @@ export function relativeTime(timestamp) {
 export function formatEGP(amount) {
   const num = Number(amount);
   if (!isFinite(num)) return '0 ج.م';
-  const formatted = new Intl.NumberFormat(AR_LOCALE, {
+  const formatted = (_egpFmt || (_egpFmt = new Intl.NumberFormat(AR_LOCALE, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(num);
+  }))).format(num);
   return `${formatted} ج.م`;
 }
 

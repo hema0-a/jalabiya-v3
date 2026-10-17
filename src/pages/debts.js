@@ -18,7 +18,8 @@ import { modal } from '../ui/modal.js';
 import { sendLogged } from '../services/auto-messages.js';
 import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
 import { toast } from '../ui/toast.js';
-import { computeReceivables, buildReminderText } from '../services/receivables.js';
+import { computeReceivables, buildReminderText, filterOverdueByAge } from '../services/receivables.js';
+import { openMessageComposer } from '../ui/message-composer-dialog.js';
 
 let state = { container: null, showAll: false, data: null, workshop: {}, msgCfg: null };
 
@@ -129,6 +130,14 @@ function customerCard(c) {
         else draw();   /* لتحديث «آخر تذكير» */
       },
     }, '💬 تذكير واتساب'));
+    actions.splice(1, 0, el('button', {
+      className: 'btn btn--secondary', type: 'button', 'data-action': 'debt-compose',
+      style: { fontSize: '12px', padding: '4px 10px' },
+      onClick: () => openMessageComposer({
+        customer: { id: c.customerId, name: c.name, phone: c.phone },
+        amount: Math.round(c.overdue * 100) / 100, text: 'تذكير بالمتبقي',
+      }),
+    }, '✍️ صياغة'));
   }
   if (c.phone) {
     actions.push(el('a', {
@@ -192,10 +201,22 @@ function draw() {
     }, 'الكل (مع عند التسليم)'),
   ]));
 
-  const shown = state.showAll ? list : list.filter((x) => x.overdue > 0.009);
+  /* تصفية بالعمر: الأقدم أولاً لتحديد من يستحق اتصالاً لا مجرد رسالة */
+  if (!state.showAll && totals.overdue > 0.009) {
+    c.appendChild(el('div', { 'data-role': 'age-filter', style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' } }, [
+      el('span', { style: { fontSize: '12px', color: '#666' } }, 'متأخر منذ:'),
+      ...[[0, 'الكل'], [7, '+٧ أيام'], [30, '+٣٠ يوماً'], [60, '+٦٠ يوماً']].map(([d, lbl]) => el('button', {
+        className: 'btn ' + (state.minAge === d ? 'btn--primary' : 'btn--secondary'), type: 'button',
+        'data-age': String(d), style: { fontSize: '12px', padding: '4px 10px' },
+        onClick: () => { state.minAge = d; draw(); },
+      }, lbl)),
+    ]));
+  }
+
+  const shown = state.showAll ? list : filterOverdueByAge(list, state.minAge);
   if (shown.length === 0) {
     c.appendChild(el('div', { className: 'card', style: { padding: '24px', textAlign: 'center', color: '#2E7D32' } },
-      state.showAll ? 'لا توجد مستحقات 🎉' : '✅ لا ديون متأخرة — كل الطلبات المسلَّمة مسدَّدة'));
+      state.showAll ? 'لا توجد مستحقات 🎉' : (state.minAge > 0 ? 'لا ديون متأخرة بهذا العمر — جرّب «الكل»' : '✅ لا ديون متأخرة — كل الطلبات المسلَّمة مسدَّدة')));
     return;
   }
   /* عرض تدريجي: بآلاف العملاء كان يُرسم كل شيء دفعة واحدة (~27 ألف عنصر وتجمّد ثوانٍ على الجوال) */
@@ -205,7 +226,7 @@ function draw() {
 
 export const debtsPage = {
   async render(container) {
-    state = { container, showAll: false, data: null, workshop: {}, msgCfg: null, pl: null };
+    state = { container, showAll: false, minAge: 0, data: null, workshop: {}, msgCfg: null, pl: null };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ الحساب...'));
     try {
       await loadData();

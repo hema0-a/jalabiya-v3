@@ -11,6 +11,14 @@
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
+/* الخط يُحمَّل بلا حجب للرسم الأول (كان رابطاً في <head> يؤخّر ظهور الشاشة على الشبكات البطيئة) */
+try {
+  const fontLink = document.createElement('link');
+  fontLink.rel = 'stylesheet';
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap';
+  document.head.appendChild(fontLink);
+} catch (_) { /* الخط تحسين فقط */ }
+
 const app = document.getElementById('app');
 if (app) {
   while (app.firstChild) app.removeChild(app.firstChild);

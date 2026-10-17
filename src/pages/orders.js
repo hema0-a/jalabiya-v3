@@ -34,6 +34,8 @@ import { sinceText } from '../services/message-log.js';
 import { suggestDueDate, getDayLoad, planOrder, isValidWorkPlan } from '../services/order-scheduler.js';
 import { buildItemCatalog, findInCatalog } from '../services/item-catalog.js';
 import { assessOrderRisks } from '../services/order-risk.js';
+import { describeChosenDay } from '../services/capacity-strip.js';
+import { buildCapacityStripView } from '../ui/capacity-strip-view.js';
 import {
   deliveryProgress, canPartialDeliver, deliveryBadgeText, planDelivery, applyDelivery,
   completeRemaining, sanitizeDeliveries,
@@ -445,6 +447,39 @@ function openOrderForm(existing = null) {
   };
   dueDateInput.addEventListener('input', () => setHint([]));
 
+  /* مبلغ الطلب الجاري (يُحسب عند الحاجة فقط) */
+  const currentOrderAmount = () => {
+    try {
+      const its = Array.from(itemsContainer.children).map((r) => r._getValues());
+      const fs = Array.from(feesContainer.children).map((r) => r._getValues());
+      return Number(computeTotals(its, discountTypeSelect.value, discountValueInput.value, fs).amount) || 0;
+    } catch (e) { return 0; }
+  };
+  const capConfig = () => ({
+    dailyOrderLimit: state.scheduleConfig.dailyOrderLimit,
+    dayOffWeekday: state.scheduleConfig.dayOffWeekday,
+    excludeOrderId: existing ? existing.id : null,
+    orderAmount: currentOrderAmount(),
+  });
+  const dueTsOf = () => (dueDateInput.value ? new Date(dueDateInput.value + 'T12:00:00').getTime() : null);
+  const capStrip = buildCapacityStripView({
+    getOrders: () => state.orders,
+    getConfig: capConfig,
+    getSelectedTs: dueTsOf,
+    onPick: (ts) => {
+      dueDateInput.value = localDateInput(ts);
+      dueDateInput.dispatchEvent(new Event('change', { bubbles: true }));   /* يحفظ المسودة + يُظهر ملاحظة اليوم */
+    },
+  });
+  /* اختيار يدوي لتاريخ: تنبيه إن كان اليوم مزدحماً أو إجازة */
+  dueDateInput.addEventListener('change', () => {
+    const ts = dueTsOf();
+    if (ts == null) { capStrip.refresh(); return; }
+    const d = describeChosenDay(state.orders, capConfig(), ts);
+    if (d.level !== 'none') setHint([d.text], d.level !== 'ok');
+    capStrip.refresh();
+  });
+
   const suggestBtn = el('button', {
     className: 'btn btn--sm btn--secondary btn--block', type: 'button',
     title: 'اقتراح أقرب موعد تسليم يناسب الحد اليومي',
@@ -594,6 +629,7 @@ function openOrderForm(existing = null) {
   });
 
   function recalc() {
+    capStrip.refresh();
     const items = Array.from(itemsContainer.children).map((r) => r._getValues());
     const fees = Array.from(feesContainer.children).map((r) => r._getValues());
     const t = computeTotals(items, discountTypeSelect.value, discountValueInput.value, fees);
@@ -679,7 +715,7 @@ function openOrderForm(existing = null) {
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📅 تاريخ التسليم'),
-      dueDateInput, suggestBtn, dueHint,
+      dueDateInput, suggestBtn, dueHint, capStrip,
     ]),
     depositField,
     extras,

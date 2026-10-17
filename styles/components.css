@@ -1339,3 +1339,14 @@ body.wall-open { overflow: hidden; }
 .composer__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: var(--space-s); }
 .composer__field { display: flex; flex-direction: column; gap: 2px; font-size: var(--font-size-xs); }
 .composer__note { font-size: var(--font-size-xs); color: var(--color-primary-light); }
+
+/* ===== شريط سعة الأيام (v3.3.67) ===== */
+.capstrip { margin-top: var(--space-sm); }
+.capstrip__title { font-size: var(--font-size-sm); color: var(--color-text-muted, #666); margin-bottom: 6px; }
+.capstrip__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.capstrip__day { min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border: 1px solid; border-radius: 10px; padding: 4px 6px; font: inherit; cursor: pointer; }
+.capstrip__day:disabled { cursor: not-allowed; opacity: .7; }
+.capstrip__day.is-selected { outline: 2px solid var(--color-primary, #1F6D57); outline-offset: 1px; }
+.capstrip__day { padding: 4px 2px; }
+.capstrip__wd { font-size: 9px; } .capstrip__num { font-size: 15px; } .capstrip__st { font-size: 9px; white-space: nowrap; }

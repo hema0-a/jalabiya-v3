@@ -67,11 +67,12 @@ export function buildWeekVisits({ orders = [], customers = [], appointments = []
   return out;
 }
 
+let _wdFmt = null;
 /** «اليوم» / «غداً» / اسم اليوم بالعربية. */
 export function dayLabel(ts, now = Date.now()) {
   if (ts < startOfDayPlus(now, 1)) return 'اليوم';
   if (ts < startOfDayPlus(now, 2)) return 'غداً';
-  try { return new Date(ts).toLocaleDateString('ar-EG', { weekday: 'long' }); } catch { return ''; }
+  try { return (_wdFmt || (_wdFmt = new Intl.DateTimeFormat('ar-EG', { weekday: 'long' }))).format(new Date(ts)); } catch { return ''; }
 }
 
 /** رسالة تذكير مهذّبة بالحضور القادم. */

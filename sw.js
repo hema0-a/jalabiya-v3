@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.66 — تطوير شاشة الورشة
+   الإصدار: v3.3.67 — تطوير شاشة الورشة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.66';
+const CACHE_VERSION = 'v3.3.67';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -130,6 +130,7 @@ const PRECACHE_URLS = [
   './src/services/auto-backup.js',
   './src/services/auto-messages.js',
   './src/services/calendar-events.js',
+  './src/services/capacity-strip.js',
   './src/services/catalog-page.js',
   './src/services/commitments-calculator.js',
   './src/services/contacts-import.js',
@@ -191,6 +192,7 @@ const PRECACHE_URLS = [
 
   /* --- src/ui --- */
   './src/ui/bottom-nav.js',
+  './src/ui/capacity-strip-view.js',
   './src/ui/catalog-page-share.js',
   './src/ui/client-mode.js',
   './src/ui/collapsible.js',

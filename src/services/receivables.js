@@ -112,6 +112,16 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
   return { customers, totals, buckets };
 }
 
+/**
+ * العملاء المتأخرون منذ minDays يوماً فأكثر (بحسب أقدم دين) — للتركيز على الأقدم أولاً.
+ * minDays ≤ 0 أو غير رقمي ⇒ كل من عليهم دين متأخر. لا يغيّر المصفوفة الأصلية.
+ */
+export function filterOverdueByAge(customers, minDays = 0) {
+  const list = Array.isArray(customers) ? customers : [];
+  const min = Number(minDays) > 0 ? Number(minDays) : 0;
+  return list.filter((c) => c && c.overdue > EPS && (c.oldestDays || 0) >= min);
+}
+
 /** نص تذكير واتساب مهذّب لمستحق عميل. */
 /** متغيرات رسالة تذكير المستحقات (تُستعمل أيضاً في طابور الرسائل). */
 export function debtVars(name, amountText, workshop = '', phone = '') {

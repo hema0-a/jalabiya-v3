@@ -16,10 +16,18 @@ import { isPastDue } from './order-timing.js';
 
 const STATUS_LABEL = { pending: 'انتظار', in_progress: 'قيد التنفيذ', ready: 'جاهز' };
 
+let _niceFmt = null;
+const _niceCache = new Map();
 function niceDay(key) {
+  const hit = _niceCache.get(key);
+  if (hit !== undefined) return hit;
+  let out;
   try {
-    return new Date(key + 'T12:00:00').toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' });
-  } catch (e) { return key; }
+    out = (_niceFmt || (_niceFmt = new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'long' }))).format(new Date(key + 'T12:00:00'));
+  } catch (e) { out = key; }
+  if (_niceCache.size > 800) _niceCache.clear();
+  _niceCache.set(key, out);
+  return out;
 }
 
 /**

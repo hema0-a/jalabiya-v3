@@ -294,13 +294,9 @@ export function sampleVars(scope = 'order') {
    ========================================================================== */
 
 function replaceVars(line, vars) {
-  let out = line;
-  Object.keys(vars).forEach((k) => {
-    const re = new RegExp('\\{' + k + '\\}', 'g');
-    const val = String(vars[k] ?? '');
-    out = out.replace(re, () => val);   /* دالة لا نص: حتى لا تُفسَّر $& و$1 داخل الأسماء */
-  });
-  return out;
+  /* تمريرة واحدة بدل RegExp جديد لكل متغيّر؛ المتغيّر غير المعروف يبقى كما هو */
+  return String(line).replace(/\{([^{}]+)\}/g, (m, k) =>
+    (Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k] ?? '') : m));
 }
 
 /**
