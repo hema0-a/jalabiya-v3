@@ -6,6 +6,8 @@
    2) فحص سلامة البيانات + إصلاح آمن (لا يمسّ أي مبلغ مالي).
    3) دمج العملاء المكررين (يعيد نسبة الطلبات والدفعات والمواعيد للسجل الباقي).
    4) تشخيص حجم الصور والتوقيعات داخل الطلبات (v3.3.72) — للقراءة فقط وعند الضغط فقط.
+   v3.3.73: القراءة كسولة — فتح الصفحة لا يقرأ الطلبات (بصورها وتوقيعاتها) ولا الدفعات ولا المواعيد؛
+   تُقرأ فقط عند الضغط على «افحص المؤهلين» أو «افحص الآن» (سلامة البيانات) أو «تحديث» في بطاقة الحالة.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -29,17 +31,32 @@ import { diagnoseOrderMedia, assessMedia, formatKB } from '../services/media-dia
 import { getStorageStatus, formatBytes } from '../services/storage-health.js';
 
 const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
-/** حالة الصفحة (تُعاد كاملة عند الفتح والإغلاق). حقول media* لأداة تشخيص الوسائط. */
+/**
+ * حالة الصفحة (تُعاد كاملة عند الفتح والإغلاق). حقول media* لأداة تشخيص الوسائط.
+ * full: هل قُرئت كل المخازن (الطلبات والدفعات…)؟ false عند الفتح — العملاء فقط.
+ */
 const freshState = (container = null) => ({
-  container, data: null, scan: null, backups: null, verifyResult: null,
+  container, data: null, full: false, scan: null, backups: null, verifyResult: null,
   media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null,
   mediaError: '', mediaUsage: null, mediaProgressNode: null,
 });
 let state = freshState();
 
-async function loadData() {
+/**
+ * يحمّل بيانات الصفحة.
+ * - بلا full: العملاء فقط (خفيفة) وبقية المخازن مصفوفات فارغة — الأقسام التي تحتاجها تتحقق من state.full.
+ * - مع full: كل المخازن (تقرأ الطلبات بصورها وتوقيعاتها، فلا تُستدعى إلا بضغطة صريحة).
+ * @param {boolean} [full=state.full] — الافتراضي يحافظ على النمط الحالي عند إعادة التحميل بعد إجراء.
+ * @returns {Promise<void>}
+ */
+async function loadData(full = state.full) {
+  if (!full) {
+    state.data = { customers: await customers.list(), orders: [], payments: [], appointments: [], quotes: [] };
+    return;
+  }
   const [cus, ord, pay, apt, qts] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
   state.data = { customers: cus, orders: ord, payments: pay, appointments: apt, quotes: qts };
+  state.full = true;
 }
 
 const section = (title, children) => el('div', { className: 'card', style: { padding: '14px', marginBottom: '14px' } },
@@ -49,7 +66,8 @@ const btn = (txt, fn, cls = 'primary', extra = {}) => el('button', { className: 
 /* ---------- 1) VIP ---------- */
 function vipSection() {
   const rules = loadVipRules();
-  const promos = computeVipPromotions(state.data.customers, state.data.orders, rules);
+  /* الترقية تعتمد على الطلبات المسلَّمة؛ لا نقرؤها إلا بضغطة «افحص المؤهلين» */
+  const promos = state.full ? computeVipPromotions(state.data.customers, state.data.orders, rules) : null;
   const minO = el('input', { className: 'input', type: 'number', min: '0', value: rules.minOrders, style: { width: '90px' } });
   const minS = el('input', { className: 'input', type: 'number', min: '0', value: rules.minSpent, style: { width: '110px' } });
   const auto = el('input', { type: 'checkbox' }); auto.checked = rules.enabled;
@@ -64,7 +82,9 @@ function vipSection() {
     ]),
     el('label', { style: { display: 'flex', gap: '6px', alignItems: 'center', fontSize: '13px', marginBottom: '8px' } },
       [auto, 'تطبيق تلقائي عند فتح صفحة العملاء']),
-    promos.length === 0
+    promos === null
+      ? btn('🔍 افحص المؤهلين', async () => { await loadData(true); draw(); }, 'secondary')
+      : promos.length === 0
       ? el('div', { style: { color: '#2E7D32', fontSize: '13px' } }, '✅ لا يوجد عملاء مؤهلون للترقية حالياً')
       : el('div', {}, [
         el('div', { style: { fontSize: '13px', marginBottom: '6px' } }, promos.length + ' عميل مؤهل: ' + promos.slice(0, 6).map((p) => p.name).join('، ') + (promos.length > 6 ? '…' : '')),
@@ -89,7 +109,7 @@ function integritySection() {
   const sc = state.scan;
   const kids = [el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px' } },
     'يكشف سجلات يتيمة (دفعة بلا طلب، طلب لعميل محذوف…). الإصلاح الآمن لا يغيّر أي مبلغ مالي.')];
-  kids.push(btn(sc ? '🔄 أعد الفحص' : '🔍 افحص الآن', async () => { await loadData(); state.scan = scanIntegrity(state.data); draw(); }));
+  kids.push(btn(sc ? '🔄 أعد الفحص' : '🔍 افحص الآن', async () => { await loadData(true); state.scan = scanIntegrity(state.data); draw(); }));
   if (sc) {
     if (sc.total === 0) kids.push(el('div', { style: { color: '#2E7D32', margin: '10px 0' } }, '✅ البيانات سليمة'));
     else {
@@ -186,7 +206,7 @@ function groupCard(g) {
     r.checked = c.id === chosen;
     r.addEventListener('change', () => { chosen = c.id; });
     return el('label', { style: { display: 'flex', gap: '6px', alignItems: 'center', padding: '4px 0', fontSize: '13px' } },
-      [r, el('span', {}, c.name + (c.phone ? ' · ' + c.phone : ' · بلا هاتف') + ' · ' + count(c.id) + ' طلب' + (c.vip ? ' ⭐' : ''))]);
+      [r, el('span', {}, c.name + (c.phone ? ' · ' + c.phone : ' · بلا هاتف') + (state.full ? ' · ' + count(c.id) + ' طلب' : '') + (c.vip ? ' ⭐' : ''))]);
   });
   return el('div', { style: { padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,0.08)' } }, [
     el('div', { style: { fontSize: '12px', fontWeight: '700', color: g.kind === 'phone' ? '#C62828' : '#E65100', marginBottom: '4px' } },
@@ -212,7 +232,8 @@ function mergeSection() {
   const groups = findDuplicateGroups(state.data.customers);
   return section('👥 العملاء المكررون', groups.length === 0
     ? [el('div', { style: { color: '#2E7D32', fontSize: '13px' } }, '✅ لا يوجد عملاء مكررون')]
-    : [el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '6px' } }, groups.length + ' مجموعة'), ...groups.map(groupCard)]);
+    : [el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '6px' } },
+      groups.length + ' مجموعة' + (state.full ? '' : ' — أعداد الطلبات تظهر بعد «افحص المؤهلين» أو «افحص الآن»')), ...groups.map(groupCard)]);
 }
 
 /* ---------- 4) تشخيص حجم الصور والتوقيعات (للقراءة فقط) ---------- */
@@ -315,7 +336,7 @@ function draw() {
   if (!c || !state.data) return;
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));
-  c.appendChild(buildSystemStatusCard());
+  c.appendChild(buildSystemStatusCard({ lazyIntegrity: true }));
   c.appendChild(mediaDiagSection());
   c.appendChild(vipSection());
   c.appendChild(integritySection());

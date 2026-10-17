@@ -19,7 +19,12 @@ import { evaluateStatus } from '../services/system-status.js';
 
 const part = async (fn, fallback = null) => { try { return await fn(); } catch { return fallback; } };
 
-/** يجمع اللقطة (كل جزء بمعزل). */
+/**
+ * يجمع اللقطة (كل جزء بمعزل).
+ * @param {Object} [env]
+ * @param {boolean} [env.integrity=true] — false يتخطى فحص سلامة البيانات (لأنه يقرأ كل الطلبات بصورها وتوقيعاتها).
+ * @returns {Promise<Object>}
+ */
 export async function collectStatus(env = {}) {
   const nav = env.nav || (typeof navigator !== 'undefined' ? navigator : {});
   const snap = { online: nav.onLine !== false, version: APP_CONFIG.version };
@@ -29,10 +34,12 @@ export async function collectStatus(env = {}) {
   }, {});
   snap.queueSize = await part(() => queueSize(), 0);
   snap.storage = await part(() => getStorageStatus(nav), {});
-  snap.integrity = await part(async () => {
-    const [c, o, p, a, q] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
-    return scanIntegrity({ customers: c, orders: o, payments: p, appointments: a, quotes: q });
-  }, null);
+  if (env.integrity !== false) {
+    snap.integrity = await part(async () => {
+      const [c, o, p, a, q] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
+      return scanIntegrity({ customers: c, orders: o, payments: p, appointments: a, quotes: q });
+    }, null);
+  }
   const backups = await part(() => listBackups(), []);
   const ext = await part(() => getLastExternalBackupAt(), 0);
   snap.lastBackupAt = Math.max((backups[0] && backups[0].createdAt) || 0, ext || 0);
@@ -47,10 +54,20 @@ export async function collectStatus(env = {}) {
 const ICON = { ok: '✅', info: 'ℹ️', warn: '⚠️', bad: '🔴' };
 const HEAD = { ok: '🩺 النظام سليم', warn: '🩺 يحتاج انتباهاً', bad: '🩺 يحتاج إجراءً الآن' };
 
-export function buildSystemStatusCard() {
+/**
+ * يبني بطاقة «حالة النظام».
+ * @param {Object} [opts]
+ * @param {boolean} [opts.lazyIntegrity=false] — true: التحميل الأول لا يقرأ الطلبات (بند «سلامة البيانات» يغيب)،
+ *   وزر «تحديث» (ضغطة صريحة من المستخدم) هو وحده الذي يشغّل فحص السلامة.
+ * @returns {HTMLElement}
+ */
+export function buildSystemStatusCard(opts = {}) {
+  const lazyIntegrity = !!opts.lazyIntegrity;
+  let firstLoad = true;
   const body = el('div', { className: 'sysstat__body' }, el('div', { className: 'sysstat__loading' }, 'جارٍ الفحص…'));
   const title = el('h3', { className: 'sysstat__title' }, '🩺 حالة النظام');
   const refreshBtn = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'sysstat-refresh', onClick: () => load() }, '🔄 تحديث');
+  if (lazyIntegrity) refreshBtn.title = 'يشمل فحص سلامة البيانات (يقرأ الطلبات)';
   const card = el('div', { className: 'card sysstat', 'data-role': 'system-status' }, [
     el('div', { className: 'sysstat__head' }, [title, refreshBtn]), body,
   ]);
@@ -58,7 +75,10 @@ export function buildSystemStatusCard() {
   async function load() {
     refreshBtn.disabled = true;
     try {
-      const res = evaluateStatus(await collectStatus());
+      /* الفحص الكسول: التحميل الأول بلا قراءة طلبات، وكل ضغطة «تحديث» بعدها تشمل السلامة */
+      const withIntegrity = !(lazyIntegrity && firstLoad);
+      firstLoad = false;
+      const res = evaluateStatus(await collectStatus({ integrity: withIntegrity }));
       title.textContent = HEAD[res.level];
       card.setAttribute('data-level', res.level);
       clear(body);

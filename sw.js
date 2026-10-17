@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.72 — أداة تشخيص حجم الصور والتوقيعات
+   الإصدار: v3.3.73 — أداة تشخيص حجم الصور والتوقيعات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.72';
+const CACHE_VERSION = 'v3.3.73';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -151,6 +151,7 @@ const PRECACHE_URLS = [
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
   './src/services/loans-calculator.js',
+  './src/services/media-diagnostic.js',
   './src/services/message-composer.js',
   './src/services/message-log.js',
   './src/services/message-queue.js',
@@ -172,7 +173,6 @@ const PRECACHE_URLS = [
   './src/services/size-clusters.js',
   './src/services/status-notify.js',
   './src/services/storage-health.js',
-  './src/services/media-diagnostic.js',
   './src/services/system-status.js',
   './src/services/vip-rules.js',
   './src/services/wall-board.js',

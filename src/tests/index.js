@@ -83,5 +83,6 @@ import './modules/v3371-queue-count-only.test.js';
 import './modules/v3371-loan-payment.test.js';
 import './modules/v3371-fresh-orders.test.js';
 import './modules/v3372-media-diagnostic.test.js';
+import './modules/v3373-lazy-data-care.test.js';
 
 export { runAll, register } from './registry.js';
