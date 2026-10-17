@@ -77,5 +77,6 @@ import './modules/v3365-update-banner.test.js';
 import './modules/v3365-record-schema.test.js';
 import './modules/v3365-record-merge.test.js';
 import './modules/v3365-diagnostics.test.js';
+import './modules/v3366-features.test.js';
 
 export { runAll, register } from './registry.js';

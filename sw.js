@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.65 — تطوير شاشة الورشة
+   الإصدار: v3.3.66 — تطوير شاشة الورشة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.65';
+const CACHE_VERSION = 'v3.3.66';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -130,7 +130,9 @@ const PRECACHE_URLS = [
   './src/services/auto-backup.js',
   './src/services/auto-messages.js',
   './src/services/calendar-events.js',
+  './src/services/catalog-page.js',
   './src/services/commitments-calculator.js',
+  './src/services/contacts-import.js',
   './src/services/customer-merge.js',
   './src/services/data-integrity.js',
   './src/services/delivery-receipt.js',
@@ -147,6 +149,7 @@ const PRECACHE_URLS = [
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
   './src/services/loans-calculator.js',
+  './src/services/message-composer.js',
   './src/services/message-log.js',
   './src/services/message-queue.js',
   './src/services/message-templates.js',
@@ -167,6 +170,7 @@ const PRECACHE_URLS = [
   './src/services/size-clusters.js',
   './src/services/status-notify.js',
   './src/services/storage-health.js',
+  './src/services/system-status.js',
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
   './src/services/week-visits.js',
@@ -187,8 +191,10 @@ const PRECACHE_URLS = [
 
   /* --- src/ui --- */
   './src/ui/bottom-nav.js',
+  './src/ui/catalog-page-share.js',
   './src/ui/client-mode.js',
   './src/ui/collapsible.js',
+  './src/ui/contacts-import-dialog.js',
   './src/ui/controls.js',
   './src/ui/customer-menu.js',
   './src/ui/customer-picker.js',
@@ -200,6 +206,7 @@ const PRECACHE_URLS = [
   './src/ui/form-builder.js',
   './src/ui/layout.js',
   './src/ui/lock-screen.js',
+  './src/ui/message-composer-dialog.js',
   './src/ui/modal.js',
   './src/ui/morning-summary.js',
   './src/ui/notifications-center.js',
@@ -214,6 +221,7 @@ const PRECACHE_URLS = [
   './src/ui/sub-page.js',
   './src/ui/swipe.js',
   './src/ui/sync-indicator.js',
+  './src/ui/system-status-card.js',
   './src/ui/theme.js',
   './src/ui/toast.js',
   './src/ui/topbar.js',

@@ -23,6 +23,7 @@ import { findDuplicateGroups, pickPrimary, mergeFields, CUSTOMER_LINKED_STORES }
 import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { listBackups, verifyBackup, getLastVerification } from '../services/auto-backup.js';
 import { formatDate } from '../core/utils.js';
+import { buildSystemStatusCard } from '../ui/system-status-card.js';
 
 const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
 let state = { container: null, data: null, scan: null, backups: null, verifyResult: null };
@@ -210,6 +211,7 @@ function draw() {
   if (!c || !state.data) return;
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));
+  c.appendChild(buildSystemStatusCard());
   c.appendChild(vipSection());
   c.appendChild(integritySection());
   c.appendChild(mergeSection());

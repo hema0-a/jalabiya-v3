@@ -9,6 +9,7 @@
    - الحساب في services/message-queue.js (نقي ومُختبَر).
    ========================================================================== */
 
+import { openMessageComposer } from '../ui/message-composer-dialog.js';
 import { el, clear } from '../core/dom.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { customers } from '../data/repos/customers.js';
@@ -186,6 +187,10 @@ function draw() {
   state.lists = [];
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '📣 رسائل اليوم'));
+  c.appendChild(el('button', {
+    className: 'btn btn--secondary btn--block', type: 'button', 'data-action': 'open-composer', style: { marginBottom: '12px' },
+    onClick: () => openMessageComposer(),
+  }, '✍️ صياغة رسالة بكلمتين'));
 
   const cfg = state.raw.settings.autoMessages || null;
   if (!isEnabledCfg(cfg)) {

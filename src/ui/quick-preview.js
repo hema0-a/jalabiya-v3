@@ -8,6 +8,7 @@
    - static imports للـ helpers، dynamic imports للـ repos الثقيلة.
    ========================================================================== */
 
+import { shareCatalogPage } from './catalog-page-share.js';
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
 import { createCollapsible } from './collapsible.js'; /* v3.3.63 */
@@ -307,6 +308,14 @@ export async function shareCatalog(opts = {}) {
         if (opts.phone) _whatsapp(opts.phone, area.value);
         else window.open('https://wa.me/?text=' + encodeURIComponent(area.value), '_blank', 'noopener,noreferrer');
       } } : null,
+    { text: '📄 صفحة كتالوج', variant: 'secondary', action: 'catalog-page',
+      onClick: () => shareCatalogPage({
+        ws,
+        entries: checks.filter(({ cb }) => cb.checked).map(({ t }) => {
+          const p = picOf(t);
+          return { name: t.name, price: t.price, src: p ? (p.thumbnail || p.image) : '' };
+        }),
+      }) },
     { text: '📋 نسخ', variant: 'secondary',
       onClick: async () => {
         try { await navigator.clipboard.writeText(area.value); }

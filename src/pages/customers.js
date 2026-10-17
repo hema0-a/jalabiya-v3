@@ -24,6 +24,7 @@ import { printCustomerStatement } from '../services/invoice-print.js';
 import { shareCustomerStatementImage } from '../services/invoice-image.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
+import { openContactsImport } from '../ui/contacts-import-dialog.js';
 import { formatEGP } from '../core/utils.js';
 import { findSimilarCustomers, phoneKey } from '../services/customer-merge.js';
 import * as draft from '../services/draft-manager.js';
@@ -992,6 +993,12 @@ export const customersPage = {
       style: { marginBottom: '16px' },
       onClick: () => openCustomerForm(),
     }, '➕ إضافة عميل'));
+
+    container.appendChild(el('button', {
+      className: 'btn btn--secondary btn--block', type: 'button', 'data-action': 'import-contacts',
+      style: { marginBottom: '16px' },
+      onClick: () => openContactsImport({ onDone: () => refreshAll() }),
+    }, '📇 استيراد من جهات الاتصال'));
 
     container.appendChild(el('button', {
       className: 'btn btn--secondary btn--block',

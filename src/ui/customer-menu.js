@@ -11,6 +11,7 @@ import { toast } from './toast.js';
 import { customers } from '../data/repos/customers.js';
 import { sendWhatsApp } from '../services/auto-messages.js';
 import { previewCustomer } from './quick-preview.js';
+import { openMessageComposer } from './message-composer-dialog.js';
 
 export const LONG_PRESS_MS = 550;
 const MOVE_TOLERANCE = 10;
@@ -32,6 +33,10 @@ export async function openCustomerMenu(customerId) {
         'data-action': 'cm-wa',
         onClick: () => { if (!sendWhatsApp(phone, 'السلام عليكم ' + (c.name || '') + '،')) toast.warning('رقم الهاتف غير صالح'); handle.close(); },
       }) : null,
+      item('customer-menu__compose', '✍️ صياغة رسالة', {
+        'data-action': 'cm-compose',
+        onClick: () => { handle.close(); setTimeout(() => openMessageComposer({ customer: c }), 50); },
+      }),
       item('customer-menu__profile', '📋 ملف العميل', {
         'data-action': 'cm-profile',
         onClick: () => { handle.close(); setTimeout(() => previewCustomer(c), 50); },

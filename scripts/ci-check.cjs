@@ -40,11 +40,17 @@ const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 
   /* 1) الاختبارات */
   if (!ONLY || ONLY === 'tests') {
-  await page.goto(base + '#/tests', { waitUntil: 'load' });
-  await page.waitForSelector('text=تشغيل الاختبارات');
-  await page.click('text=تشغيل الاختبارات');
-  await page.waitForFunction(() => /⏱️/.test(document.getElementById('tests-output')?.textContent || ''), { timeout: 180000 }).catch(() => {});
-  const out = await page.evaluate(() => document.getElementById('tests-output')?.textContent || '');
+  /* نشغّل runAll مباشرة: بعض الاختبارات تتنقّل بين الصفحات فتُفقد صفحة النتائج قبل اكتمال التشغيل */
+  await page.goto(base + '#/dashboard', { waitUntil: 'load' });
+  await page.waitForTimeout(1500);
+  const out = await page.evaluate(async () => {
+    const m = await import('./src/tests/index.js');
+    const lines = [];
+    const r = await m.runAll((h, b) => lines.push(h + (b ? '\n' + b : '')));
+    lines.push(r.totalPassed === r.totalTests ? '✅ كل الاختبارات نجحت' : '❌ بعض الاختبارات فشلت');
+    lines.push('TOTAL ' + r.totalPassed + '/' + r.totalTests);
+    return lines.join('\n');
+  });
   const bad = out.split('\n').filter((l) => /❌|💥/.test(l));
   if (!out.includes('كل الاختبارات نجحت') || bad.length) { failed++; console.log('TESTS FAILED\n' + bad.join('\n') + '\n--- tail ---\n' + out.split('\n').slice(-15).join('\n') + '\n' + errs.join('\n')); }
   else console.log('tests: all passed');
