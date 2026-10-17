@@ -14,6 +14,7 @@
 
 import { clearPin } from './pin-crypto.js';
 import { auth } from './auth.js';
+import * as authSync from '../sync/auth-sync.js';
 
 /**
  * @param {string} email
@@ -30,10 +31,8 @@ export async function recoverPinWithCloud(email, password, deps = {}) {
   if (!e || !p) return { success: false, error: 'أدخل البريد الإلكتروني وكلمة المرور' };
 
   let res;
-  let authMod = null;
   try {
-    if (!deps.login || !deps.getOwnerUid || !deps.logout) authMod = await import('../sync/auth-sync.js');
-    const login = deps.login || authMod.login;
+    const login = deps.login || authSync.login;
     res = await login(e, p);
   } catch (err) {
     return { success: false, error: (err && err.message) || 'تعذّر الاتصال — تحقق من الإنترنت' };
@@ -41,8 +40,8 @@ export async function recoverPinWithCloud(email, password, deps = {}) {
   if (!res || !res.ok) return { success: false, error: (res && res.error) || 'تعذّر تسجيل الدخول' };
 
   /* الحساب يجب أن يطابق «صاحب الجهاز» المربوط من جلسة مفتوحة */
-  const getOwner = deps.getOwnerUid || authMod.getOwnerUid;
-  const doLogout = deps.logout || authMod.logout;
+  const getOwner = deps.getOwnerUid || authSync.getOwnerUid;
+  const doLogout = deps.logout || authSync.logout;
   const owner = getOwner();
   const uid = res.user && res.user.uid;
   if (!owner || !uid || uid !== owner) {

@@ -22,6 +22,9 @@ import { portfolio as portfolioRepo } from '../data/repos/portfolio.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { commitmentPayments as cpRepo } from '../data/repos/commitment-payments.js';
 import { savingsGoals as goalsRepo } from '../data/repos/savings-goals.js';
+import { inventory as inventoryRepo, isLowStockItem } from '../data/repos/inventory.js';
+import { workers as workersRepo } from '../data/repos/workers.js';
+import { workerPayments as wpRepo } from '../data/repos/worker-payments.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { deliveryProgress } from '../services/partial-delivery.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
@@ -1035,9 +1038,6 @@ export async function previewPortfolio(idOrObj, onEdit, onDetails) {
  * @returns {Promise<void>}
  */
 export async function previewInventory(idOrObj, onEdit) {
-  const inventoryModule = await import('../data/repos/inventory.js');
-  const inventoryRepo = inventoryModule.inventory;
-  const isLowStockItem = inventoryModule.isLowStockItem;
   const item = (typeof idOrObj === 'string') ? await inventoryRepo.find(idOrObj) : idOrObj;
   if (!item) return;
 
@@ -1095,9 +1095,6 @@ export async function previewInventory(idOrObj, onEdit) {
  * @returns {Promise<void>}
  */
 export async function previewWorker(idOrObj, onEdit) {
-  const workersRepo = (await import('../data/repos/workers.js')).workers;
-  const wpRepo = (await import('../data/repos/worker-payments.js')).workerPayments;
-
   const w = (typeof idOrObj === 'string') ? await workersRepo.find(idOrObj) : idOrObj;
   if (!w) return;
 

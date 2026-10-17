@@ -17,6 +17,7 @@ import { DEFAULT_SETTINGS } from '../../core/config.js';
 import { auth } from '../../security/auth.js';
 import { toLatinDigits } from '../../core/utils.js';
 import * as biometric from '../../security/biometric.js';
+import * as db from '../../data/idb.js';
 
 /* ==========================================================================
    1. الأمان
@@ -375,7 +376,6 @@ const dangerZoneSection = {
         if (!ok2) return;
 
         try {
-          const db = await import('../../data/idb.js');
           const stores = [
             'customers', 'orders', 'payments', 'inventory', 'workers',
             'expenses', 'appointments', 'trash', 'activity',
@@ -401,7 +401,6 @@ const dangerZoneSection = {
         if (!ok) return;
 
         try {
-          const db = await import('../../data/idb.js');
           await db.remove('settings', 'main');
           toast.success('تمت إعادة التعيين — أعد تحميل الصفحة');
           setTimeout(() => location.reload(), 1500);

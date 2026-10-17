@@ -20,6 +20,7 @@ import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS, APP_CONFIG as APP_INFO } from '../../core/config.js';
 import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
+import * as db from '../../data/idb.js';
 import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
 import * as autoSync from '../../sync/auto-sync.js';
 import { seedDemoData, clearDemoData, countDemoData } from '../../services/demo-data.js';
@@ -818,7 +819,6 @@ const backupSection = {
 
 async function exportAllData() {
   try {
-    const db = await import('../../data/idb.js');
     const stores = [
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
@@ -855,7 +855,6 @@ async function importAllData(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!data || !data.stores || typeof data.stores !== 'object') throw new Error('ملف غير صالح');
-    const db = await import('../../data/idb.js');
 
     /* مخازن مسموحة فقط (نفس قائمة التصدير) — لا نكتب في backups/trash ولا في اسم عشوائي */
     const ALLOWED = [

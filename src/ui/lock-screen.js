@@ -23,6 +23,8 @@ import { toLatinDigits } from '../core/utils.js';
 import * as biometric from '../security/biometric.js';
 import { clearSyncIdentity } from '../sync/sync-identity.js';
 import { recoverPinWithCloud } from '../security/pin-recovery.js';
+import { activity } from '../data/repos/activity.js';
+import { toast } from './toast.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -48,7 +50,6 @@ async function readSettings() {
 async function logAttempt(ok, cfg) {
   try {
     if (cfg && cfg.security && cfg.security.logLoginAttempts === false) return;
-    const { activity } = await import('../data/repos/activity.js');
     await activity.log({
       type: ok ? 'auth:login' : 'auth:failed',
       description: ok ? 'تم فتح القفل بنجاح' : 'محاولة فاشلة لإدخال الرقم السري',
@@ -346,8 +347,7 @@ export function showLock() {
           setAppHidden(false);
           _lastActivity = Date.now();
           resolve();
-          import('./toast.js').then((m) => m.toast.success('أُزيل الرقم السري — عيّن رقماً جديداً من الإعدادات › الأمان'))
-            .catch(() => { /* اختياري */ });
+          try { toast.success('أُزيل الرقم السري — عيّن رقماً جديداً من الإعدادات › الأمان'); } catch (e) { /* اختياري */ }
         }
         return res;
       });
