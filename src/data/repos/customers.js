@@ -114,20 +114,24 @@ export function pointsForAmount(amount, cfg) {
  * @returns {Promise<{balance:number, points:number}>}
  */
 customers.walletAdjust = async function walletAdjust(id, d) {
-  const c = await base.find(id);
-  if (!c) throw new Error('العميل غير موجود');
-  const w = walletOf(c);
-  const dBal = r2(d.balance); const dPts = Math.round(Number(d.points) || 0);
-  const nb = r2(w.balance + dBal); const np = w.points + dPts;
-  if (nb < 0) throw new Error('الرصيد لا يكفي');
-  if (np < 0) throw new Error('النقاط لا تكفي');
-  const entry = {
-    id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    at: Date.now(), type: d.type, balance: dBal, points: dPts,
-    orderId: d.orderId || null, note: d.note || '',
-  };
-  await base.update(id, { creditBalance: nb, points: np, walletLog: [entry, ...w.log].slice(0, WALLET_LOG_MAX) });
-  return { balance: nb, points: np };
+  /* ذرّي: كل الحساب داخل قفل السجل (حركتان متزامنتان كانتا تُضيّعان إحداهما) */
+  let out = null;
+  const res = await base.modify(id, (c) => {
+    const w = walletOf(c);
+    const dBal = r2(d.balance); const dPts = Math.round(Number(d.points) || 0);
+    const nb = r2(w.balance + dBal); const np = w.points + dPts;
+    if (nb < 0) throw new Error('الرصيد لا يكفي');
+    if (np < 0) throw new Error('النقاط لا تكفي');
+    const entry = {
+      id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      at: Date.now(), type: d.type, balance: dBal, points: dPts,
+      orderId: d.orderId || null, note: d.note || '',
+    };
+    out = { balance: nb, points: np };
+    return { creditBalance: nb, points: np, walletLog: [entry, ...w.log].slice(0, WALLET_LOG_MAX) };
+  });
+  if (!res) throw new Error('العميل غير موجود');
+  return out;
 };
 
 /**

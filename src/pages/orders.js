@@ -24,7 +24,7 @@ import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
-import { orderPaidBreakdown } from '../services/payments-view.js';
+import { orderPaidBreakdown, overpaidBy } from '../services/payments-view.js';
 import { suggestCollection } from '../services/delivery-receipt.js';
 import { openDeliveryReceipt } from '../ui/delivery-receipt-dialog.js';
 import { createCustomerPicker } from '../ui/customer-picker.js';
@@ -792,6 +792,20 @@ function openOrderForm(existing = null) {
             return;
           }
 
+          /* تعديل طلب عليه مدفوعات: تخفيض الإجمالي دون المدفوع يصنع فائضاً يختفي (المتبقي لا يقل عن صفر) */
+          if (isEdit && statusSelect.value !== 'cancelled') {
+            try {
+              const pays = await paymentsRepoForDelete.findByOrder(existing.id);
+              const over = overpaidBy({ ...existing, amount: totals.amount, deposit }, pays);
+              if (over > 0 && !(await modal.confirm({
+                title: 'المدفوع أكبر من الإجمالي',
+                message: 'المدفوع حتى الآن أكبر من الإجمالي الجديد (' + formatEGP(totals.amount) + ') بمقدار ' +
+                  formatEGP(over) + '.\nسيظهر الفرق كفائض يجب ردّه للعميل. هل تريد المتابعة؟',
+                confirmText: 'نعم، احفظ', cancelText: 'تعديل',
+              }))) return;
+            } catch (e) { /* فشل الفحص لا يمنع الحفظ */ }
+          }
+
           /* إجمالي صفر: غالباً نُسي السعر أو أُدخل ناقصاً (كان يُحفظ بصمت) — وأرقام مستحيلة تُرفض */
           if (totals.amount > MAX_AMOUNT) { toast.warning('إجمالي الطلب كبير جداً — تأكد من الأسعار والكميات'); return; }
           if (totals.amount <= 0 && statusSelect.value !== 'cancelled') {
@@ -890,7 +904,11 @@ function openOrderForm(existing = null) {
           }                                                      /* المسلَّم/الملغى: تبقى خطته كما هي */
 
           try {
-            if (isEdit) { await orders.update(existing.id, data); toast.success('تم تحديث الطلب'); }
+            if (isEdit) {
+              const res = await orders.update(existing.id, data);
+              if (!res) { toast.danger('الطلب لم يعد موجوداً (حُذف من جهاز آخر؟) — لم يُحفظ شيء'); return; }
+              toast.success('تم تحديث الطلب');
+            }
             else {
               const created = await orders.create(data);
               const notify = await newOrderNotifyAction(created && created.id ? created : { ...data });

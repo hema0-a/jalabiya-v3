@@ -91,6 +91,28 @@ export function createRepository(storeName, options = {}) {
     },
 
     /**
+     * قراءة ثم تعديل ثم كتابة **داخل القفل** (ذرّي لكل سجل).
+     * استعملها لكل تعديل يعتمد على القيمة الحالية (كمية، رصيد، عدّاد)، لأن
+     * `find` ثم `update` منفصلين يُضيّعان تحديثاً عند ضغطتين متقاربتين.
+     * ⚠️ لا تستدعِ update/modify لنفس السجل داخل fn (سيتجمّد القفل).
+     * @param {string} id
+     * @param {(existing:Object) => (Object|null|Promise<Object|null>)} fn — تُرجع patch أو null لعدم التعديل
+     * @returns {Promise<Object|null>} السجل بعد التعديل (أو null إن لم يوجد)
+     */
+    async modify(id, fn) {
+      return runExclusive(storeName + ':' + id, async () => {
+        const existing = await idb.get(storeName, id);
+        if (!existing) return null;
+        const patch = await fn(existing);
+        if (!patch) return existing;
+        const updated = { ...existing, ...patch, id };
+        if (timestamps) updated.updatedAt = now();
+        await idb.put(storeName, updated);
+        return updated;
+      });
+    },
+
+    /**
      * حذف سجل بالمعرّف.
      * @param {string} id
      */

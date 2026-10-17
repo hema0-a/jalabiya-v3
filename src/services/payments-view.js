@@ -23,8 +23,15 @@ export function unrecordedDeposit(deposit, orderPayments) {
   const d = Number(deposit) || 0;
   if (d <= 0) return 0;
   const list = Array.isArray(orderPayments) ? orderPayments : [];
-  /* 1) علامة صريحة: دفعة عُلِّمت من النموذج بأنها المقدم نفسه */
-  if (list.some((p) => p && p.isDeposit === true)) return 0;
+  /* 1) علامة صريحة: دفعات عُلِّمت من النموذج بأنها المقدم نفسه.
+        تُخصم قيمتها من المقدم، والباقي (إن رُفع المقدم لاحقاً في الطلب) يبقى غير مسجّل فلا يضيع.
+        (كان وجود أي دفعة معلَّمة يُصفّر المقدم كله: مقدم 500 ودفعة معلَّمة 200 ← يُحسب المدفوع 200 فقط) */
+  const flagged = list.filter((p) => p && p.isDeposit === true);
+  if (flagged.length > 0) {
+    const flaggedSum = flagged.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const rest = Math.round((d - flaggedSum) * 100) / 100;
+    return rest > AMOUNT_EPS ? rest : 0;
+  }
   /* 2) توافق مع البيانات القديمة فقط (دفعات بلا حقل isDeposit): مطابقة المبلغ.
         الدفعات الجديدة تحمل isDeposit=false فلا تُطابَق، فلا يضيع المقدم
         إن دفع العميل لاحقاً دفعة بمبلغ المقدم نفسه. */
@@ -44,6 +51,20 @@ export function orderPaidBreakdown(order, orderPayments) {
   const recorded = list.reduce((s, p) => s + (Number(p && p.amount) || 0), 0);
   const deposit = unrecordedDeposit(order && order.deposit, list);
   return { recorded, deposit, paid: recorded + deposit };
+}
+
+/**
+ * مقدار ما يتجاوزه المدفوع من إجمالي الطلب (0 إن لم يتجاوز).
+ * يُستعمل لتنبيه المستخدم قبل حفظ دفعة أو تخفيض إجمالي طلب عليه مدفوعات.
+ * @param {{amount?:number, deposit?:number}} order — الطلب (بالإجمالي/المقدم المراد فحصهما)
+ * @param {Array} orderPayments — دفعات هذا الطلب فقط
+ * @returns {number} الفائض (بدقة قرشين)
+ */
+export function overpaidBy(order, orderPayments) {
+  const total = Number(order && order.amount) || 0;
+  const paid = orderPaidBreakdown(order, orderPayments).paid;
+  const over = Math.round((paid - total) * 100) / 100;
+  return over > AMOUNT_EPS ? over : 0;
 }
 
 /**

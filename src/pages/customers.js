@@ -15,6 +15,7 @@ import { customers, walletOf, POSTURE_OPTIONS, buildContactsVcf } from '../data/
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { quotes } from '../data/repos/quotes.js';
+import { appointments } from '../data/repos/appointments.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal } from '../ui/modal.js';
@@ -477,7 +478,15 @@ function openCustomerForm(existing = null) {
             notes: notesInput.value.trim(),
             vip: vipCheckbox.checked,
             image: imagePicker.getValue() || '',
-            measurements: measurements.getValues(),
+            /* ندمج مع المحفوظ: الحقول المعطَّلة/المحذوفة من الإعدادات لا تظهر في النموذج،
+               وكان الحفظ يستبدل كل المقاسات بالظاهر فقط فتضيع قيمها بصمت. */
+            measurements: (() => {
+              const shown = new Set(state.measurementFields.map((f) => f.id));
+              const kept = {};
+              const old = (isEdit && existing.measurements && typeof existing.measurements === 'object') ? existing.measurements : {};
+              Object.keys(old).forEach((k) => { if (!shown.has(k)) kept[k] = old[k]; });
+              return { ...kept, ...measurements.getValues() };
+            })(),
             familyHeadId: familySelect.value || '',
             posture: postureChecks.filter((x) => x.cb.checked).map((x) => x.id),
             postureNote: postureNoteInput.value.trim(),
@@ -577,14 +586,20 @@ async function deleteCustomer(customer) {
   /* تنبيه بالسجلات المرتبطة: تبقى في التطبيق بلا اسم عميل حتى يُسترجع من السلة */
   let linkedNote = '';
   try {
-    const [co, cp, cq] = await Promise.all([
+    const [co, cp, cq, ca] = await Promise.all([
       orders.findByCustomer(customer.id),
       payments.findByCustomer(customer.id),
       quotes.findByIndex('by_customerId', customer.id),
+      appointments.findByCustomer(customer.id),
     ]);
-    if (co.length > 0 || cp.length > 0 || cq.length > 0) {
+    /* أفراد العائلة المرتبطون به كرب عائلة (كانوا يبقون مشيرين لعميل محذوف بلا تنبيه) */
+    const fam = state.customers.filter((x) => x.familyHeadId === customer.id).length;
+    if (co.length > 0 || cp.length > 0 || cq.length > 0 || ca.length > 0 || fam > 0) {
       linkedNote = '\n\n⚠️ له ' + co.length + ' طلب و' + cp.length +
-        ' دفعة' + (cq.length ? ' و' + cq.length + ' عرض سعر' : '') + ' ستبقى في التطبيق دون اسم عميل. يمكنك استرجاعه من سلة المحذوفات لإعادة الربط.';
+        ' دفعة' + (cq.length ? ' و' + cq.length + ' عرض سعر' : '') + (ca.length ? ' و' + ca.length + ' موعد' : '') +
+        ' ستبقى في التطبيق دون اسم عميل.' +
+        (fam ? '\n👨‍👩‍👧 ويرتبط به ' + fam + ' من أفراد العائلة (سيبقون بلا رب عائلة).' : '') +
+        '\nيمكنك استرجاعه من سلة المحذوفات لإعادة الربط.';
     }
   } catch (e) { /* نكمل بدون التنبيه */ }
   const ok = await modal.confirm({

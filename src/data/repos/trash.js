@@ -8,6 +8,7 @@
 import { createRepository } from '../repository.js';
 import { STORES, LIMITS } from '../../core/config.js';
 import * as idb from '../idb.js';
+import { customers as customersRepo } from './customers.js';
 
 const base = createRepository(STORES.TRASH);
 
@@ -58,8 +59,18 @@ export const trash = {
   async restore(trashId) {
     const item = await base.find(trashId);
     if (!item || !item.originalStore || !item.data) return null;
+    const data = { ...item.data };
+    /* دفعة «من الرصيد» حُذفت فأُعيد مبلغها للمحفظة (creditRefunded): استرجاعها يخصم المبلغ ثانيةً،
+       وإن لم يكفِ الرصيد يُرفض الاسترجاع قبل أي كتابة. عناصر السلة القديمة بلا العلامة لا تتأثر. */
+    if (item.originalStore === STORES.PAYMENTS && data.fromCredit && data.creditRefunded) {
+      await customersRepo.walletAdjust(data.customerId, {
+        balance: -(Number(data.amount) || 0), type: 'adjust', orderId: data.orderId || null,
+        note: 'خصم: استرجاع دفعة من الرصيد',
+      });
+    }
+    delete data.creditRefunded;
     /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
-    await idb.put(item.originalStore, { ...item.data, updatedAt: Date.now() });
+    await idb.put(item.originalStore, { ...data, updatedAt: Date.now() });
     await base.remove(trashId);
     return item.data;
   },

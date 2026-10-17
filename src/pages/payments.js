@@ -18,7 +18,7 @@ import { createCustomerPicker } from '../ui/customer-picker.js';
 import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
-import { withDepositPayments } from '../services/payments-view.js';
+import { withDepositPayments, overpaidBy } from '../services/payments-view.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 
 /* --- مفتاح المسودة --- */
@@ -151,6 +151,8 @@ function openPaymentForm(existing = null) {
     className: 'input', type: 'number', placeholder: '0', min: '0', step: '0.01',
   });
   if (isEdit && existing.amount != null) amountInput.value = String(existing.amount);
+  /* دفعة «من رصيد العميل»: المبلغ مرتبط بحركة في المحفظة، فتعديله يفصل الاثنين → يُقفل (احذفها لإعادة الرصيد) */
+  if (isEdit && existing.fromCredit) amountInput.disabled = true;
 
   /* طريقة الدفع */
   const methodSelect = el('select', { className: 'select' });
@@ -219,9 +221,28 @@ function openPaymentForm(existing = null) {
             notes: notesInput.value.trim(),
             isDeposit: !!orderId && depositCheck.checked,
           };
+          /* فائض: هل سيتجاوز مجموع المدفوع إجمالي الطلب؟ (كان يُحفظ بصمت ويُخفى بأن المتبقي لا يقل عن صفر) */
+          if (orderId) {
+            try {
+              const ord = await orders.find(orderId);
+              if (ord && ord.status !== 'cancelled') {
+                const others = (await payments.findByOrder(orderId)).filter((p) => !(isEdit && p.id === existing.id));
+                const over = overpaidBy(ord, others.concat([{ ...data, id: isEdit ? existing.id : 'new' }]));
+                if (over > 0 && !(await modal.confirm({
+                  title: 'دفعة أكبر من المتبقي',
+                  message: 'بهذه الدفعة يصير المدفوع أكبر من إجمالي الطلب (' + formatEGP(ord.amount) + ') بمقدار ' +
+                    formatEGP(over) + '.\nهل الرقم صحيح؟',
+                  confirmText: 'نعم، احفظ', cancelText: 'تعديل المبلغ',
+                }))) return;
+              }
+            } catch (e) { /* فشل الفحص لا يمنع الحفظ */ }
+          }
           try {
-            if (isEdit) { await payments.update(existing.id, data); toast.success('تم التحديث'); }
-            else { await payments.create(data); toast.success('تم الإضافة'); }
+            if (isEdit) {
+              const res = await payments.update(existing.id, data);
+              if (!res) { toast.danger('الدفعة لم تعد موجودة (حُذفت من جهاز آخر؟)'); return; }
+              toast.success('تم التحديث');
+            } else { await payments.create(data); toast.success('تم الإضافة'); }
             draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
@@ -300,16 +321,31 @@ async function deletePayment(p) {
   const c = state.customerMap[p.customerId];
   const ok = await modal.confirm({
     title: 'حذف دفعة',
-    message: 'حذف دفعة "' + (c ? c.name : '') + '" بمبلغ ' + formatEGP(p.amount) + '؟',
+    message: 'حذف دفعة "' + (c ? c.name : '') + '" بمبلغ ' + formatEGP(p.amount) + '؟' +
+      (p.fromCredit ? '\n\n💳 هذه الدفعة خُصمت من رصيد العميل، وسيُعاد إليه ' + formatEGP(p.amount) + '.' : ''),
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
+  let refunded = false;
   try {
-    await trash.addToTrash('payments', p);
+    /* دفعة من الرصيد: نُعيد المبلغ للمحفظة أولاً (كان الرصيد يضيع عند حذفها) */
+    if (p.fromCredit && p.customerId && Number(p.amount) > 0) {
+      await customers.walletAdjust(p.customerId, {
+        balance: Number(p.amount), type: 'adjust', orderId: p.orderId || null,
+        note: 'استرجاع: حذف دفعة من الرصيد',
+      });
+      refunded = true;
+    }
+    await trash.addToTrash('payments', refunded ? { ...p, creditRefunded: true } : p);
     await payments.remove(p.id);
-    toast.success('تم الحذف');
+    toast.success(p.fromCredit ? 'تم الحذف وأُعيد المبلغ لرصيد العميل' : 'تم الحذف');
     await refreshAll();
-  } catch (err) { toast.danger('فشل: ' + err.message); }
+  } catch (err) {
+    if (refunded) {   // فشل الحذف بعد الإعادة: نتراجع كي لا يتضاعف الرصيد
+      try { await customers.walletAdjust(p.customerId, { balance: -Number(p.amount), type: 'adjust', note: 'تراجع: فشل حذف الدفعة' }); } catch (e2) { /* ignore */ }
+    }
+    toast.danger('فشل: ' + err.message);
+  }
 }
 
 /* ==========================================================================

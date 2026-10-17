@@ -103,10 +103,10 @@ export const inventory = {
    * @returns {Promise<Object|null>}
    */
   async adjustStock(id, delta) {
-    const item = await base.find(id);
-    if (!item) return null;
-    const newQty = Math.max(0, Number(item.quantity || 0) + Number(delta || 0));
-    return base.update(id, { quantity: newQty });
+    /* ذرّي: القراءة والكتابة داخل القفل (ضغطات +1 المتتالية كانت تُضيّع تحديثات) */
+    return base.modify(id, (item) => ({
+      quantity: Math.max(0, Number(item.quantity || 0) + Number(delta || 0)),
+    }));
   },
 
   /**
