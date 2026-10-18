@@ -140,6 +140,53 @@ customers.walletAdjust = async function walletAdjust(id, d) {
 };
 
 /**
+ * ينقل كل محفظة عميل (رصيد + نقاط) إلى عميل آخر — يُستعمل عند دمج عميلين (v3.3.80).
+ * الترتيب مقصود: الإضافة للباقي أولاً ثم الخصم من المدموج؛ فأسوأ انقطاع يترك المبلغ مكرراً ظاهراً
+ * (يمكن تصحيحه) لا ضائعاً. إن فشل الخصم يُعكس الإيداع قبل رمي الخطأ. تُكرَّر المحاولة إن وصلت حركة
+ * متزامنة للمصدر أثناء النقل، وإن بقي شيء بعدها يُرمى خطأ (فلا يُحذف حساب فيه مال).
+ * كل خطوة عبر walletAdjust فتُسجَّل في walletLog والدفتر الظلّي كالمعتاد.
+ * @param {string} fromId — العميل المدموج (يُفرَّغ)
+ * @param {string} toId — العميل الباقي (يستلم)
+ * @param {{fromName?:string, toName?:string}} [names] — للملاحظات فقط
+ * @returns {Promise<{balance:number, points:number, moved:boolean}>}
+ * @throws {Error} إن تعذّر النقل الكامل
+ */
+customers.walletTransfer = async function walletTransfer(fromId, toId, names = {}) {
+  if (!fromId || !toId || fromId === toId) throw new Error('عميلان مختلفان مطلوبان للنقل');
+  if (!(await base.find(toId))) throw new Error('العميل الباقي غير موجود');
+  let totalB = 0; let totalP = 0;
+  for (let round = 0; round < 3; round++) {
+    const from = await base.find(fromId);
+    if (!from) break;
+    const w = walletOf(from);
+    const b = r2(w.balance); const p = Math.max(0, Math.round(w.points));
+    if (!(b > 0) && !(p > 0)) {
+      return { balance: totalB, points: totalP, moved: totalB > 0 || totalP > 0 };
+    }
+    await customers.walletAdjust(toId, {
+      balance: b, points: p, type: 'adjust',
+      note: 'محفظة واردة من دمج «' + (names.fromName || '') + '»',
+    });
+    try {
+      await customers.walletAdjust(fromId, {
+        balance: -b, points: -p, type: 'adjust',
+        note: 'نُقلت المحفظة عند الدمج إلى «' + (names.toName || '') + '»',
+      });
+    } catch (e) {
+      try {
+        await customers.walletAdjust(toId, { balance: -b, points: -p, type: 'adjust', note: 'تراجع عن نقل محفظة لم يكتمل' });
+      } catch (e2) { console.error('[customers] تعذّر عكس الإيداع بعد فشل نقل المحفظة:', e2); }
+      throw e;
+    }
+    totalB = r2(totalB + b); totalP += p;
+  }
+  const left = await base.find(fromId);
+  const lw = left ? walletOf(left) : { balance: 0, points: 0 };
+  if (lw.balance > 0 || lw.points > 0) throw new Error('تعذّر نقل المحفظة كاملة — أعد المحاولة');
+  return { balance: totalB, points: totalP, moved: totalB > 0 || totalP > 0 };
+};
+
+/**
  * شحن رصيد عميل (دفع مقدّم).
  * @param {string} id
  * @param {number} amount

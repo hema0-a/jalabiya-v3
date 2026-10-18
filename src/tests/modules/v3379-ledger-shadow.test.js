@@ -26,6 +26,7 @@ const throwsAsync = async (fn) => { try { await fn(); return false; } catch (e) 
 async function resetAll() {
   await ledgerRepo.clearAll();
   await idb.clear('customers');
+  await idb.clear('inventory');   /* الافتتاح يقرأ المخزون أيضاً منذ 3.3.80 */
   _resetShadowState();
   resetShadowFailures();
   reportDeps.syncState = () => ({ usedCloud: false, dirtySince: null });
@@ -157,7 +158,7 @@ register('v3.3.79 ledger — الكتابة الظلّية من المحفظة',
   let res = null; let threw = false;
   try { res = await customers.walletTopUp(c.id, 10); } catch (e) { threw = true; }
   shadowDeps.append = origAppend;
-  t.test('10. فشل الدفتر لا يُفشل شحن المحفظة', !threw && res && res.balance === 80 + 10 - 0 + 0 || (!threw && !!res));
+  t.test('10. فشل الدفتر لا يُفشل شحن المحفظة', !threw && !!res && res.balance === 80);
   t.test('11. العدّاد القديم سجّل الشحن رغم فشل الدفتر', (await customers.find(c.id)).creditBalance === 80);
   t.test('12. عدّاد الفشل زاد وسيظهر في التقرير', getShadowFailures() === 1);
   const rep = buildShadowReport(await customers.list(), await ledgerRepo.list());

@@ -11,7 +11,7 @@
    ========================================================================== */
 
 import { ledgerRepo } from '../data/repos/ledger.js';
-import { makeEntry, toMinor, nextSeq } from './ledger.js';
+import { makeEntry, toMinor, nextSeq, ENTRY_TYPES } from './ledger.js';
 
 const K_DEVICE = 'jalabiya_v3_device_id';
 const K_FAIL = 'jalabiya_v3_ledger_shadow_fail';
@@ -92,6 +92,45 @@ export function recordWalletMove(customerId, log) {
       out.failed++;
       bumpFailures();
       console.warn('[ledger-shadow] تعذّرت الكتابة الظلّية (العملية الأصلية سليمة):', e);
+    }
+    return out;
+  };
+  queue = queue.catch(() => {}).then(task);
+  return queue;
+}
+
+/**
+ * يُسجَّل أثر حركة مخزون في الدفتر (v3.3.80). لا يرمي أبداً.
+ * الكمية القديمة في الصنف تبقى المرجع؛ هذا أثر ظلّي للمقارنة فقط.
+ * @param {string} itemId — معرّف الصنف
+ * @param {number} deltaQty — التغيير بوحدة الصنف (موجب إضافة، سالب صرف)؛ صفر لا يُسجَّل
+ * @param {{type?:string, moveId?:string, note?:string, at?:number}} [opts]
+ *   moveId يجعل المفتاح ثابتاً (استدعاء مكرر لا يكرّر السطر)؛ وإلا يُولَّد معرّف فريد للحركة.
+ * @returns {Promise<{written:number, skipped:number, failed:number}>}
+ */
+export function recordStockMove(itemId, deltaQty, opts = {}) {
+  const task = async () => {
+    const out = { written: 0, skipped: 0, failed: 0 };
+    try {
+      if (!itemId) { out.failed++; bumpFailures(); return out; }
+      const delta = toMinor('stock', deltaQty);
+      if (!delta) return out;
+      const dev = getDeviceId();
+      const moveId = opts.moveId ? String(opts.moveId) : 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const type = ENTRY_TYPES.includes(opts.type) ? opts.type : 'adjust';
+      const seq = await takeSeq(dev);
+      const e = makeEntry({
+        unit: 'stock', acct: String(itemId), delta, type,
+        key: 's:' + moveId,
+        note: String(opts.note || '').slice(0, 200),
+        at: Number.isFinite(opts.at) ? opts.at : Date.now(),
+      }, { dev, seq });
+      const r = await shadowDeps.append(e);
+      if (r.added) out.written++; else out.skipped++;
+    } catch (e) {
+      out.failed++;
+      bumpFailures();
+      console.warn('[ledger-shadow] تعذّرت كتابة حركة المخزون (العملية الأصلية سليمة):', e);
     }
     return out;
   };

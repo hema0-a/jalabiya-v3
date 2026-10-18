@@ -9,6 +9,7 @@ import { createRepository } from '../repository.js';
 import { STORES, LIMITS } from '../../core/config.js';
 import * as idb from '../idb.js';
 import { customers as customersRepo } from './customers.js';
+import { recordStockMove } from '../../services/ledger-shadow.js';
 
 const base = createRepository(STORES.TRASH);
 
@@ -71,6 +72,10 @@ export const trash = {
     delete data.creditRefunded;
     /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
     await idb.put(item.originalStore, { ...data, updatedAt: Date.now() });
+    /* الدفتر الظلّي (v3.3.80): استرجاع صنف يعيد كميته؛ المعرّف مشتق من عنصر السلة فلا يتكرر */
+    if (item.originalStore === STORES.INVENTORY && Number(data.quantity) > 0) {
+      await recordStockMove(data.id, Number(data.quantity), { type: 'adjust', moveId: 'restore:' + trashId, note: 'استرجاع صنف من السلة' });
+    }
     await base.remove(trashId);
     return item.data;
   },

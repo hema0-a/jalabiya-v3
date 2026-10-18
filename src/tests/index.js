@@ -89,5 +89,6 @@ import './modules/audit-phase2.test.js';
 
 import './modules/v3378-ledger-phase0.test.js';
 import './modules/v3379-ledger-shadow.test.js';
+import './modules/v3380-stock-shadow-merge.test.js';
 
 export { runAll, register } from './registry.js';

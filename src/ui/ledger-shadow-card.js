@@ -1,7 +1,7 @@
 /* ==========================================================================
    ledger-shadow-card.js — بطاقة «مطابقة العدّادات للدفتر» في صيانة البيانات (v3.3.79)
    ==========================================================================
-   تعرض: هل تتطابق عدّادات المحفظة والنقاط القديمة مع مجموع الدفتر الجديد؟ وإن اختلفت تعرض
+   تعرض: هل تتطابق عدّادات المحفظة والنقاط وكميات المخزون القديمة مع مجموع الدفتر الجديد؟ وإن اختلفت تعرض
    الفروق بوضوح (العميل، الوحدة، القديم، الدفتر، الفرق، السبب). الوضع الظلّي: العدّادات القديمة
    هي المرجع، والبطاقة للمراقبة فقط. لا innerHTML: كل النصوص عبر el().
    ========================================================================== */
@@ -42,8 +42,8 @@ export function buildLedgerShadowCard() {
       clear(body);
       title.textContent = (r.ok ? '✅' : '⚠️') + ' مطابقة الدفتر الجديد (وضع المراقبة)';
       body.appendChild(el('div', { className: 'ledcard__summary', 'data-role': 'ledger-summary' }, r.ok
-        ? 'العدّادات القديمة تطابق مجموع الدفتر تماماً (' + r.customers + ' عميل · ' + r.entries + ' سطر).'
-        : 'يوجد ' + r.mismatches + ' فرق بين العدّادات والدفتر (' + r.customers + ' عميل · ' + r.entries + ' سطر).'));
+        ? 'العدّادات والكميات القديمة تطابق مجموع الدفتر تماماً (' + r.customers + ' عميل · ' + r.items + ' صنف · ' + r.entries + ' سطر).'
+        : 'يوجد ' + r.mismatches + ' فرق بين العدّادات والدفتر (' + r.customers + ' عميل · ' + r.items + ' صنف · ' + r.entries + ' سطر).'));
       if (r.failures > 0) {
         body.appendChild(el('div', { className: 'ledcard__warn', 'data-role': 'ledger-failures' },
           '⚠️ فشلت الكتابة في الدفتر ' + r.failures + ' مرة على هذا الجهاز (العمليات الأصلية سليمة). أعد الضبط أو راجع الفروق.'));
@@ -54,7 +54,7 @@ export function buildLedgerShadowCard() {
       if (r.rows.length) {
         const list = el('div', { className: 'ledcard__rows', 'data-role': 'ledger-rows' });
         r.rows.slice(0, MAX_ROWS).forEach((row) => list.appendChild(el('div', { className: 'ledcard__row', 'data-kind': row.kind }, [
-          el('div', { className: 'ledcard__who' }, (row.name || 'عميل غير معروف') + ' — ' + UNITS[row.unit].label),
+          el('div', { className: 'ledcard__who' }, (row.name || (row.unit === 'stock' ? 'صنف غير معروف' : 'عميل غير معروف')) + ' — ' + UNITS[row.unit].label),
           el('div', { className: 'ledcard__nums' },
             'القديم: ' + formatAmount(row.unit, row.legacy) + ' · الدفتر: ' + formatAmount(row.unit, row.ledger)
             + ' · الفرق: ' + formatAmount(row.unit, row.diff)),

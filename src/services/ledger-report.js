@@ -11,6 +11,7 @@
    ========================================================================== */
 
 import { customers as customersRepo, walletOf } from '../data/repos/customers.js';
+import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { ledgerRepo } from '../data/repos/ledger.js';
 import * as dirty from '../sync/dirty-state.js';
 import {
@@ -18,8 +19,9 @@ import {
 } from './ledger.js';
 import { getDeviceId, getShadowFailures, shadowDeps, _resetShadowState } from './ledger-shadow.js';
 
-/** وحدات هذه المرحلة (المخزون في 3.3.80). */
-export const SHADOW_UNITS = Object.freeze(['wallet', 'points']);
+/** وحدات الوضع الظلّي: المحفظة والنقاط (حسابها العميل) والمخزون (حسابه الصنف، v3.3.80). */
+export const SHADOW_UNITS = Object.freeze(['wallet', 'points', 'stock']);
+const CUSTOMER_UNITS = Object.freeze(['wallet', 'points']);
 
 const OWNER_KEY = 'jalabiya_v3_owner_uid';
 
@@ -39,9 +41,35 @@ function legacyOf(c) {
   return { wallet: toMinor('wallet', w.balance), points: w.points };
 }
 
+/** كمية صنف بأصغر وحدة (الألف). */
+function stockLegacy(item) {
+  return toMinor('stock', Number(item && item.quantity) || 0);
+}
+
+/**
+ * كل «الحسابات» المقارَنة: عملاء (محفظة/نقاط) وأصناف (مخزون إن مُرّرت).
+ * @returns {Array<{acct:string, name:string, unit:string, legacy:number}>}
+ */
+function legacyAccounts(custs, items) {
+  const out = [];
+  for (const c of custs) {
+    if (!c || c.id == null) continue;
+    const legacy = legacyOf(c);
+    for (const unit of CUSTOMER_UNITS) out.push({ acct: String(c.id), name: c.name || '', unit, legacy: legacy[unit] });
+  }
+  if (Array.isArray(items)) {
+    for (const it of items) {
+      if (!it || it.id == null) continue;
+      out.push({ acct: String(it.id), name: it.name || '', unit: 'stock', legacy: stockLegacy(it) });
+    }
+  }
+  return out;
+}
+
 /**
  * يكتب الأسطر الافتتاحية الناقصة.
- * @param {{customers?:Array, entries?:Array}} [input] — يُقرآن من المخزن إن لم يُمرَّرا
+ * @param {{customers?:Array, entries?:Array, items?:Array}} [input] — يُقرآن من المخزن إن لم يُمرَّرا؛
+ *   إن مُرِّر customers بلا items لا يُفتتح المخزون (تحكّم دقيق للاختبار)، وإن لم يُمرَّر شيء يُقرأ الكل.
  * @returns {Promise<{status:'written'|'nothing'|'gated', written:number, reason?:string, gatedBy?:string}>}
  */
 export async function ensureOpening(input = {}) {
@@ -50,6 +78,8 @@ export async function ensureOpening(input = {}) {
     return { status: 'gated', written: 0, gatedBy: 'sync-dirty', reason: 'توجد تغييرات لم تُرفع إلى السحابة — ارفعها أولاً ثم أعد المحاولة' };
   }
   const custs = Array.isArray(input.customers) ? input.customers : await customersRepo.list();
+  const items = Array.isArray(input.items) ? input.items
+    : (Array.isArray(input.customers) ? [] : await inventoryRepo.list());
   const entries = Array.isArray(input.entries) ? input.entries : await ledgerRepo.list();
   const bal = balances(entries);
   const have = new Set(entries.map((e) => e.id));
@@ -57,21 +87,17 @@ export async function ensureOpening(input = {}) {
   let written = 0;
   let seq = (entries.filter((e) => e.dev === dev).reduce((m, e) => Math.max(m, e.seq), -1)) + 1;
 
-  for (const c of custs) {
-    if (!c || c.id == null) continue;
-    const legacy = legacyOf(c);
-    for (const unit of SHADOW_UNITS) {
-      const key = 'opening:' + unit + ':' + c.id;
-      if (have.has('k:' + key)) continue;
-      const delta = legacy[unit] - ((bal.get(accountKey(unit, String(c.id))) || { balance: 0 }).balance);
-      if (!delta) continue;
-      const e = makeEntry({
-        unit, acct: String(c.id), delta, type: 'opening', key,
-        note: 'رصيد افتتاحي من العدّاد القديم', at: Date.now(),
-      }, { dev, seq: seq++ });
-      const r = await shadowDeps.append(e);
-      if (r.added) written++;
-    }
+  for (const a of legacyAccounts(custs, items)) {
+    const key = 'opening:' + a.unit + ':' + a.acct;
+    if (have.has('k:' + key)) continue;
+    const delta = a.legacy - ((bal.get(accountKey(a.unit, a.acct)) || { balance: 0 }).balance);
+    if (!delta) continue;
+    const e = makeEntry({
+      unit: a.unit, acct: a.acct, delta, type: 'opening', key,
+      note: 'رصيد افتتاحي من العدّاد القديم', at: Date.now(),
+    }, { dev, seq: seq++ });
+    const r = await shadowDeps.append(e);
+    if (r.added) written++;
   }
   if (written > 0) _resetShadowState();
   return { status: written ? 'written' : 'nothing', written };
@@ -92,28 +118,25 @@ export async function ensureOpening(input = {}) {
 export function buildShadowReport(customerList, entries, extra = {}) {
   const custs = Array.isArray(customerList) ? customerList : [];
   const list = Array.isArray(entries) ? entries : [];
+  const items = Array.isArray(extra.items) ? extra.items : null;   /* null = المخزون خارج هذا التقرير */
+  const units = items ? SHADOW_UNITS : CUSTOMER_UNITS;
   const bal = balances(list);
   const hasOpening = new Set(list.filter((e) => e.type === 'opening').map((e) => e.unit + ':' + e.acct));
   const known = new Set();
   const rows = [];
 
-  for (const c of custs) {
-    if (!c || c.id == null) continue;
-    const acct = String(c.id);
-    known.add(acct);
-    const legacy = legacyOf(c);
-    for (const unit of SHADOW_UNITS) {
-      const ledger = (bal.get(accountKey(unit, acct)) || { balance: 0 }).balance;
-      const lg = legacy[unit];
-      if (ledger === lg) continue;
-      let kind;
-      if (!hasOpening.has(unit + ':' + acct) && ledger === 0) kind = 'no_opening';
-      else kind = ledger < lg ? 'ledger_less' : 'ledger_more';
-      rows.push({ acct, name: c.name || '', unit, legacy: lg, ledger, diff: ledger - lg, kind });
-    }
+  for (const a of legacyAccounts(custs, items)) {
+    known.add(a.unit === 'stock' ? 'stock:' + a.acct : 'cust:' + a.acct);
+    const ledger = (bal.get(accountKey(a.unit, a.acct)) || { balance: 0 }).balance;
+    if (ledger === a.legacy) continue;
+    let kind;
+    if (!hasOpening.has(a.unit + ':' + a.acct) && ledger === 0) kind = 'no_opening';
+    else kind = ledger < a.legacy ? 'ledger_less' : 'ledger_more';
+    rows.push({ acct: a.acct, name: a.name, unit: a.unit, legacy: a.legacy, ledger, diff: ledger - a.legacy, kind });
   }
   for (const r of bal.values()) {
-    if (!SHADOW_UNITS.includes(r.unit) || known.has(r.acct) || r.balance === 0) continue;
+    if (!units.includes(r.unit) || r.balance === 0) continue;
+    if (known.has((r.unit === 'stock' ? 'stock:' : 'cust:') + r.acct)) continue;
     rows.push({ acct: r.acct, name: '', unit: r.unit, legacy: 0, ledger: r.balance, diff: r.balance, kind: 'orphan_account' });
   }
   const counts = {};
@@ -122,7 +145,7 @@ export function buildShadowReport(customerList, entries, extra = {}) {
   const failures = getShadowFailures();
   return {
     ok: rows.length === 0 && failures === 0 && anomalies.filter((a) => a.severity === 'warn').length === 0,
-    customers: custs.length, entries: list.length, rows, mismatches: rows.length, anomalies, failures, counts,
+    customers: custs.length, items: items ? items.length : 0, entries: list.length, rows, mismatches: rows.length, anomalies, failures, counts,
   };
 }
 
@@ -131,13 +154,13 @@ export const KIND_LABELS = Object.freeze({
   no_opening: 'لم يُكتب السطر الافتتاحي بعد',
   ledger_less: 'الدفتر أقل من العدّاد',
   ledger_more: 'الدفتر أكثر من العدّاد',
-  orphan_account: 'حساب عميل غير موجود (محذوف أو مدموج)',
+  orphan_account: 'حساب غير موجود (عميل أو صنف محذوف/مدموج)',
 });
 
 /** عرض مقدار بالوحدة البشرية مع اسم الوحدة. */
 export function formatAmount(unit, minor) {
   const v = fromMinor(unit, minor);
-  const label = unit === 'wallet' ? 'ج.م' : 'نقطة';
+  const label = unit === 'wallet' ? 'ج.م' : (unit === 'stock' ? 'وحدة' : 'نقطة');
   return String(Number(v.toFixed(2))) + ' ' + label;
 }
 
@@ -146,8 +169,8 @@ export function formatAmount(unit, minor) {
  * @returns {Promise<Object>}
  */
 export async function loadShadowReport() {
-  const [custs, entries] = await Promise.all([customersRepo.list(), ledgerRepo.list()]);
-  return buildShadowReport(custs, entries);
+  const [custs, entries, items] = await Promise.all([customersRepo.list(), ledgerRepo.list(), inventoryRepo.list()]);
+  return buildShadowReport(custs, entries, { items });
 }
 
 /**

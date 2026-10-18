@@ -12,7 +12,7 @@
 
 import { el, clear } from '../core/dom.js';
 import { formatEGP } from '../core/utils.js';
-import { customers } from '../data/repos/customers.js';
+import { customers, walletOf } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
 import { appointments } from '../data/repos/appointments.js';
@@ -22,7 +22,8 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { scanIntegrity, ISSUE_LABELS } from '../services/data-integrity.js';
-import { findDuplicateGroups, pickPrimary, mergeFields, CUSTOMER_LINKED_STORES } from '../services/customer-merge.js';
+import { findDuplicateGroups, pickPrimary } from '../services/customer-merge.js';
+import { mergeCustomers } from '../services/customer-merge-exec.js';
 import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { listBackups, verifyBackup, getLastVerification } from '../services/auto-backup.js';
 import { formatDate } from '../core/utils.js';
@@ -186,16 +187,14 @@ function backupVerifySection() {
 
 /* ---------- 3) دمج المكررين ---------- */
 async function mergeGroup(primary, dups) {
-  const patch = mergeFields(primary, dups);
-  if (Object.keys(patch).length) await customers.update(primary.id, patch);
-  for (const d of dups) {
-    for (const name of CUSTOMER_LINKED_STORES) {
-      const rows = await REPOS[name].findByIndex('by_customerId', d.id);
-      for (const r of rows) await REPOS[name].update(r.id, { customerId: primary.id });
-    }
-    await trash.addToTrash('customers', d);
-    await customers.remove(d.id);
-  }
+  return mergeCustomers(primary, dups);   /* ينقل المحفظة أولاً (v3.3.80) ثم السجلات ثم السلة */
+}
+
+/** نص يصف محافظ المكررين لرسالة التأكيد (فارغ إن لم يكن فيها شيء). */
+function walletsNote(dups) {
+  const parts = dups.map((d) => ({ d, w: walletOf(d) })).filter((x) => x.w.balance > 0 || x.w.points > 0)
+    .map((x) => x.d.name + ': ' + formatEGP(x.w.balance) + (x.w.points > 0 ? ' و' + x.w.points + ' نقطة' : ''));
+  return parts.length ? ' وتُنقل محفظتهم (' + parts.join('، ') + ')' : '';
 }
 
 function groupCard(g) {
@@ -219,7 +218,7 @@ function groupCard(g) {
       const dups = g.customers.filter((c) => c.id !== chosen);
       const ok = await modal.confirm({
         title: 'دمج العملاء',
-        message: 'ستُنقل كل طلبات ودفعات ومواعيد وعروض أسعار (' + dups.map((d) => d.name).join('، ') + ') إلى «' + primary.name + '»، ويُنقل المكرر لسلة المحذوفات.',
+        message: 'ستُنقل كل طلبات ودفعات ومواعيد وعروض أسعار (' + dups.map((d) => d.name).join('، ') + ') إلى «' + primary.name + '»،' + walletsNote(dups) + ' ويُنقل المكرر لسلة المحذوفات.',
         confirmText: 'ادمج', cancelText: 'إلغاء', danger: true,
       });
       if (!ok) return;
