@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.77 — الفحص العميق (المرحلة 2): الأرصدة والمزامنة والإلغاء
+   الإصدار: v3.3.78 — الفحص العميق (المرحلة 2): الأرصدة والمزامنة والإلغاء
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.77';
+const CACHE_VERSION = 'v3.3.78';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -150,6 +150,7 @@ const PRECACHE_URLS = [
   './src/services/invoice-print.js',
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
+  './src/services/ledger.js',
   './src/services/loans-calculator.js',
   './src/services/media-diagnostic.js',
   './src/services/message-composer.js',
