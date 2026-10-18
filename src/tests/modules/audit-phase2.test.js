@@ -342,7 +342,7 @@ register('phase2: نقاط الولاء تتبع الطلب (إعادة فتح/�
     /* ما أنفقه العميل لا يُسترد ولا تنزل نقاطه تحت صفر */
     await customers.walletAdjust(cust.id, { points: -25, type: 'redeem' });
     await orders.update(o.id, { status: 'cancelled' });
-    await t.test('7. أنفق 25 من 30 ثم أُلغي الطلب: تُسحب المتبقية فقط (5) ولا تصير سالبة', (await pts()) === 0 && (await orders.find(o.id)).pointsAwarded === 0);
+    await t.test('7. أنفق 25 من 30 ثم أُلغي الطلب: تُسحب المتبقية فقط (5) ولا تصير سالبة، والـ25 المنفقة تبقى منسوبة للطلب (v3.3.77)', (await pts()) === 0 && (await orders.find(o.id)).pointsAwarded === 25);
 
     const o2 = await mk(400);
     await orders.update(o2.id, { status: 'delivered' });
@@ -444,5 +444,83 @@ register('phase2: مؤقت العمل والكانبان', async (t) => {
     box.remove();
     for (const id of ids) { try { await orders.remove(id); } catch { /* ignore */ } }
     try { await customers.remove(cust.id); } catch { /* ignore */ }
+  }
+});
+
+/* ==========================================================================
+   v3.3.77 — نقاط الولاء لا تُكسب مرتين (أُثبت بتجربة حيّة قبل الإصلاح)
+   ========================================================================== */
+register('phase2b: نقاط الولاء لا تُكسب مرتين بعد الإنفاق', async (t) => {
+  const s0 = await settings.get();
+  await settings.update({ loyalty: { enabled: true, earnEvery: 20, pointValue: 1 } });
+  const ids = []; const custs = [];
+  const mkCust = async (n) => { const c = await customers.create({ name: 'p2b-' + n, phone: '0104444000' + n }); custs.push(c.id); return c; };
+  const mk = async (cid, amount) => { const o = await orders.create({ customerId: cid, status: 'in_progress', amount, deposit: 0, items: [{ name: 'ثوب', price: amount, quantity: 1 }] }); ids.push(o.id); return o; };
+  const pts = async (cid) => (await customers.find(cid)).points || 0;
+  try {
+    /* س1: اكسب 20 → أنفقها → أعد فتح الطلب → سلّمه: كان يكسب 20 ثانيةً (40 من طلب واحد) */
+    const c1 = await mkCust('1');
+    const a = await mk(c1.id, 400);
+    await orders.update(a.id, { status: 'delivered' });
+    const b = await mk(c1.id, 1000);
+    await orders.redeemPoints(b.id, 20, 1000);
+    await t.test('1. بعد الإنفاق: 0 نقطة والمنسوب للطلب لا يزال 20', (await pts(c1.id)) === 0 && (await orders.find(a.id)).pointsAwarded === 20);
+    await orders.update(a.id, { status: 'ready' });
+    await t.test('2. إعادة فتح الطلب: لا شيء يُسحب (لا رصيد) والمنسوب يبقى 20', (await pts(c1.id)) === 0 && (await orders.find(a.id)).pointsAwarded === 20);
+    await orders.update(a.id, { status: 'delivered' });
+    await t.test('3. إعادة التسليم لا تمنح نقاطاً ثانيةً (يبقى 0)', (await pts(c1.id)) === 0);
+
+    /* س2: اكسب 20 → أنفقها → اخفض السعر → أعده: كان يكسب 10 مجاناً */
+    const c2 = await mkCust('2');
+    const d = await mk(c2.id, 400);
+    await orders.update(d.id, { status: 'delivered' });
+    const e = await mk(c2.id, 1000);
+    await orders.redeemPoints(e.id, 20, 1000);
+    await orders.update(d.id, { amount: 200 });
+    await t.test('4. خفض السعر بعد الإنفاق: لا شيء يُسحب والمنسوب يبقى 20', (await pts(c2.id)) === 0 && (await orders.find(d.id)).pointsAwarded === 20);
+    await orders.update(d.id, { amount: 400 });
+    await t.test('5. إرجاع السعر لا يمنح نقاطاً مجانية (يبقى 0)', (await pts(c2.id)) === 0);
+
+    /* السلوك السليم عند وجود رصيد نقاط: سحب جزئي ثم تعويض مطابق */
+    const c3 = await mkCust('3');
+    const f = await mk(c3.id, 400);
+    await orders.update(f.id, { status: 'delivered' });
+    await customers.walletAdjust(c3.id, { points: -15, type: 'redeem' });
+    await orders.update(f.id, { status: 'ready' });
+    await t.test('6. أنفق 15 من 20 ثم أُعيد فتح الطلب: تُسحب الـ5 المتبقية فقط، والمنسوب 15', (await pts(c3.id)) === 0 && (await orders.find(f.id)).pointsAwarded === 15);
+    await orders.update(f.id, { status: 'delivered' });
+    await t.test('7. إعادة التسليم تعوّض الـ5 المسحوبة فقط (الإجمالي المنسوب 20 لا 35)', (await pts(c3.id)) === 5 && (await orders.find(f.id)).pointsAwarded === 20);
+
+    /* بدون إنفاق: السلوك الأصلي كما هو */
+    const c4 = await mkCust('4');
+    const g = await mk(c4.id, 400);
+    await orders.update(g.id, { status: 'delivered' });
+    await orders.update(g.id, { amount: 200 });
+    const afterCut = await pts(c4.id);
+    await orders.update(g.id, { amount: 400 });
+    await t.test('8. بلا إنفاق: خفض السعر يسحب 10 ورفعه يعيدها (20 → 10 → 20)', afterCut === 10 && (await pts(c4.id)) === 20);
+
+    /* طلب مسلَّم قبل نظام النقاط (بلا منسوب): تعديل مبلغه لا يمنح نقاطاً بأثر رجعي */
+    const c5 = await mkCust('5');
+    const h = await mk(c5.id, 400);
+    await orders.update(h.id, { status: 'delivered' });
+    await customers.walletAdjust(c5.id, { points: -20, type: 'redeem' });
+    await orders.update(h.id, { status: 'ready' });
+    await orders.update(h.id, { status: 'delivered' });
+    const legacy = await orders.create({ customerId: c5.id, status: 'delivered', amount: 400, deposit: 0, items: [{ name: 'قديم', price: 400, quantity: 1 }] });
+    ids.push(legacy.id);
+    await orders.update(legacy.id, { amount: 600 });
+    await t.test('9. طلب مسلَّم بلا نقاط منسوبة: تعديل مبلغه لا يمنح نقاطاً بأثر رجعي', (await pts(c5.id)) === 0 && !(await orders.find(legacy.id)).pointsAwarded);
+
+    /* إيقاف النظام: لا منح عند التسليم */
+    await settings.update({ loyalty: { enabled: false, earnEvery: 20, pointValue: 1 } });
+    const c6 = await mkCust('6');
+    const k = await mk(c6.id, 400);
+    await orders.update(k.id, { status: 'delivered' });
+    await t.test('10. النقاط معطّلة: التسليم لا يمنح شيئاً', (await pts(c6.id)) === 0 && !(await orders.find(k.id)).pointsAwarded);
+  } finally {
+    for (const id of ids) { try { await orders.remove(id); } catch { /* ignore */ } }
+    for (const id of custs) { try { await customers.remove(id); } catch { /* ignore */ } }
+    await settings.update({ loyalty: s0.loyalty });
   }
 });

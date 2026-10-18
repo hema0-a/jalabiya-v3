@@ -13,53 +13,57 @@ import { getActiveSession, stopSession } from '../../services/order-timing.js';
 
 const base = createRepository(STORES.ORDERS);
 
-/** منح نقاط الولاء لطلب سُلِّم (مرة واحدة؛ pointsAwarded يمنع التكرار). */
-async function _awardPoints(id, o) {
-  try {
-    if (!o.customerId) return;
-    const cfg = loyaltyConfig(await settingsRepo.get());
-    const pts = pointsForAmount(o.amount, cfg);
-    if (pts <= 0) return;
-    await customersRepo.walletAdjust(o.customerId, {
-      points: pts, type: 'earn', orderId: id, note: 'طلب #' + String(id).slice(-6),
-    });
-    await base.update(id, { pointsAwarded: pts });
-  } catch (e) { console.warn('[orders] award points:', e); }
-}
-
 /**
- * مواءمة نقاط الولاء الممنوحة مع حالة الطلب ومبلغه (v3.3.76).
- * النقاط تُمنح عند التسليم على مبلغ الطلب؛ فإن أُعيد فتح الطلب/أُلغي سُحبت، وإن خُفِّض (أو رُفع) مبلغه وهو مسلَّم
- * عُدّلت بالفرق. ما أنفقه العميل منها فعلاً لا يُسترد (لا تنزل نقاطه تحت صفر). تُعيد pointsAwarded بالقيمة الجديدة
- * (0 عند السحب، فيُعاد منحها بالمبلغ الجديد عند التسليم التالي).
+ * مواءمة نقاط الولاء مع حالة الطلب ومبلغه (v3.3.77).
+ *
+ * `pointsAwarded` = **الصافي المنسوب فعلاً لهذا الطلب** (ما مُنح ناقص ما سُحب فعلاً)، وليس «المستهدف».
+ * الفرق مهم عند إنفاق العميل نقاطه: السحب يُقصّ على رصيده (لا يصير سالباً)، فالمتبقي غير المسحوب
+ * يبقى منسوباً للطلب ولا يُمنح ثانيةً عند إعادة التسليم أو رفع السعر. (قبل 3.3.77 كان يُسجَّل المستهدف
+ * فيُكسب العميل النقاط مرتين: أنفق → أعِد فتح الطلب → سلّمه، أو أنفق → اخفض السعر → أعده.)
+ *
+ *  - تسليم (أول مرة أو بعد إعادة فتح): الهدف = نقاط المبلغ، والفرق عن المنسوب يُمنح.
+ *  - مسلَّم وتغيّر مبلغه: الفرق يُمنح/يُسحب (السحب لا يتجاوز رصيد نقاطه).
+ *  - إعادة فتح/إلغاء: الهدف صفر، يُسحب المنسوب بقدر رصيده والباقي يبقى منسوباً.
+ *  - طلب مسلَّم قبل نظام النقاط (بلا منسوب): لا أثر رجعي عند تعديل مبلغه.
  * @param {string} id
  * @param {Object} prev — الطلب قبل التعديل
  * @param {Object} next — الطلب بعد التعديل
  */
-async function _reconcilePoints(id, prev, next) {
+async function _syncPoints(id, prev, next) {
   try {
-    const old = Math.floor(Number(prev.pointsAwarded) || 0);
-    if (old <= 0 || !next || !next.customerId) return;
+    if (!prev || !next || !next.customerId) return;
+    const wasDelivered = prev.status === 'delivered';
+    const isDelivered = next.status === 'delivered';
+    const old = Math.max(0, Math.floor(Number(prev.pointsAwarded) || 0));
     let target;
-    if (next.status !== 'delivered') target = 0;
-    else {
-      if (Number(next.amount) === Number(prev.amount)) return;
-      target = pointsForAmount(next.amount, loyaltyConfig(await settingsRepo.get()));
+    if (!isDelivered) {
+      if (old <= 0) return;
+      target = 0;
+    } else {
+      if (wasDelivered) {
+        if (old <= 0) return;
+        if (Number(next.amount) === Number(prev.amount)) return;
+      }
+      const cfg = loyaltyConfig(await settingsRepo.get());
+      if (!cfg.enabled) return;
+      target = pointsForAmount(next.amount, cfg);
     }
-    if (target === old) return;
     let delta = target - old;
+    if (delta === 0) return;
     if (delta < 0) {
       const c = await customersRepo.find(next.customerId);
       delta = -Math.min(-delta, walletOf(c).points);
     }
-    if (delta !== 0) {
-      await customersRepo.walletAdjust(next.customerId, {
-        points: delta, type: 'adjust', orderId: id,
-        note: (target === 0 ? 'سحب نقاط: إعادة فتح/إلغاء طلب #' : 'تعديل نقاط: تغيّر مبلغ طلب #') + String(id).slice(-6),
-      });
-    }
-    await base.update(id, { pointsAwarded: target });
-  } catch (e) { console.warn('[orders] reconcile points:', e); }
+    if (delta === 0) return;                      /* لا رصيد نقاط لسحبه: المنسوب يبقى كما هو */
+    const tag = String(id).slice(-6);
+    await customersRepo.walletAdjust(next.customerId, {
+      points: delta, orderId: id,
+      type: (old === 0 && delta > 0) ? 'earn' : 'adjust',
+      note: !isDelivered ? 'سحب نقاط: إعادة فتح/إلغاء طلب #' + tag
+        : (old === 0 ? 'طلب #' + tag : 'تعديل نقاط: تغيّر مبلغ طلب #' + tag),
+    });
+    await base.update(id, { pointsAwarded: old + delta });
+  } catch (e) { console.warn('[orders] sync points:', e); }
 }
 
 /**
@@ -144,13 +148,8 @@ export const orders = {
       if (prev && prev.status !== 'ready' && !('readyAt' in p)) p = { ...p, readyAt: Date.now() };
     }
     const res = await base.update(id, p);
-    /* نقاط الولاء: تُمنح مرة واحدة عند أول تسليم */
-    if (p && p.status === 'delivered' && prev && prev.status !== 'delivered' && !prev.pointsAwarded) {
-      await _awardPoints(id, { ...prev, ...p });
-    } else if (res && prev && prev.pointsAwarded > 0) {
-      /* نقاط سبق منحها: أُعيد فتح الطلب/أُلغي أو تغيّر مبلغه → نواءمها */
-      await _reconcilePoints(id, prev, res);
-    }
+    /* نقاط الولاء: تُمنح عند التسليم وتتبع حالة الطلب ومبلغه (انظر _syncPoints) */
+    if (res && prev) await _syncPoints(id, prev, res);
     return res;
   },
 
