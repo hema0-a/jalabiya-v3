@@ -19,6 +19,14 @@
      4) التنزيل يدعم الدمج (apply mode:'merge'): لا يُمسح أي سجل محلي، والأحدث updatedAt يفوز.
    القراءة تدعم أيضاً الصيغة القديمة (مستند واحد فيه stores) لمن رفع قبل v3.3.12.
    لا يبدأ تلقائياً.
+
+   v3.3.76 (الفحص العميق — المرحلة 2):
+     5) رفع/تطبيق لا يتداخلان أبداً (قفل متسلسل): رفعان متزامنان (تلقائي + يدوي) كانا يُنتجان
+        remote-changed وهمياً يوقف المزامنة التلقائية.
+     6) apply يتحقق داخل معاملة الكتابة نفسها أن كل سجل سيُكتب لم يتغير محلياً منذ حساب الخطة
+        (writeBatch guards). تعديل/حذف محلي وقع أثناء الدمج كان يُطمس بصمت بقيمة السحابة.
+        عند الاختلاف تُلغى المعاملة كلها وتُعاد المحاولة (حتى 3 مرات) بلا كتابة جزئية.
+     7) لا تُمسح علامة «غير مرفوع» إن حدثت أي كتابة أخرى أثناء التطبيق.
    ========================================================================== */
 
 import { loadFirebase } from './firebase-config.js';
@@ -52,6 +60,14 @@ const MAX_RECORD_BYTES = 8 * 1024 * 1024;
 const PIECE_CHARS = 250000;
 let _fsModule = null;
 let _testBackend = null;
+
+/* قفل متسلسل لعمليات الرفع/التطبيق: واحدة في كل مرة (الأخرى تنتظر دورها) */
+let _syncChain = Promise.resolve();
+function exclusive(fn) {
+  const run = _syncChain.then(fn, fn);
+  _syncChain = run.catch(() => {});
+  return run;
+}
 
 /** حقن بديل Firestore للاختبار فقط. */
 export function _setBackendForTest(backend) { _testBackend = backend; }
@@ -204,7 +220,11 @@ function splitIntoChunks(list) {
  * @returns {Promise<{ok:boolean, counts?:Object, error?:string, code?:string, remoteUpdatedAt?:number, firstSync?:boolean, remoteTotal?:number, localTotal?:number}>}
  *   code: 'remote-changed' | 'shrink' عند إيقاف الرفع حمايةً للسحابة.
  */
-export async function push(uid, opts = {}) {
+export function push(uid, opts = {}) {
+  return exclusive(() => pushImpl(uid, opts));
+}
+
+async function pushImpl(uid, opts = {}) {
   if (!uid) return { ok: false, error: 'uid مطلوب' };
   const force = !!(opts && opts.force);
   const startedAt = Date.now(); /* تعديل بعد هذه اللحظة يبقى «غير مرفوع» */
@@ -429,6 +449,9 @@ function compareStore(local, cloud, store, tomb, since = 0) {
   const dOf = (id) => (tomb ? tomb.get(store + ':' + id) : undefined);
   const localMap = new Map();
   for (const r of local) if (r && r.id != null) localMap.set(r.id, r);
+  /* بصمة كل سجل محلي وقت المقارنة (updatedAt) — تُستعمل حارساً عند الكتابة */
+  const localSig = new Map();
+  for (const [id, r] of localMap) localSig.set(id, recTime(r));
   const cloudIds = new Set();
   const toPut = [];
   const toDelete = [];
@@ -466,7 +489,40 @@ function compareStore(local, cloud, store, tomb, since = 0) {
     survivors.set(String(id), Math.max(survivors.get(String(id)) || 0, recTime(l)));
     if (!cloudIds.has(id)) localOnly++;
   }
-  return { toPut, toDelete, added, updated, localOnly, localNewer, deleted, merged, conflicts, survivors };
+  return { toPut, toDelete, added, updated, localOnly, localNewer, deleted, merged, conflicts, survivors, localSig };
+}
+
+/**
+ * حراس الكتابة لخطة دمج: لكل سجل سيُكتب/يُحذف نتوقع بصمته المحلية وقت الحساب
+ * (null = لم يكن موجوداً). أي اختلاف داخل معاملة الكتابة يُلغيها كلها.
+ * @param {Object} perStore — نتائج compareStore لكل مخزن
+ * @param {Array} settingsRecords — سجلات الإعدادات التي ستُكتب
+ * @param {Map<string,(number|null)>} settingsSig — بصمات سجلات الإعدادات قبل بناء الخطة
+ */
+function buildGuards(perStore, settingsRecords, settingsSig) {
+  const guards = {};
+  for (const [s, r] of Object.entries(perStore || {})) {
+    const g = new Map();
+    const sig = (id) => (r.localSig.has(id) ? r.localSig.get(id) : null);
+    for (const rec of r.toPut) g.set(rec.id, sig(rec.id));
+    for (const id of r.toDelete) g.set(id, sig(id));
+    if (g.size > 0) guards[s] = g;
+  }
+  const sg = new Map();
+  for (const rec of (settingsRecords || [])) if (rec && rec.id != null) sg.set(rec.id, settingsSig.has(rec.id) ? settingsSig.get(rec.id) : null);
+  if (sg.size > 0) guards.settings = sg;
+  return guards;
+}
+
+/** بصمات (updatedAt) سجلات الإعدادات/الشواهد التي تكتبها المزامنة — تُقرأ قبل بناء الخطة. */
+async function readSettingsSigs() {
+  const ids = [...settingsSync.SETTINGS_RECORD_IDS, tombstones.TOMB_KEY];
+  const m = new Map();
+  for (const id of ids) {
+    const rec = await idb.get('settings', id);
+    m.set(id, rec ? (Number(rec.updatedAt) || 0) : null);
+  }
+  return m;
 }
 
 /**
@@ -541,43 +597,74 @@ export async function analyzeLocalVsCloud(snapshot) {
  * @param {{mode?:'replace'|'merge'}} [opts]
  * @returns {Promise<{ok:boolean, counts?:Object, merge?:Object, error?:string}>}
  */
-export async function apply(snapshot, opts = {}) {
+export function apply(snapshot, opts = {}) {
+  return exclusive(() => applyImpl(snapshot, opts));
+}
+
+/** أقصى محاولات عند تغيّر بيانات الجهاز أثناء حساب الخطة (guard-mismatch). */
+const APPLY_MAX_ATTEMPTS = 3;
+
+async function applyImpl(snapshot, opts = {}) {
   if (!snapshot || !snapshot.stores) {
     return { ok: false, error: 'snapshot غير صالح' };
   }
   const merge = !!(opts && opts.mode === 'merge');
   try {
     tombstones.install(SYNC_STORES);
-    /* استبدال/دمج ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
-    const plan = {};
-    const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0, tombPending: 0, settingsPending: 0 };
-    if (merge) {
-      const mp = await buildMergePlan(snapshot);
-      stats.conflictList = mp.conflictList.slice(0, 200);
-      for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
-      Object.assign(stats, mp.totals, { tombPending: mp.tombPending, settingsPending: mp.settingsPlan.pending });
-      plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs), ...mp.settingsPlan.records] };
-    } else {
-      for (const s of SYNC_STORES) {
-        /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
-        if (!Array.isArray(snapshot.stores[s])) continue;
-        plan[s] = { clear: true, records: snapshot.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
+    for (let attempt = 1; ; attempt++) {
+      /* عدّاد الكتابات قبل بدء الحساب: بعد الكتابة يجب أن يزيد بواحد فقط (معاملتنا) */
+      const v0 = idb.getWriteVersion();
+      const settingsSig = await readSettingsSigs();   /* قبل بناء الخطة: أي تغيير بعدها يُكتشف */
+
+      /* استبدال/دمج ذرّي: لا تبقى البيانات نصف مكتوبة إن انقطع الاتصال أو فسد سجل */
+      const plan = {};
+      const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0, tombPending: 0, settingsPending: 0 };
+      let perStore = null;
+      if (merge) {
+        const mp = await buildMergePlan(snapshot);
+        perStore = mp.perStore;
+        stats.conflictList = mp.conflictList.slice(0, 200);
+        for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
+        Object.assign(stats, mp.totals, { tombPending: mp.tombPending, settingsPending: mp.settingsPlan.pending });
+        plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs), ...mp.settingsPlan.records] };
+      } else {
+        for (const s of SYNC_STORES) {
+          /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
+          if (!Array.isArray(snapshot.stores[s])) continue;
+          plan[s] = { clear: true, records: snapshot.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
+        }
+        const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
+        const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
+        const sp = await settingsSync.planApply(cloudSets, 'replace');
+        plan.settings = { clear: false, records: [tombstones.buildRecord(cloudTombs), ...sp.records] };
       }
-      const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
-      const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
-      const sp = await settingsSync.planApply(cloudSets, 'replace');
-      plan.settings = { clear: false, records: [tombstones.buildRecord(cloudTombs), ...sp.records] };
+      if (Object.keys(plan).filter((n) => n !== 'settings').length === 0) {
+        return { ok: false, error: 'النسخة السحابية لا تحتوي أي مخزن صالح' };
+      }
+
+      /* حراس: بيانات الدمج تُحرَس لكل سجل؛ في الاستبدال (clear) تُحرَس سجلات الإعدادات فقط */
+      const guards = buildGuards(perStore || {}, plan.settings.records, settingsSig);
+
+      let counts;
+      try {
+        counts = await idb.writeBatch(plan, { guards });
+      } catch (e) {
+        if (e && e.code === 'guard-mismatch') {
+          if (attempt < APPLY_MAX_ATTEMPTS) continue;   /* تغيّرت بيانات الجهاز أثناء الحساب: نعيد الحساب على الحالة الجديدة */
+          return { ok: false, code: 'concurrent-edit', error: 'تغيّرت بيانات هذا الجهاز أثناء المزامنة — لم يُطبَّق شيء. أعد المحاولة بعد لحظات' };
+        }
+        throw e;
+      }
+      delete counts.settings;
+      /* بعد التطبيق صار هذا الجهاز يعرف نسخة السحابة هذه — فيسمح الرفع التالي */
+      if (snapshot.updatedAt !== undefined) setKnownRev(snapshot.updatedAt);
+      /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات/حذف محلي لم يُرفع = يحتاج رفعاً.
+         وإن حدثت أي كتابة أخرى أثناء التطبيق (غير معاملتنا) نُبقي علامة «غير مرفوع» (كان markClean يمسحها بلا شرط). */
+      const concurrentWrites = idb.getWriteVersion() !== v0 + 1;
+      if (!concurrentWrites && (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0 && stats.settingsPending === 0))) markClean();
+      stats.attempts = attempt;
+      return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
     }
-    if (Object.keys(plan).filter((n) => n !== 'settings').length === 0) {
-      return { ok: false, error: 'النسخة السحابية لا تحتوي أي مخزن صالح' };
-    }
-    const counts = await idb.writeBatch(plan);
-    delete counts.settings;
-    /* بعد التطبيق صار هذا الجهاز يعرف نسخة السحابة هذه — فيسمح الرفع التالي */
-    if (snapshot.updatedAt !== undefined) setKnownRev(snapshot.updatedAt);
-    /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات/حذف محلي لم يُرفع = يحتاج رفعاً */
-    if (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0 && stats.settingsPending === 0)) markClean();
-    return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
   } catch (err) {
     return { ok: false, error: translateError(err) };
   }

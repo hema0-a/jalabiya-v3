@@ -356,24 +356,61 @@ export async function getByIndex(storeName, indexName, value) {
 /**
  * كتابة ذرّية (Atomic) لعدة مخازن في معاملة واحدة: كلها تنجح أو كلها تُلغى.
  * تُستخدم في الاستعادة والاستيراد والمزامنة حتى لا تبقى البيانات نصف مكتوبة.
+ *
+ * guards (اختياري — v3.3.76): حماية من «تعديل محلي وقع بعد حساب الخطة وقبل كتابتها».
+ * قبل أي كتابة تُقرأ السجلات المحروسة داخل المعاملة نفسها وتُقارَن updatedAt الحالية بالمتوقعة؛
+ * عند أي اختلاف تُلغى المعاملة كلها (لا كتابة جزئية) ويُرفض الوعد برمز `guard-mismatch`.
+ * (قراءة-قرار-كتابة خارج معاملة واحدة كانت تُضيّع تعديلاً محلياً بصمت.)
+ *
  * @param {Object<string,{clear?:boolean, deletes?:Array, records:Array}>} plan
  *   الترتيب داخل المخزن: clear ← deletes ← records (فالسجل المكتوب يغلب حذفاً لنفس المعرّف).
+ * @param {{guards?:Object<string,Map<*,(number|null)>>}} [opts]
+ *   guards[store] = Map(id → updatedAt المتوقعة، أو null = يجب ألا يكون السجل موجوداً)
  * @returns {Promise<Object<string,number>>} عدد السجلات المكتوبة لكل مخزن
  */
-export async function writeBatch(plan) {
+export async function writeBatch(plan, opts = {}) {
   const db = await openDB();
   const names = Object.keys(plan).filter((n) => db.objectStoreNames.contains(n));
   if (names.length === 0) return {};
+  const guards = (opts && opts.guards) || null;
   return new Promise((resolve, reject) => {
     const counts = {};
     let tx;
+    let mismatch = null;
     try {
       tx = db.transaction(names, 'readwrite');
     } catch (e) { reject(e); return; }
     tx.oncomplete = () => { writeVersion++; notifyWrite(names); notifyBatch(names); resolve(counts); };
-    tx.onerror = () => reject(tx.error || new Error('[idb] batch failed'));
-    tx.onabort = () => reject(tx.error || new Error('[idb] batch aborted'));
+    /* عند إلغاء الحارس تُطلق الطلبات المعلّقة أخطاء AbortError قبل حدث abort: لا نرفض بها كي يصل رمز guard-mismatch */
+    tx.onerror = () => { if (mismatch) return; reject(tx.error || new Error('[idb] batch failed')); };
+    tx.onabort = () => {
+      if (mismatch) {
+        const e = new Error('[idb] guard mismatch: ' + mismatch.store + ':' + mismatch.id);
+        e.code = 'guard-mismatch'; e.store = mismatch.store; e.id = mismatch.id;
+        reject(e);
+      } else reject(tx.error || new Error('[idb] batch aborted'));
+    };
     try {
+      /* الحراس أولاً: تُنفَّذ طلبات القراءة بالترتيب قبل أي كتابة، فالإلغاء يسبق كل تغيير */
+      if (guards) {
+        for (const n of names) {
+          const g = guards[n];
+          if (!g) continue;
+          const st = tx.objectStore(n);
+          for (const [id, expected] of g) {
+            const rq = st.get(id);
+            rq.onsuccess = () => {
+              if (mismatch) return;
+              const cur = rq.result;
+              const sig = cur ? (Number(cur.updatedAt) || 0) : null;
+              if (sig !== expected) {
+                mismatch = { store: n, id };
+                try { tx.abort(); } catch (_) { /* ignore */ }
+              }
+            };
+          }
+        }
+      }
       for (const n of names) {
         const store = tx.objectStore(n);
         const { clear: doClear, records, deletes } = plan[n];

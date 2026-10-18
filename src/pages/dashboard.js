@@ -15,7 +15,7 @@
    - يعرض 3 رسوم بيانية: مبيعات 7 أيام، توزيع الطلبات، ملخص مالي.
    ========================================================================== */
 
-import { withDepositPayments, withWorkerExpenses, orderPaidBreakdown } from '../services/payments-view.js';
+import { revenuePayments, withWorkerExpenses, orderPaidBreakdown } from '../services/payments-view.js';
 import { computePickups, buildPickupText } from '../services/pickup-reminders.js';
 import { computeReceivables, buildReminderText } from '../services/receivables.js';
 import { sendLogged } from '../services/auto-messages.js';
@@ -170,7 +170,7 @@ async function loadKPIs() {
     .filter((a) => a.date && a.date >= _dayStart && a.date < _dayEnd)
     .sort((a, b) => a.date - b.date);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
-  const paymentsList = withDepositPayments(rawPayments, ordersList);
+  const paymentsList = revenuePayments(rawPayments, ordersList);
 
   const activeOrders = ordersList.filter(
     (o) => o.status !== 'delivered' && o.status !== 'cancelled'

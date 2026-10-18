@@ -72,6 +72,61 @@ function linkPanel(c) {
   return panel;
 }
 
+/**
+ * تسجيل ردّ مبلغ طلب ملغى للعميل. ما دُفع من رصيد المحفظة يُعاد للمحفظة تلقائياً،
+ * والباقي يُرَدّ نقداً بيد صاحب الورشة (نسجّل فقط أنه رُدّ). يُستبعد الطلب بعدها من القائمة.
+ * @param {Object} r — صف من computeReceivables().refunds.list
+ */
+async function markRefunded(r) {
+  const ok = await modal.confirm({
+    title: 'تأكيد ردّ المبلغ',
+    message: 'هل ردَدتَ ' + formatEGP(r.cashPart) + ' نقداً إلى "' + r.name + '"؟' +
+      (r.creditPart > 0 ? '\n\n💳 وسيُعاد ' + formatEGP(r.creditPart) + ' إلى رصيد محفظته (دُفع من رصيده).' : ''),
+    confirmText: 'تم الرد', cancelText: 'لاحقاً',
+  });
+  if (!ok) return;
+  let credited = false;
+  try {
+    if (r.creditPart > 0 && r.customerId) {
+      await customers.walletAdjust(r.customerId, {
+        balance: r.creditPart, type: 'adjust', orderId: r.orderId,
+        note: 'ردّ: إلغاء طلب #' + String(r.orderId).slice(-6),
+      });
+      credited = true;
+    }
+    const res = await orders.update(r.orderId, { refundedAt: Date.now(), refundedAmount: r.amount });
+    if (!res) throw new Error('الطلب لم يعد موجوداً');
+    toast.success('سُجّل ردّ المبلغ' + (credited ? ' وأُعيد جزء منه لرصيد العميل' : ''));
+    await loadData();
+    draw();
+  } catch (err) {
+    if (credited) {   // فشل تسجيل الردّ بعد إعادة الرصيد: نتراجع كي لا يتضاعف
+      try { await customers.walletAdjust(r.customerId, { balance: -r.creditPart, type: 'adjust', note: 'تراجع: فشل تسجيل الردّ' }); } catch (e2) { /* ignore */ }
+    }
+    console.error('[debts] mark refunded:', err);
+    toast.error('تعذّر تسجيل الردّ: ' + (err && err.message || err));
+  }
+}
+
+/** بطاقة «مستحق ردّه للعملاء» — تظهر فقط إن وُجدت طلبات ملغاة مدفوعة لم يُرَدّ مبلغها. */
+function refundsCard(refunds) {
+  if (!refunds || refunds.list.length === 0) return null;
+  return el('div', { className: 'card', 'data-role': 'refunds-due', style: { padding: '12px', marginBottom: '12px', borderInlineStart: '4px solid #C62828' } }, [
+    el('div', { style: { fontWeight: '700', marginBottom: '2px' } }, '💸 مستحق ردّه للعملاء — ' + formatEGP(refunds.total)),
+    el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px' } },
+      'طلبات ملغاة دُفع عليها. لا تدخل في الإيرادات، ويجب ردّ مبالغها للعملاء.'),
+    ...refunds.list.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderTop: '1px solid rgba(0,0,0,0.06)' } }, [
+      el('div', { style: { flex: '1', minWidth: '0' } }, [
+        el('div', { style: { fontWeight: '600' } }, r.name),
+        el('div', { style: { fontSize: '12px', color: '#666' } },
+          '#' + String(r.orderId).slice(-6) + ' · ' + formatEGP(r.amount) +
+          (r.creditPart > 0 ? ' (منها ' + formatEGP(r.creditPart) + ' من رصيده)' : '')),
+      ]),
+      el('button', { className: 'btn btn--secondary', type: 'button', 'data-action': 'refund-done', style: { fontSize: '12px', padding: '4px 10px' }, onClick: () => markRefunded(r) }, '✔ تم الرد'),
+    ])),
+  ]);
+}
+
 function statCard(label, value, color) {
   return el('div', { className: 'card', style: { padding: '10px', textAlign: 'center' } }, [
     el('div', { style: { fontSize: '11px', color: '#666' } }, label),
@@ -179,6 +234,9 @@ function draw() {
     statCard('عند التسليم', formatEGP(totals.pending), '#555'),
     statCard('عملاء متأخرون', String(totals.customersOverdue), totals.customersOverdue ? '#E65100' : '#2E7D32'),
   ]));
+
+  const rc = refundsCard(state.data.refunds);
+  if (rc) c.appendChild(rc);
 
   if (totals.overdue > 0.009) {
     c.appendChild(el('div', { style: { fontSize: '12px', fontWeight: '600', margin: '4px 0' } }, 'أعمار الديون المتأخرة'));

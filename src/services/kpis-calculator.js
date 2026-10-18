@@ -12,7 +12,7 @@ import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { MONTH_NAMES, DAY_NAMES_FULL } from '../core/config.js';
 import { getWriteVersion } from '../data/idb.js';
-import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
+import { revenuePayments, withWorkerExpenses } from './payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { dueDayEndMs } from './order-timing.js';
 
@@ -144,7 +144,7 @@ async function computeKpis(period) {
   ]);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
 
-  const paymentsList = withDepositPayments(rawPayments, ordersList);
+  const paymentsList = revenuePayments(rawPayments, ordersList);
 
   const { startMs, endMs } = getPeriodRange(period);
   const inRange = (ts) => ts >= startMs && ts < endMs;

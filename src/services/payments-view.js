@@ -151,3 +151,46 @@ export function withWorkerExpenses(expensesList, workerPaymentsList) {
   }
   return extra.length > 0 ? expenses.concat(extra) : expenses;
 }
+
+/**
+ * دفعات «الإيراد الفعلي»: كل الدفعات (مع مقدمات الطلبات الافتراضية) **بعد استبعاد دفعات الطلبات الملغاة**.
+ * الطلب الملغى لا إيراد منه: ما دُفع عليه ملك للعميل ويجب ردّه (انظر computeRefundsDue).
+ * (كانت الإيرادات تحسب دفعات الملغى فتتضخم، بينما مقدمه الافتراضي وحده كان يُستبعد.)
+ * ⚠️ لكشف حساب العميل استعمل withDepositPayments (دفعاته على ملغى حقٌّ له ويجب أن يظهر).
+ * @param {Array} paymentsList
+ * @param {Array} ordersList
+ * @returns {Array}
+ */
+export function revenuePayments(paymentsList, ordersList) {
+  const cancelled = new Set((Array.isArray(ordersList) ? ordersList : [])
+    .filter((o) => o && o.status === 'cancelled').map((o) => o.id));
+  return withDepositPayments(paymentsList, ordersList)
+    .filter((p) => !(p && p.orderId && cancelled.has(p.orderId)));
+}
+
+/**
+ * المبالغ المستحقة الردّ للعملاء عن طلبات ملغاة (لم يُسجَّل ردّها بعد).
+ * creditPart: ما دُفع من رصيد العميل (يُعاد لمحفظته)، cashPart: الباقي يُردّ نقداً.
+ * @param {Array} ordersList
+ * @param {Array} paymentsList — الدفعات المسجّلة (بلا الافتراضية)
+ * @returns {{list:Array<{orderId:string, customerId:string, amount:number, creditPart:number, cashPart:number}>, total:number}}
+ */
+export function computeRefundsDue(ordersList, paymentsList) {
+  const byOrder = new Map();
+  for (const p of (Array.isArray(paymentsList) ? paymentsList : [])) {
+    if (!p || p.synthetic || !p.orderId) continue;
+    if (!byOrder.has(p.orderId)) byOrder.set(p.orderId, []);
+    byOrder.get(p.orderId).push(p);
+  }
+  const list = [];
+  for (const o of (Array.isArray(ordersList) ? ordersList : [])) {
+    if (!o || o.status !== 'cancelled' || o.refundedAt) continue;
+    const pays = byOrder.get(o.id) || [];
+    const paid = orderPaidBreakdown(o, pays).paid;
+    if (!(paid > AMOUNT_EPS)) continue;
+    const credit = Math.min(paid, Math.round(pays.filter((p) => p.fromCredit)
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100);
+    list.push({ orderId: o.id, customerId: o.customerId, amount: paid, creditPart: credit, cashPart: Math.round((paid - credit) * 100) / 100 });
+  }
+  return { list, total: Math.round(list.reduce((s, r) => s + r.amount, 0) * 100) / 100 };
+}

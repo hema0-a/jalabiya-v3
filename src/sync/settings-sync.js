@@ -23,6 +23,8 @@ export const SETTINGS_SYNC_KEYS = [
 const EXCLUDE_FIELDS = { workshop: ['logo'] };
 const META_KEY = 'sync_settings_meta';
 const MAIN_ID = 'main';
+/** معرّفات سجلات الإعدادات التي تكتبها المزامنة (تُحرَس بـ updatedAt عند التطبيق). */
+export const SETTINGS_RECORD_IDS = [MAIN_ID, META_KEY];
 
 /** JSON بترتيب مفاتيح ثابت (لمقارنة لا تتأثر بترتيب الحقول). */
 function stable(v) {

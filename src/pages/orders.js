@@ -69,6 +69,7 @@ let state = {
   customerMap: {},
   activeFilter: 'all',
   activeView: 'list',
+  kanbanLimit: {},
   scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
   grouping: { enabled: false, sameTypeOnly: true, tolerance: 2 },
   pickupDays: 2,
@@ -806,6 +807,28 @@ function openOrderForm(existing = null) {
             } catch (e) { /* فشل الفحص لا يمنع الحفظ */ }
           }
 
+          /* إلغاء طلب مدفوع: لا إيراد منه ويُردّ المدفوع للعميل (لا يُحتفظ بالعربون) — نُنبّه قبل التنفيذ */
+          if (statusSelect.value === 'cancelled' && !(isEdit && existing.status === 'cancelled')) {
+            let paidNow = deposit;
+            if (isEdit) {
+              try { paidNow = orderPaidBreakdown({ ...existing, amount: totals.amount, deposit }, await paymentsRepoForDelete.findByOrder(existing.id)).paid; } catch (e) { /* ignore */ }
+            }
+            if (paidNow > 0 && !(await modal.confirm({
+              title: 'إلغاء طلب مدفوع',
+              message: 'المدفوع على هذا الطلب ' + formatEGP(paidNow) + '.\nعند الإلغاء يُستبعد من الإيرادات ويصير مستحقاً ردّه للعميل (يظهر في صفحة «المستحقات» لتسجيل الردّ).',
+              confirmText: 'نعم، ألغِ الطلب', cancelText: 'رجوع',
+            }))) return;
+          }
+
+          /* إعادة فتح طلب سبق ردّ مبلغه: دفعاته القديمة ستُحتسب مدفوعة من جديد */
+          if (isEdit && existing.status === 'cancelled' && statusSelect.value !== 'cancelled' && existing.refundedAt) {
+            if (!(await modal.confirm({
+              title: 'إعادة فتح طلب ملغى',
+              message: 'سبق ردّ مبلغ هذا الطلب (' + formatEGP(existing.refundedAmount || 0) + ') للعميل.\nإعادة فتحه تُعيد احتساب دفعاته القديمة كمدفوعة. تأكد أن العميل دفع مجدداً، أو احذف/عدّل تلك الدفعات بعد الحفظ.',
+              confirmText: 'إعادة الفتح', cancelText: 'رجوع',
+            }))) return;
+          }
+
           /* إجمالي صفر: غالباً نُسي السعر أو أُدخل ناقصاً (كان يُحفظ بصمت) — وأرقام مستحيلة تُرفض */
           if (totals.amount > MAX_AMOUNT) { toast.warning('إجمالي الطلب كبير جداً — تأكد من الأسعار والكميات'); return; }
           if (totals.amount <= 0 && statusSelect.value !== 'cancelled') {
@@ -846,6 +869,11 @@ function openOrderForm(existing = null) {
             referenceImage: imagePicker.getValue() || '',
             urgent: urgentInput.checked,
           };
+          /* إعادة فتح طلب ملغى: تُلغى علامة «تم الرد» حتى لا تبقى على طلب عاد فعّالاً */
+          if (isEdit && existing.status === 'cancelled' && data.status !== 'cancelled' && existing.refundedAt) {
+            data.refundedAt = null;
+            data.refundedAmount = null;
+          }
           /* تاريخ التسليم الفعلي (تعتمد عليه مؤشرات الأداء): يُحفظ عند التحوّل لـ delivered ويُمسح عند الرجوع منها */
           if (data.status === 'delivered') {
             data.deliveredAt = (isEdit && existing.deliveredAt) || Date.now();
@@ -1417,6 +1445,22 @@ async function openMessageMenu(order) {
   });
 }
 
+/**
+ * جلسات العمل كما تُعرض: طلب مسلَّم/ملغى بجلسة ما زالت مفتوحة (بيانات قبل v3.3.76) تُغلق عند وقت التسليم
+ * بدل أن يستمر حساب ساعاته إلى الآن للأبد.
+ * @param {Object} o — الطلب
+ * @returns {Array}
+ */
+function sessionsOf(o) {
+  const s = Array.isArray(o.workSessions) ? o.workSessions : [];
+  if ((o.status === 'delivered' || o.status === 'cancelled') && getActiveSession(s)) {
+    const last = s[s.length - 1];
+    const end = Math.max(Number(last.start) || 0, Number(o.deliveredAt) || Number(o.updatedAt) || 0);
+    return [...s.slice(0, -1), { start: last.start, end }];
+  }
+  return s;
+}
+
 async function toggleTimer(order) {
   const sessions = Array.isArray(order.workSessions) ? order.workSessions : [];
   const isActive = getActiveSession(sessions);
@@ -1563,7 +1607,7 @@ function buildOrderCard(o) {
   const canDeliver = o.status === 'ready' || o.status === 'in_progress';
   const deadline = getDeadlineInfo(o.dueDate);
   const pickup = getPickupInfo(o.receivedDate);
-  const sessions = Array.isArray(o.workSessions) ? o.workSessions : [];
+  const sessions = sessionsOf(o);
   const isRunning = getActiveSession(sessions);
   const totalMs = getTotalWorkTime(sessions);
 
@@ -1744,7 +1788,7 @@ function buildMiniCard(o, opts = {}) {
   const c = state.customerMap[o.customerId];
   const name = c ? c.name : 'عميل محذوف';
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
-  const isRunning = getActiveSession(o.workSessions);
+  const isRunning = getActiveSession(sessionsOf(o));
 
   const card = el('div', {
     className: 'card',
@@ -1794,6 +1838,27 @@ function buildMiniCard(o, opts = {}) {
    10. كانبان + تجميع
    ========================================================================== */
 
+/** عدد البطاقات الظاهرة في كل عمود كانبان قبل «عرض المزيد». */
+const KANBAN_PAGE = 30;
+
+/**
+ * ترتيب عمود الكانبان: الأعمدة النشطة بأقرب موعد تسليم أولاً (العاجل قبله، وبلا موعد في الآخر)
+ * كي لا يكون الأقرب للتأخر هو ما يُخفى؛ المسلَّم والملغى بالأحدث أولاً.
+ * @param {string} status
+ * @param {Array} list
+ * @returns {Array} نسخة مرتّبة
+ */
+function kanbanSorted(status, list) {
+  const out = list.slice();
+  if (status === 'pending' || status === 'in_progress' || status === 'ready') {
+    out.sort((a, b) =>
+      ((b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)) ||
+      ((a.dueDate || Infinity) - (b.dueDate || Infinity)) ||
+      ((b.createdAt || 0) - (a.createdAt || 0)));
+  }
+  return out;
+}
+
 function renderKanban() {
   const wrap = state.container?.querySelector('#orders-list');
   if (!wrap) return;
@@ -1810,7 +1875,8 @@ function renderKanban() {
 
   STATUS_ORDER.forEach((status) => {
     const sInfo = STATUS_MAP[status];
-    const items = state.orders.filter((o) => o.status === status);
+    const items = kanbanSorted(status, state.orders.filter((o) => o.status === status));
+    const limit = (state.kanbanLimit && state.kanbanLimit[status]) || KANBAN_PAGE;
 
     const column = el('div', {
       style: { background: '#F6F1E6', borderRadius: '12px', padding: '10px', minHeight: '200px' },
@@ -1833,7 +1899,16 @@ function renderKanban() {
         style: { fontSize: '11px', color: '#999', textAlign: 'center', padding: '20px 0' },
       }, 'لا يوجد'));
     } else {
-      items.slice(0, 30).forEach((o) => column.appendChild(buildMiniCard(o, { color: sInfo.color })));
+      items.slice(0, limit).forEach((o) => column.appendChild(buildMiniCard(o, { color: sInfo.color })));
+      /* كان العمود يُقصّ عند 30 بلا أي إشارة (والشارة تعرض العدد الكامل) فتختفي طلبات — صار «عرض المزيد» */
+      if (items.length > limit) {
+        const rest = items.length - limit;
+        column.appendChild(el('button', {
+          type: 'button', className: 'btn btn--sm btn--ghost', 'data-kanban-more': status,
+          style: { width: '100%', marginTop: '6px' },
+          onClick: () => { state.kanbanLimit[status] = limit + KANBAN_PAGE; renderKanban(); },
+        }, 'عرض ' + Math.min(KANBAN_PAGE, rest) + ' أخرى (متبقٍ ' + rest + ')'));
+      }
     }
     board.appendChild(column);
   });
@@ -2096,7 +2171,7 @@ function startLiveTimer() {
   state._timerInterval = setInterval(() => {
     if (!state.container) return;
     state.orders.forEach((o) => {
-      const sessions = Array.isArray(o.workSessions) ? o.workSessions : [];
+      const sessions = sessionsOf(o);
       if (!getActiveSession(sessions)) return;
       const badge = state.container.querySelector('[data-timer-id="' + o.id + '"]');
       if (!badge) return;
@@ -2160,7 +2235,7 @@ export const ordersPage = {
     disposeOrdersList();
     state = {
       orders: [], customers: [], customerMap: {},
-      activeFilter: 'all', activeView: 'list',
+      activeFilter: 'all', activeView: 'list', kanbanLimit: {},
       scheduleConfig: { dayOffWeekday: 0, dailyOrderLimit: 0 },
       grouping: { enabled: false, sameTypeOnly: true, tolerance: 2 },
       pickupDays: 2,

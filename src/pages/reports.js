@@ -8,7 +8,7 @@ import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { formatEGP } from '../core/utils.js';
-import { withDepositPayments, withWorkerExpenses } from '../services/payments-view.js';
+import { revenuePayments, withWorkerExpenses } from '../services/payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 
 let state = { container: null, activePeriod: 'month' };
@@ -35,7 +35,7 @@ export async function computeReport(period) {
     workerPayments.list().catch(() => []),
   ]);
   const expList = withWorkerExpenses(rawExpList, workerPaysList);
-  const payList = withDepositPayments(rawPayList, ordList);
+  const payList = revenuePayments(rawPayList, ordList);
   const revenue = payList
     .filter((p) => (p.createdAt || 0) >= start)
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -120,7 +120,7 @@ async function buildOrdersByStatus() {
 }
 
 async function buildTopCustomers() {
-  const allPayments = withDepositPayments(await payments.list(), await orders.list());
+  const allPayments = revenuePayments(await payments.list(), await orders.list());
   const totals = {};
   allPayments.forEach((p) => {
     totals[p.customerId] = (totals[p.customerId] || 0) + (Number(p.amount) || 0);

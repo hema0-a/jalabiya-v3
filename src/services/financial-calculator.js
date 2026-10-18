@@ -13,7 +13,7 @@ import { inventory, isLowStockItem } from '../data/repos/inventory.js';
 import { MONTH_NAMES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { getWriteVersion } from '../data/idb.js';
-import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
+import { revenuePayments, withWorkerExpenses } from './payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { isPastDue } from './order-timing.js';
 
@@ -217,7 +217,7 @@ async function computeFinancials(period) {
   ]);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
 
-  const paymentsList = withDepositPayments(rawPayments, ordersList);
+  const paymentsList = revenuePayments(rawPayments, ordersList);
 
   const { startMs, endMs } = getPeriodRange(period);
   const inRange = (ts) => ts >= startMs && ts < endMs;

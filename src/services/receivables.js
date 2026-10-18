@@ -11,7 +11,7 @@
    تُعرض كـ «رصيد غير مربوط» بجانب المستحق ليقرر المستخدم.
    ========================================================================== */
 
-import { orderPaidBreakdown } from './payments-view.js';
+import { orderPaidBreakdown, computeRefundsDue } from './payments-view.js';
 import { renderTemplate, workshopVars, KIND } from './message-templates.js';
 
 const EPS = 0.009;
@@ -35,7 +35,8 @@ function bucketOf(days) {
  * @param {Array} customersList
  * @param {number} [now]
  * @returns {{customers:Array, totals:{overdue:number, pending:number, customersOverdue:number},
- *            buckets:Array<{id:string,label:string,amount:number,count:number}>}}
+ *            buckets:Array<{id:string,label:string,amount:number,count:number}>,
+ *            refunds:{list:Array<{orderId:string,customerId:string,name:string,phone:string,amount:number,creditPart:number,cashPart:number}>, total:number}}}
  */
 export function computeReceivables(ordersList, paymentsList, customersList, now = Date.now()) {
   const orders = Array.isArray(ordersList) ? ordersList : [];
@@ -109,7 +110,16 @@ export function computeReceivables(ordersList, paymentsList, customersList, now 
     pending: customers.reduce((s, c) => s + c.pending, 0),
     customersOverdue: customers.filter((c) => c.overdue > EPS).length,
   };
-  return { customers, totals, buckets };
+  /* مستحق للعملاء (عكس الدين): طلبات ملغاة دُفع عليها ولم يُسجَّل ردّها */
+  const rf = computeRefundsDue(orders, pays);
+  const refunds = {
+    total: rf.total,
+    list: rf.list.map((r) => {
+      const c = custMap.get(r.customerId);
+      return { ...r, name: (c && c.name) || 'عميل محذوف', phone: (c && c.phone) || '' };
+    }).sort((a, b) => b.amount - a.amount),
+  };
+  return { customers, totals, buckets, refunds };
 }
 
 /**

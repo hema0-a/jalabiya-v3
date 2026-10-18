@@ -85,5 +85,6 @@ import './modules/v3371-fresh-orders.test.js';
 import './modules/v3372-media-diagnostic.test.js';
 import './modules/v3373-lazy-data-care.test.js';
 import './modules/audit-phase1.test.js';
+import './modules/audit-phase2.test.js';
 
 export { runAll, register } from './registry.js';

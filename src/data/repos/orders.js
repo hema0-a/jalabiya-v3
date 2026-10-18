@@ -9,6 +9,7 @@ import { STORES } from '../../core/config.js';
 import { customers as customersRepo, walletOf, loyaltyConfig, pointsForAmount, postureLabels } from './customers.js';
 import { payments as paymentsRepo } from './payments.js';
 import { settings as settingsRepo } from './settings.js';
+import { getActiveSession, stopSession } from '../../services/order-timing.js';
 
 const base = createRepository(STORES.ORDERS);
 
@@ -24,6 +25,41 @@ async function _awardPoints(id, o) {
     });
     await base.update(id, { pointsAwarded: pts });
   } catch (e) { console.warn('[orders] award points:', e); }
+}
+
+/**
+ * مواءمة نقاط الولاء الممنوحة مع حالة الطلب ومبلغه (v3.3.76).
+ * النقاط تُمنح عند التسليم على مبلغ الطلب؛ فإن أُعيد فتح الطلب/أُلغي سُحبت، وإن خُفِّض (أو رُفع) مبلغه وهو مسلَّم
+ * عُدّلت بالفرق. ما أنفقه العميل منها فعلاً لا يُسترد (لا تنزل نقاطه تحت صفر). تُعيد pointsAwarded بالقيمة الجديدة
+ * (0 عند السحب، فيُعاد منحها بالمبلغ الجديد عند التسليم التالي).
+ * @param {string} id
+ * @param {Object} prev — الطلب قبل التعديل
+ * @param {Object} next — الطلب بعد التعديل
+ */
+async function _reconcilePoints(id, prev, next) {
+  try {
+    const old = Math.floor(Number(prev.pointsAwarded) || 0);
+    if (old <= 0 || !next || !next.customerId) return;
+    let target;
+    if (next.status !== 'delivered') target = 0;
+    else {
+      if (Number(next.amount) === Number(prev.amount)) return;
+      target = pointsForAmount(next.amount, loyaltyConfig(await settingsRepo.get()));
+    }
+    if (target === old) return;
+    let delta = target - old;
+    if (delta < 0) {
+      const c = await customersRepo.find(next.customerId);
+      delta = -Math.min(-delta, walletOf(c).points);
+    }
+    if (delta !== 0) {
+      await customersRepo.walletAdjust(next.customerId, {
+        points: delta, type: 'adjust', orderId: id,
+        note: (target === 0 ? 'سحب نقاط: إعادة فتح/إلغاء طلب #' : 'تعديل نقاط: تغيّر مبلغ طلب #') + String(id).slice(-6),
+      });
+    }
+    await base.update(id, { pointsAwarded: target });
+  } catch (e) { console.warn('[orders] reconcile points:', e); }
 }
 
 /**
@@ -95,7 +131,14 @@ export const orders = {
   async update(id, patch) {
     let p = patch;
     let prev = null;
-    if (p && (p.status === 'ready' || p.status === 'delivered')) prev = await base.find(id);
+    /* نحتاج الطلب السابق لتغيّر الحالة/المبلغ (مواءمة نقاط الولاء + إغلاق مؤقت العمل) */
+    if (p && (p.status !== undefined || p.amount !== undefined)) prev = await base.find(id);
+    /* تسليم/إلغاء طلب مؤقته يعمل: تُغلق الجلسة الآن. زر المؤقت يُخفى للمسلَّم، فكانت الجلسة تبقى مفتوحة
+       و«ساعات العمل» تتزايد كل ثانية للأبد بلا قدرة على إيقافها. */
+    if (p && (p.status === 'delivered' || p.status === 'cancelled') && !('workSessions' in p)
+        && prev && getActiveSession(prev.workSessions)) {
+      p = { ...p, workSessions: stopSession(prev.workSessions) };
+    }
     if (p && p.status === 'ready') {
       /* readyAt صريح (مثل التراجع عن «تسليم») يُحفظ كما هو بدل إعادة ضبط عمر الجاهزية */
       if (prev && prev.status !== 'ready' && !('readyAt' in p)) p = { ...p, readyAt: Date.now() };
@@ -104,6 +147,9 @@ export const orders = {
     /* نقاط الولاء: تُمنح مرة واحدة عند أول تسليم */
     if (p && p.status === 'delivered' && prev && prev.status !== 'delivered' && !prev.pointsAwarded) {
       await _awardPoints(id, { ...prev, ...p });
+    } else if (res && prev && prev.pointsAwarded > 0) {
+      /* نقاط سبق منحها: أُعيد فتح الطلب/أُلغي أو تغيّر مبلغه → نواءمها */
+      await _reconcilePoints(id, prev, res);
     }
     return res;
   },

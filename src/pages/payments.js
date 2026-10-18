@@ -18,7 +18,7 @@ import { createCustomerPicker } from '../ui/customer-picker.js';
 import { previewPayment } from '../ui/quick-preview.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
-import { withDepositPayments, overpaidBy } from '../services/payments-view.js';
+import { withDepositPayments, overpaidBy, computeRefundsDue } from '../services/payments-view.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 
 /* --- مفتاح المسودة --- */
@@ -427,14 +427,18 @@ function renderStats() {
   if (!wrap) return;
   clear(wrap);
 
-  const total = state.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  /* دفعات الطلبات الملغاة ليست إيراداً (تُردّ للعميل): تُستبعد من الإجمالي كي يطابق اللوحة والتقارير */
+  const cancelledIds = new Set(state.orders.filter((o) => o && o.status === 'cancelled').map((o) => o.id));
+  const live = state.payments.filter((p) => !(p.orderId && cancelledIds.has(p.orderId)));
+  const total = live.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
-  const monthTotal = state.payments
+  const monthTotal = live
     .filter((p) => (p.createdAt || 0) >= monthStart.getTime())
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const linked = state.payments.filter((p) => p.orderId).length;
+  const linked = live.filter((p) => p.orderId).length;
+  const refundsDue = computeRefundsDue(state.orders, state.payments).total;
 
   wrap.appendChild(el('div', { className: 'stat' }, [
     el('span', { className: 'stat__icon' }, '💰'),
@@ -451,6 +455,14 @@ function renderStats() {
     el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#1F6D57' } }, String(linked)),
     el('span', { className: 'stat__label' }, 'مرتبطة بطلب'),
   ]));
+
+  if (refundsDue > 0) {
+    wrap.appendChild(el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '💸'),
+      el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#C62828' } }, formatEGP(refundsDue)),
+      el('span', { className: 'stat__label' }, 'تُردّ للعملاء (طلبات ملغاة)'),
+    ]));
+  }
 
   /* المقدمات المقبوضة في الطلبات ولم تُسجَّل كدفعات: تُحتسب في الإيرادات (اللوحة/التقارير)
      فنعرضها هنا حتى لا يختلف إجمالي هذه الصفحة عن بقية الصفحات بلا تفسير. */

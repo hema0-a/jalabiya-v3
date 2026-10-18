@@ -196,6 +196,18 @@ export async function pullFlow(uid) {
   /* نسخة أمان قبل تعديل بيانات الجهاز */
   if (!(await safetyBackup('قبل التنزيل من السحابة'))) return { ok: false, error: 'تعذّر إنشاء نسخة أمان' };
 
+  /* «الاستبدال» يمسح سجلات الجهاز، وقراره اتُّخذ على تحليل سابق (مرّ بعده حوار ونسخة أمان).
+     نعيد الفحص الآن: إن ظهر على الجهاز ما لم يكن وقت القرار نوقف الاستبدال بدل أن يضيع.
+     (الدمج لا يحتاج هذا: apply يحرس كل سجل داخل معاملة الكتابة نفسها.) */
+  if (mode === 'replace') {
+    const an2 = await firestoreSync.analyzeLocalVsCloud(res.data);
+    const risk = (a) => (a.localOnly || 0) + (a.localNewer || 0) + (a.tombPending || 0) + (a.settingsPending || 0);
+    if (!an2.ok || risk(an2) > risk(an)) {
+      toast.warning('ظهرت تعديلات جديدة على هذا الجهاز أثناء القرار — لم يُستبدل شيء. أعد التنزيل لمراجعتها.', { duration: 9000 });
+      return { ok: false, cancelled: true, stale: true };
+    }
+  }
+
   const ap = await firestoreSync.apply(res.data, { mode });
   if (!ap.ok) {
     toast.danger('فشل التطبيق: ' + (ap.error || 'خطأ غير معروف'));
