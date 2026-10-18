@@ -34,6 +34,7 @@ const BACKUP_STORES = [
   STORES.REFERRALS,
   STORES.WORKER_PAYMENTS,
   STORES.QUOTES,
+  STORES.LEDGER,
 ];
 
 /* ==========================================================================

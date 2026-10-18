@@ -27,6 +27,7 @@ import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vi
 import { listBackups, verifyBackup, getLastVerification } from '../services/auto-backup.js';
 import { formatDate } from '../core/utils.js';
 import { buildSystemStatusCard } from '../ui/system-status-card.js';
+import { buildLedgerShadowCard } from '../ui/ledger-shadow-card.js';
 import { diagnoseOrderMedia, assessMedia, formatKB } from '../services/media-diagnostic.js';
 import { getStorageStatus, formatBytes } from '../services/storage-health.js';
 
@@ -337,6 +338,7 @@ function draw() {
   clear(c);
   c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));
   c.appendChild(buildSystemStatusCard({ lazyIntegrity: true }));
+  c.appendChild(buildLedgerShadowCard());
   c.appendChild(mediaDiagSection());
   c.appendChild(vipSection());
   c.appendChild(integritySection());

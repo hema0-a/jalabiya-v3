@@ -199,12 +199,13 @@ register('v3.3.78 ledger — محاكي الأجهزة', async (t) => {
   t.test('10. 5000 سطر: اتحاد صحيح بلا فقدان أو تكرار', bm.entries.length === expectedIds.size && bm.conflicts.length === 0);
 });
 
-register('v3.3.78 ledger — المرحلة 0 بلا تغيير سلوك', async (t) => {
+register('v3.3.78 ledger — المحرك نقي ومعزول', async (t) => {
   const read = async (p) => { try { const r = await fetch(p); return r.ok ? await r.text() : ''; } catch (e) { return ''; } };
   const src = await read('src/services/ledger.js');
   t.test('1. المحرك نقي: لا استيراد لأي شيء (لا IndexedDB/DOM/شبكة)', src.length > 1000 && !/^\s*import\s/m.test(src) && !/\bdocument\.|\bindexedDB\b|\bfetch\(|\blocalStorage\b|innerHTML/.test(src));
   const main = await read('src/main.js');
   const customers = await read('src/data/repos/customers.js');
   const orders = await read('src/data/repos/orders.js');
-  t.test('2. لا شيء في التطبيق يستورد الدفتر بعد (لا تغيير سلوك)', main.length > 0 && !/ledger/i.test(main) && !/ledger\.js/.test(customers) && !/ledger\.js/.test(orders));
+  /* المرحلة 1: الوضع الظلّي — المحرك لا يُستورد إلا من ملفات الدفتر نفسها، ولا مسار قراءة من الدفتر في الواجهة القديمة */
+  t.test('2. مستودع العملاء يستدعي الكتابة الظلّية فقط (لا المحرك)', main.length > 0 && /ledger-shadow\.js/.test(customers) && !/services\/ledger\.js/.test(customers) && !/ledger/i.test(orders));
 });

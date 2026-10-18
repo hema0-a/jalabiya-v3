@@ -588,6 +588,15 @@ renderPage(getHashPage());
 /* 👤 ضغطة مطوّلة على اسم عميل ⟵ قائمة (اتصال/واتساب/ملف) */
 import('./ui/customer-menu.js').then((m) => m.installCustomerLongPress()).catch((e) => console.warn('[Main] customer menu unavailable:', e));
 
+/* 📒 الدفتر المالي (وضع المراقبة): الأسطر الافتتاحية بعد الرسم الأول بوقت كافٍ، وبشرط مزامنة نظيفة.
+   فشلها لا يؤثر على التطبيق (العدّادات القديمة هي المرجع). */
+setTimeout(() => {
+  import('./services/ledger-report.js')
+    .then((m) => m.ensureOpening({}))
+    .then((r) => { if (r && r.status === 'written') console.log('[Ledger] كُتب ' + r.written + ' سطر افتتاحي'); })
+    .catch((e) => console.warn('[Ledger] تعذّرت الأسطر الافتتاحية:', e));
+}, 5000);
+
 /* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
 setTimeout(() => {
   (async () => {

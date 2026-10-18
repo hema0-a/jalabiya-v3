@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.78',
+  version: '3.3.79',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 10,
+  version: 11,   /* v11: مخزن ledger (الدفتر المالي — الوضع الظلّي) */
 };
 
 /* --- 4. Stores --- */
@@ -51,6 +51,7 @@ export const STORES = {
   WORKER_PAYMENTS:     'workerPayments',
   BACKUPS:             'backups',
   QUOTES:              'quotes',
+  LEDGER:              'ledger',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */

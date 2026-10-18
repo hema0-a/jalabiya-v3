@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.78 — الفحص العميق (المرحلة 2): الأرصدة والمزامنة والإلغاء
+   الإصدار: v3.3.79 — الفحص العميق (المرحلة 2): الأرصدة والمزامنة والإلغاء
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.78';
+const CACHE_VERSION = 'v3.3.79';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -66,6 +66,7 @@ const PRECACHE_URLS = [
   './src/data/repos/expenses.js',
   './src/data/repos/house-expenses.js',
   './src/data/repos/inventory.js',
+  './src/data/repos/ledger.js',
   './src/data/repos/loan-payments.js',
   './src/data/repos/orders.js',
   './src/data/repos/payments.js',
@@ -150,6 +151,8 @@ const PRECACHE_URLS = [
   './src/services/invoice-print.js',
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
+  './src/services/ledger-report.js',
+  './src/services/ledger-shadow.js',
   './src/services/ledger.js',
   './src/services/loans-calculator.js',
   './src/services/media-diagnostic.js',
@@ -210,6 +213,7 @@ const PRECACHE_URLS = [
   './src/ui/fab.js',
   './src/ui/form-builder.js',
   './src/ui/layout.js',
+  './src/ui/ledger-shadow-card.js',
   './src/ui/lock-screen.js',
   './src/ui/message-composer-dialog.js',
   './src/ui/modal.js',

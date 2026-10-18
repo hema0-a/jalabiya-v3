@@ -9,6 +9,7 @@
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
 import { normalizePhone } from '../../core/utils.js';
+import { recordWalletMove } from '../../services/ledger-shadow.js';
 
 const base = createRepository(STORES.CUSTOMERS);
 
@@ -116,6 +117,7 @@ export function pointsForAmount(amount, cfg) {
 customers.walletAdjust = async function walletAdjust(id, d) {
   /* ذرّي: كل الحساب داخل قفل السجل (حركتان متزامنتان كانتا تُضيّعان إحداهما) */
   let out = null;
+  let logEntry = null;   /* حركة walletLog المكتوبة — تُسجَّل ظلّياً في الدفتر بعد نجاح الكتابة القديمة */
   const res = await base.modify(id, (c) => {
     const w = walletOf(c);
     const dBal = r2(d.balance); const dPts = Math.round(Number(d.points) || 0);
@@ -128,9 +130,12 @@ customers.walletAdjust = async function walletAdjust(id, d) {
       orderId: d.orderId || null, note: d.note || '',
     };
     out = { balance: nb, points: np };
+    logEntry = entry;
     return { creditBalance: nb, points: np, walletLog: [entry, ...w.log].slice(0, WALLET_LOG_MAX) };
   });
   if (!res) throw new Error('العميل غير موجود');
+  /* الوضع الظلّي (v3.3.79): لا يرمي ولا يغيّر نتيجة العملية — العدّادات القديمة هي المرجع */
+  if (logEntry) await recordWalletMove(id, logEntry);
   return out;
 };
 

@@ -823,7 +823,7 @@ async function exportAllData() {
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger',
     ];
     const data = { version: 10, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
@@ -861,7 +861,7 @@ async function importAllData(file) {
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger',
     ];
     const plan = {};
     let skipped = 0;

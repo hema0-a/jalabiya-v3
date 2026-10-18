@@ -188,7 +188,7 @@ function stable(v) {
 }
 
 /** هوية السطر المالية: ما يؤثر على الرصيد (الباقي بيانات وصفية). */
-const identity = (e) => stable({ id: e.id, unit: e.unit, acct: e.acct, delta: e.delta, type: e.type, rev: e.rev == null ? null : e.rev });
+export const entryIdentity = (e) => stable({ id: e.id, unit: e.unit, acct: e.acct, delta: e.delta, type: e.type, rev: e.rev == null ? null : e.rev });
 
 /** ترتيب قانوني ثابت: الوقت ثم الجهاز ثم التسلسل ثم المعرّف. */
 export function compareEntries(a, b) {
@@ -231,7 +231,7 @@ export function mergeLedgers(a, b) {
     (side === 'a' ? inA : inB).add(e.id);
     const cur = map.get(e.id);
     if (!cur) { map.set(e.id, e); return; }
-    if (identity(cur) !== identity(e)) {
+    if (entryIdentity(cur) !== entryIdentity(e)) {
       const kept = pick(cur, e);
       const dropped = kept === cur ? e : cur;
       if (!conflicts.some((c) => c.id === e.id)) conflicts.push({ id: e.id, kept, dropped });
