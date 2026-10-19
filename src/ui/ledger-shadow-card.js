@@ -4,6 +4,10 @@
    تعرض: هل تتطابق عدّادات المحفظة والنقاط وكميات المخزون القديمة مع مجموع الدفتر الجديد؟ وإن اختلفت تعرض
    الفروق بوضوح (العميل، الوحدة، القديم، الدفتر، الفرق، السبب). الوضع الظلّي: العدّادات القديمة
    هي المرجع، والبطاقة للمراقبة فقط. لا innerHTML: كل النصوص عبر el().
+
+   v3.3.81 (الخطوة 2أ): «لوحة التفعيل» أسفل البطاقة: تعرض شروط الجاهزية (مزامنة نظيفة، صفر فروق، نسخة
+   احتياطية جديدة)، وتمنع التفعيل مع بيان السبب إن لم تتحقق، وعند التفعيل تأخذ نسخة جديدة وتفحصها أولاً.
+   تجهيز فقط: المفتاح لا يغيّر أي سلوك مالي بعد.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -14,6 +18,8 @@ import {
 } from '../services/ledger-report.js';
 import { UNITS } from '../services/ledger.js';
 import { resetShadowFailures } from '../services/ledger-shadow.js';
+import { collectReadiness, activateLedgerAuthority, deactivateLedgerAuthority } from '../services/ledger-authority.js';
+import { formatDate } from '../core/utils.js';
 
 const MAX_ROWS = 25;
 
@@ -26,9 +32,11 @@ export function buildLedgerShadowCard() {
   const btnRefresh = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-refresh', onClick: () => load() }, '🔄 إعادة الفحص');
   const btnOpen = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-opening', onClick: () => runOpening() }, '📒 اكتب الأسطر الافتتاحية');
   const btnReset = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-reset', onClick: () => runReset() }, '♻️ إعادة ضبط الدفتر');
+  const authBox = el('div', { className: 'ledauth', 'data-role': 'ledger-authority' });
   const card = el('div', { className: 'card ledcard', 'data-role': 'ledger-shadow' }, [
     el('div', { className: 'ledcard__head' }, [title, btnRefresh]), body,
     el('div', { className: 'ledcard__actions' }, [btnOpen, btnReset]),
+    authBox,
     el('div', { className: 'ledcard__hint' },
       'التطبيق يعمل بالعدّادات القديمة كالمعتاد، ويُسجَّل كل تغيير في الدفتر في الخلفية للمقارنة فقط. '
       + 'قد تظهر فروق إن كان لديك جهاز آخر لم يُحدَّث بعد، أو بعد استعادة نسخة احتياطية قديمة.'),
@@ -63,10 +71,87 @@ export function buildLedgerShadowCard() {
         if (r.rows.length > MAX_ROWS) list.appendChild(el('div', { className: 'ledcard__more' }, 'و' + (r.rows.length - MAX_ROWS) + ' فرقاً آخر…'));
         body.appendChild(list);
       }
+      await renderAuthority(r);
     } catch (e) {
       clear(body);
       body.appendChild(el('div', { className: 'ledcard__warn' }, 'تعذّر الفحص: ' + (e && e.message ? e.message : e)));
     } finally { btnRefresh.disabled = false; }
+  }
+
+  /** لوحة التفعيل: شروط الجاهزية + زر التفعيل/الإلغاء. فشلها لا يُسقط البطاقة. */
+  async function renderAuthority(report) {
+    try {
+      const res = await collectReadiness({ report });
+      clear(authBox);
+      authBox.setAttribute('data-state', res.alreadyEnabled ? 'enabled' : (res.canAttempt ? 'ready' : 'blocked'));
+      authBox.appendChild(el('div', { className: 'ledauth__title' }, '🔐 تفعيل الدفتر كمرجع أساسي'));
+      authBox.appendChild(el('div', { className: 'ledauth__note' },
+        'الخطوة 2أ — تجهيز فقط: المفتاح لا يغيّر أي حساب؛ التطبيق يستمر بالعدّادات القديمة حتى الخطوتين التاليتين.'));
+
+      if (res.alreadyEnabled) {
+        const cur = res.current;
+        authBox.appendChild(el('div', { className: 'ledauth__state', 'data-role': 'authority-state' },
+          '✅ مفعَّل على هذا الجهاز' + (cur.enabledAt ? ' منذ ' + formatDate(cur.enabledAt) : '')
+          + (cur.backupId ? ' — نسخة ما قبل التفعيل: ' + String(cur.backupId).slice(0, 8) : '')));
+        authBox.appendChild(el('div', { className: 'ledcard__actions' }, [
+          el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-authority-deactivate', onClick: () => runDeactivate() }, '↩️ ألغِ التفعيل'),
+        ]));
+        return;
+      }
+
+      res.checks.forEach((c) => {
+        const icon = c.ok ? '✅' : (c.id === 'backup' && res.canAttempt ? '⏳' : '❌');
+        authBox.appendChild(el('div', { className: 'ledauth__check', 'data-check': c.id, 'data-ok': c.ok ? '1' : '0' }, [
+          el('div', { className: 'ledauth__label' }, icon + ' ' + c.label),
+          el('div', { className: 'ledauth__detail' }, c.detail),
+          !c.ok && c.hint ? el('div', { className: 'ledauth__hint' }, c.hint) : null,
+        ]));
+      });
+      if (!res.canAttempt) {
+        authBox.appendChild(el('div', { className: 'ledauth__reason', 'data-role': 'authority-reason' }, '⛔ ' + res.reason));
+      }
+      const btnActivate = el('button', {
+        className: 'btn btn--sm btn--primary', type: 'button', 'data-action': 'ledger-authority-activate',
+        onClick: () => runActivate(btnActivate),
+      }, '🔒 فعّل الدفتر كمرجع (مع نسخة احتياطية تلقائية)');
+      btnActivate.disabled = !res.canAttempt;
+      authBox.appendChild(el('div', { className: 'ledcard__actions' }, [btnActivate]));
+    } catch (e) {
+      clear(authBox);
+      authBox.appendChild(el('div', { className: 'ledcard__warn' }, 'تعذّر فحص جاهزية التفعيل: ' + (e && e.message ? e.message : e)));
+    }
+  }
+
+  async function runActivate(btn) {
+    const ok = await modal.confirm({
+      title: 'تفعيل الدفتر كمرجع',
+      message: 'سيُؤخذ الآن نسخة احتياطية جديدة وتُفحص، ثم يُحفظ مفتاح التفعيل. في هذه الخطوة لا يتغيّر أي حساب '
+        + 'ولا أي رصيد: التطبيق يستمر بالعدّادات القديمة. متابعة؟',
+      confirmText: 'خذ نسخة وفعّل', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+    if (btn) btn.disabled = true;
+    try {
+      const r = await activateLedgerAuthority();
+      if (r.status === 'activated') toast.success('فُعّل الدفتر كمرجع بعد نسخة احتياطية سليمة');
+      else if (r.status === 'failed') toast.danger(r.reason);
+      else toast.warning(r.reason || 'تعذّر التفعيل');
+    } catch (e) { toast.danger('تعذّر: ' + (e && e.message ? e.message : e)); }
+    await load();
+  }
+
+  async function runDeactivate() {
+    const ok = await modal.confirm({
+      title: 'إلغاء التفعيل',
+      message: 'يعود المفتاح إلى «غير مفعّل». لا تتغيّر أي بيانات. متابعة؟',
+      confirmText: 'ألغِ التفعيل', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+    try {
+      const r = await deactivateLedgerAuthority();
+      if (r.status === 'failed') toast.danger(r.reason); else toast.success('أُلغي التفعيل');
+    } catch (e) { toast.danger('تعذّر: ' + (e && e.message ? e.message : e)); }
+    await load();
   }
 
   async function runOpening() {

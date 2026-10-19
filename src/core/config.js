@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.80',
+  version: '3.3.81',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -220,6 +220,12 @@ export const DEFAULT_SETTINGS = {
   },
   lockScreen: {
     background: null, message: 'أدخل الرقم السري للدخول', showLogo: true,
+  },
+  /* الدفتر المالي كمرجع أساسي (v3.3.81، الخطوة 2أ): مفتاح يدوي محلي لهذا الجهاز — ليس ضمن مفاتيح
+     الإعدادات المُزامَنة (settings-sync). في 2أ لا يقرؤه أي كود مالي؛ يُحفظ فقط بعد اجتياز لوحة الجاهزية
+     في بطاقة الدفتر (مزامنة نظيفة + صفر فروق + نسخة احتياطية جديدة سليمة). انظر ledger-authority.js. */
+  ledgerAuthority: {
+    enabled: false, enabledAt: null, disabledAt: null, deviceId: null, backupId: null, backupAt: null, checkedAt: null,
   },
 };
 
