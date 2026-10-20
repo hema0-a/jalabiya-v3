@@ -200,6 +200,7 @@ const appearanceSection = {
           document.documentElement.style.setProperty('--color-primary', th.primary);
           document.documentElement.style.setProperty('--color-accent', th.accent);
           document.documentElement.style.setProperty('--color-bg', th.bg);
+          markActiveCard(themesGrid, 'theme', th.id);
         },
       }, [
         el('span', { className: 'settings-theme-card__emoji' }, th.emoji),
@@ -265,6 +266,21 @@ const appearanceSection = {
    3. الخلفيات الإبداعية
    ========================================================================== */
 
+
+/**
+ * يبدّل البطاقة النشطة داخل شبكة خيارات دون إعادة رسم القسم (v3.3.85).
+ * كانت الأزرار تعيد رسم القسم داخل `grid.parentNode` (غلاف الحقل لا جسم القسم) فيتكرر القسم ويتداخل مع كل ضغطة،
+ * وكانت تستعمل innerHTML (ممنوع). الحفظ والتطبيق يجريان قبل هذه الدالة؛ هي تحدّث التمييز فقط.
+ * @param {HTMLElement} grid — الشبكة الحاضنة للأزرار
+ * @param {string} key — اسم سمة data المميِّزة (font | size | bg | icon)
+ * @param {string} id — معرّف الخيار الجديد
+ */
+function markActiveCard(grid, key, id) {
+  grid.querySelectorAll('button[data-' + key + ']').forEach((b) => {
+    b.classList.toggle('settings-theme-card--active', b.dataset[key] === id);
+  });
+}
+
 const backgroundsSection = {
   id: 'backgrounds',
   icon: '🖼️',
@@ -306,13 +322,7 @@ const backgroundsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ appearance: { backgroundPattern: bg.id } });
           applyBackground(bg.id);
-          /* إعادة رسم القسم */
-          const parent = grid.parentNode;
-          parent.innerHTML = '';
-          backgroundsSection.render(parent, {
-            ...currentSettings,
-            appearance: { ...ap, backgroundPattern: bg.id },
-          }, saveFn);
+          markActiveCard(grid, 'bg', bg.id);
         },
       }, [
         el('div', { style: previewStyle }),
@@ -363,12 +373,7 @@ const iconsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ appearance: { iconStyle: st.id } });
           applyIconStyle(st.id);
-          const parent = grid.parentNode;
-          parent.innerHTML = '';
-          iconsSection.render(parent, {
-            ...currentSettings,
-            appearance: { ...ap, iconStyle: st.id },
-          }, saveFn);
+          markActiveCard(grid, 'icon', st.id);
         },
       }, [
         el('span', { style: { fontSize: '24px', lineHeight: '1', marginBottom: '4px' } }, '👥'),
@@ -418,12 +423,7 @@ const fontsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontFamily: f.id } });
           applyFont(f.id);
-          const parent = fontGrid.parentNode;
-          parent.innerHTML = '';
-          fontsSection.render(parent, {
-            ...currentSettings,
-            display: { ...dp, fontFamily: f.id },
-          }, saveFn);
+          markActiveCard(fontGrid, 'font', f.id);
         },
       }, [
         el('span', { style: { fontFamily: f.font, fontSize: '18px', fontWeight: '600' } }, 'أ'),
@@ -453,12 +453,7 @@ const fontsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontSize: sz.id } });
           applyFontSize(sz.id);
-          const parent = sizeGrid.parentNode;
-          parent.innerHTML = '';
-          fontsSection.render(parent, {
-            ...currentSettings,
-            display: { ...dp, fontSize: sz.id },
-          }, saveFn);
+          markActiveCard(sizeGrid, 'size', sz.id);
         },
       }, [
         el('span', { style: { fontSize: (16 * sz.factor) + 'px', lineHeight: '1' } }, 'أ'),

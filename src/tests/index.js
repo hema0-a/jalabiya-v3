@@ -95,5 +95,6 @@ import './modules/v3381-ledger-authority-ui.test.js';
 import './modules/v3382-ledger-apply.test.js';
 import './modules/v3383-ledger-reconcile.test.js';
 import './modules/v3384-min-version.test.js';
+import './modules/v3385-perf-probe.test.js';
 
 export { runAll, register } from './registry.js';

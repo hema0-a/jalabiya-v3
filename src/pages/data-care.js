@@ -6,6 +6,7 @@
    2) فحص سلامة البيانات + إصلاح آمن (لا يمسّ أي مبلغ مالي).
    3) دمج العملاء المكررين (يعيد نسبة الطلبات والدفعات والمواعيد للسجل الباقي).
    4) تشخيص حجم الصور والتوقيعات داخل الطلبات (v3.3.72) — للقراءة فقط وعند الضغط فقط.
+   5) قياس الأداء على الجهاز (v3.3.85) — قراءة فقط وعند الضغط فقط + تقرير يُنسخ كاملاً.
    v3.3.73: القراءة كسولة — فتح الصفحة لا يقرأ الطلبات (بصورها وتوقيعاتها) ولا الدفعات ولا المواعيد؛
    تُقرأ فقط عند الضغط على «افحص المؤهلين» أو «افحص الآن» (سلامة البيانات) أو «تحديث» في بطاقة الحالة.
    ========================================================================== */
@@ -31,6 +32,7 @@ import { buildSystemStatusCard } from '../ui/system-status-card.js';
 import { buildLedgerShadowCard } from '../ui/ledger-shadow-card.js';
 import { diagnoseOrderMedia, assessMedia, formatKB } from '../services/media-diagnostic.js';
 import { getStorageStatus, formatBytes } from '../services/storage-health.js';
+import { runProbe, runSynthetic, formatReport } from '../services/perf-probe.js';
 
 const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
 /**
@@ -41,6 +43,7 @@ const freshState = (container = null) => ({
   container, data: null, full: false, scan: null, backups: null, verifyResult: null,
   media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null,
   mediaError: '', mediaUsage: null, mediaProgressNode: null,
+  perf: null, perfSynth: null, perfRunning: false, perfCancel: false, perfStep: '', perfError: '', perfProgressNode: null,
 });
 let state = freshState();
 
@@ -331,6 +334,86 @@ function mediaDiagSection() {
   return section('📊 تشخيص حجم الصور والتوقيعات', kids);
 }
 
+
+/* ---------- 5) قياس الأداء على الجهاز (v3.3.85، قراءة فقط) ---------- */
+
+/** نص تقدم قياس الأداء. */
+function perfProgressText() { return 'جارٍ القياس… ' + (state.perfStep || ''); }
+
+/**
+ * يشغّل القياس الأساسي (قراءة فقط) أو الاختبار التخيّلي (قاعدة مؤقتة تُحذف).
+ * @param {'probe'|'synth'} kind
+ */
+async function runPerf(kind) {
+  if (state.perfRunning) return;
+  const mine = state;
+  mine.perfRunning = true; mine.perfCancel = false; mine.perfStep = ''; mine.perfError = '';
+  if (kind === 'probe') { mine.perf = null; mine.perfSynth = null; }
+  draw();
+  const onProgress = (p) => {
+    mine.perfStep = p.step;
+    if (state === mine && mine.perfProgressNode) mine.perfProgressNode.textContent = perfProgressText();
+  };
+  try {
+    if (kind === 'probe') mine.perf = await runProbe({ onProgress, shouldCancel: () => mine.perfCancel || state !== mine });
+    else mine.perfSynth = await runSynthetic({ onProgress, shouldCancel: () => mine.perfCancel || state !== mine });
+  } catch (err) {
+    console.error('[data-care] perf:', err);
+    mine.perfError = 'تعذّر القياس: ' + (err && err.message || err);
+  } finally {
+    mine.perfRunning = false;
+    if (state === mine) draw();
+  }
+}
+
+/** ينسخ التقرير كاملاً إلى الحافظة (مع بديل execCommand لبعض المتصفحات). */
+async function copyPerfReport() {
+  const text = formatReport(state.perf, state.perfSynth);
+  try { await navigator.clipboard.writeText(text); toast.success('تم نسخ التقرير'); return; } catch (e) { /* بديل */ }
+  const ta = el('textarea', { readonly: '', style: { position: 'fixed', opacity: '0', top: '0' }, text });
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  if (ok) toast.success('تم نسخ التقرير'); else toast.warning('تعذّر النسخ — حدّد النص في المربع وانسخه يدوياً');
+}
+
+function perfSection() {
+  const kids = [
+    el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.7' } },
+      'يقيس زمن قراءة بياناتك على هذا الجهاز (الطلبات، العملاء، المدفوعات…) وحجمها، ويقدّر أثر النمو. ' +
+      'للقراءة فقط: لا يعدّل بيانات التطبيق، ولا يعمل إلا عند الضغط. انسخ التقرير وأرسله لتحديد خطوة التحسين.'),
+  ];
+  if (state.perfRunning) {
+    const prog = el('div', { role: 'status', style: { fontSize: '13px', fontWeight: '600', color: '#0B5A8A', marginBottom: '8px' } }, perfProgressText());
+    state.perfProgressNode = prog;
+    kids.push(prog, btn('⏹️ إيقاف', () => { state.perfCancel = true; }, 'secondary'));
+  } else {
+    state.perfProgressNode = null;
+    kids.push(btn(state.perf ? '🔄 إعادة القياس' : '⏱️ قياس الأداء الآن (قراءة فقط)', () => runPerf('probe')));
+    if (state.perf) {
+      kids.push(btn('📋 نسخ التقرير كاملاً', copyPerfReport, 'secondary', { marginTop: '8px' }));
+      kids.push(btn(state.perfSynth ? '🧪 إعادة اختبار النمو التخيّلي' : '🧪 اختبار النمو التخيّلي (قاعدة مؤقتة)', async () => {
+        const ok = await modal.confirm({
+          title: 'اختبار النمو التخيّلي',
+          message: 'ينشئ قاعدة بيانات مؤقتة باسم مختلف (نحو 100 ثم 300 طلب بصور ~250KB: حتى ~75MB) ليقيس السرعة، ثم يحذفها فوراً. بيانات التطبيق لا تُمسّ إطلاقاً. قد يستغرق دقيقة.',
+          confirmText: 'ابدأ', cancelText: 'إلغاء',
+        });
+        if (ok) await runPerf('synth');
+      }, 'secondary', { marginTop: '8px' }));
+    }
+  }
+  if (state.perfError) kids.push(el('div', { style: { color: '#B3261E', fontSize: '13px', marginTop: '8px' } }, state.perfError));
+  if (state.perf) {
+    kids.push(el('textarea', {
+      readonly: '', dir: 'rtl', rows: '16',
+      style: { width: '100%', marginTop: '10px', fontSize: '12px', lineHeight: '1.6', fontFamily: 'monospace', boxSizing: 'border-box' },
+      text: formatReport(state.perf, state.perfSynth),
+    }));
+  }
+  return section('⏱️ قياس الأداء', kids);
+}
+
 function draw() {
   const c = state.container;
   if (!c || !state.data) return;
@@ -339,6 +422,7 @@ function draw() {
   c.appendChild(buildSystemStatusCard({ lazyIntegrity: true }));
   c.appendChild(buildLedgerShadowCard());
   c.appendChild(mediaDiagSection());
+  c.appendChild(perfSection());
   c.appendChild(vipSection());
   c.appendChild(integritySection());
   c.appendChild(mergeSection());
@@ -355,5 +439,5 @@ export const dataCarePage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state.mediaCancel = true; state = freshState(); },
+  destroy() { state.mediaCancel = true; state.perfCancel = true; state = freshState(); },
 };
