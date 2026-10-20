@@ -36,6 +36,8 @@ import { markClean, markCleanIfUnchanged } from './dirty-state.js';
 import * as tombstones from './tombstones.js';
 import * as settingsSync from './settings-sync.js';
 import { mergeRecords } from './record-merge.js';
+import { planLedgerUnion, logLedgerConflicts } from '../services/ledger-union.js';
+import { reconcileAfterSync } from '../services/ledger-apply.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -493,6 +495,21 @@ function compareStore(local, cloud, store, tomb, since = 0) {
 }
 
 /**
+ * مقارنة مخزن الدفتر: اتحاد فقط (v3.3.83). أسطر الدفتر ثابتة فلا حذف ولا استبدال ولا دمج حقول ولا شواهد حذف؛
+ * يُضاف ما ينقص محلياً، وما اختلفت هويته بنفس المعرّف يُبلَّغ كتعارض ولا يُكتب فوق الموجود.
+ * يُرجع شكل compareStore نفسه كي يمرّ في خطة الدمج والحراس (حارس كل سطر مضاف = غير موجود).
+ * @param {Array} local
+ * @param {Array} cloud
+ */
+function compareLedger(local, cloud) {
+  const u = planLedgerUnion(local, cloud);
+  return {
+    toPut: u.toPut, toDelete: [], added: u.added, updated: 0, localOnly: u.localOnly, localNewer: 0,
+    deleted: 0, merged: 0, conflicts: [], ledgerConflicts: u.conflicts, survivors: new Map(), localSig: new Map(),
+  };
+}
+
+/**
  * حراس الكتابة لخطة دمج: لكل سجل سيُكتب/يُحذف نتوقع بصمته المحلية وقت الحساب
  * (null = لم يكن موجوداً). أي اختلاف داخل معاملة الكتابة يُلغيها كلها.
  * @param {Object} perStore — نتائج compareStore لكل مخزن
@@ -542,11 +559,15 @@ async function buildMergePlan(snapshot) {
   const survivorsByStore = {};
   const totals = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0 };
   const conflictList = [];
+  const ledgerConflicts = [];
   const since = getKnownRev() || 0;
   for (const s of SYNC_STORES) {
     if (!Array.isArray(snapshot.stores[s])) continue;
     const local = await idb.getAll(s);
-    const r = compareStore(Array.isArray(local) ? local : [], snapshot.stores[s], s, union, since);
+    const r = s === 'ledger'
+      ? compareLedger(Array.isArray(local) ? local : [], snapshot.stores[s])
+      : compareStore(Array.isArray(local) ? local : [], snapshot.stores[s], s, union, since);
+    if (r.ledgerConflicts) ledgerConflicts.push(...r.ledgerConflicts);
     perStore[s] = r;
     survivorsByStore[s] = r.survivors;
     for (const k of ['added', 'updated', 'localOnly', 'localNewer', 'deleted', 'merged']) totals[k] += r[k];
@@ -568,7 +589,7 @@ async function buildMergePlan(snapshot) {
   /* إعدادات العمل: دمج لكل مفتاح بوقت آخر تعديل */
   const cloudSets = Array.isArray(snapshot.stores[SETS]) ? snapshot.stores[SETS][0] : null;
   const settingsPlan = await settingsSync.planApply(cloudSets, 'merge');
-  return { perStore, finalTombs, tombPending, totals, settingsPlan, conflictList };
+  return { perStore, finalTombs, tombPending, totals, settingsPlan, conflictList, ledgerConflicts };
 }
 
 /**
@@ -620,10 +641,13 @@ async function applyImpl(snapshot, opts = {}) {
       const plan = {};
       const stats = { added: 0, updated: 0, localOnly: 0, localNewer: 0, deleted: 0, merged: 0, conflicts: 0, tombPending: 0, settingsPending: 0 };
       let perStore = null;
+      let ledgerPending = 0;            /* أسطر دفتر محلية لم تصل السحابة (في الاستبدال تبقى ولا تُمسح) */
+      const ledgerConflictsNow = [];
       if (merge) {
         const mp = await buildMergePlan(snapshot);
         perStore = mp.perStore;
         stats.conflictList = mp.conflictList.slice(0, 200);
+        ledgerConflictsNow.push(...mp.ledgerConflicts);
         for (const [s, r] of Object.entries(mp.perStore)) plan[s] = { clear: false, records: r.toPut, deletes: r.toDelete };
         Object.assign(stats, mp.totals, { tombPending: mp.tombPending, settingsPending: mp.settingsPlan.pending });
         plan.settings = { clear: false, records: [tombstones.buildRecord(mp.finalTombs), ...mp.settingsPlan.records] };
@@ -631,6 +655,17 @@ async function applyImpl(snapshot, opts = {}) {
         for (const s of SYNC_STORES) {
           /* مخزن غائب من النسخة السحابية (نسخة أقدم/ناقصة) لا يُمسح محلياً */
           if (!Array.isArray(snapshot.stores[s])) continue;
+          /* الدفتر لا يُمسح في «الاستبدال» أبداً (v3.3.83): اتحاد فقط — الحركات المحلية غير المرفوعة مال لا يُضيَّع */
+          if (s === 'ledger') {
+            const loc = await idb.getAll(s);
+            const lp = compareLedger(Array.isArray(loc) ? loc : [], snapshot.stores[s]);
+            plan[s] = { clear: false, records: lp.toPut, deletes: [] };
+            perStore = perStore || {};
+            perStore[s] = lp;          /* يُحرَس كل سطر مضاف بأنه غير موجود (السباق يُعيد الحساب) */
+            ledgerPending += lp.localOnly;
+            ledgerConflictsNow.push(...lp.ledgerConflicts);
+            continue;
+          }
           plan[s] = { clear: true, records: snapshot.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
         }
         const cloudTombs = Array.isArray(snapshot.stores[TOMB]) ? snapshot.stores[TOMB] : [];
@@ -661,9 +696,13 @@ async function applyImpl(snapshot, opts = {}) {
       /* استبدال (أو دمج بلا زيادات محلية) = الجهاز يطابق السحابة؛ دمج مع زيادات/حذف محلي لم يُرفع = يحتاج رفعاً.
          وإن حدثت أي كتابة أخرى أثناء التطبيق (غير معاملتنا) نُبقي علامة «غير مرفوع» (كان markClean يمسحها بلا شرط). */
       const concurrentWrites = idb.getWriteVersion() !== v0 + 1;
-      if (!concurrentWrites && (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0 && stats.settingsPending === 0))) markClean();
+      if (!concurrentWrites && ledgerPending === 0 && (!merge || (stats.localOnly === 0 && stats.localNewer === 0 && stats.tombPending === 0 && stats.settingsPending === 0))) markClean();
       stats.attempts = attempt;
-      return merge ? { ok: true, counts, merge: stats } : { ok: true, counts };
+      /* تعارضات معرّفات الدفتر تُحفظ للمراجعة؛ ثم مصالحة فورية: يُعاد اشتقاق العدّادات من الدفتر (إن كان مرجعاً)
+         ويُسجَّل cache_diverged لو كتب جهاز قديم العدّادات مباشرة (لا ترمي ولا تُفشل المزامنة) */
+      try { logLedgerConflicts(ledgerConflictsNow); } catch (e) { /* ignore */ }
+      const reconciled = await reconcileAfterSync();
+      return merge ? { ok: true, counts, merge: stats, reconciled } : { ok: true, counts, reconciled };
     }
   } catch (err) {
     return { ok: false, error: translateError(err) };

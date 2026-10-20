@@ -74,6 +74,18 @@ async function noteMergeResult(stats) {
 }
 
 /**
+ * تنبيه بعد المصالحة: إن اضطُرّ النظام لتصحيح عدّادات من الدفتر بعد السحب فهذا يعني أن جهازاً قديماً
+ * كتب الرصيد/النقاط مباشرة (cache_diverged). لا يرمي أبداً. (v3.3.83)
+ * @param {{reconciled?:{fixed?:number, diverged?:number}}} ap — نتيجة apply
+ * @returns {number} عدد العدّادات المصحَّحة بسبب انحراف
+ */
+function noteReconcile(ap) {
+  const n = ap && ap.reconciled ? Number(ap.reconciled.diverged) || 0 : 0;
+  if (n > 0) toast.warning('📒 صُحِّحت أرصدة/نقاط ' + n + ' عميل من الدفتر المالي — يبدو أن جهازاً لم يُحدَّث كتب الرصيد مباشرة. حدّث التطبيق على كل أجهزتك وراجع بطاقة الدفتر.', { duration: 12000 });
+  return n;
+}
+
+/**
  * تنزيل ودمج مع بيانات الجهاز (يحفظ كل شيء). يُستعمل من pullFlow ومن pushFlow عند التعارض.
  * @returns {Promise<{ok:boolean, error?:string}>}
  */
@@ -86,6 +98,7 @@ async function pullAndMerge(uid) {
   const ap = await firestoreSync.apply(res.data, { mode: 'merge' });
   if (!ap.ok) return { ok: false, error: ap.error || 'فشل الدمج' };
   await noteMergeResult(ap.merge);
+  noteReconcile(ap);
   return { ok: true, stats: ap.merge };
 }
 
@@ -215,6 +228,7 @@ export async function pullFlow(uid) {
   }
   markSynced();
   if (mode === 'merge') await noteMergeResult(ap.merge);
+  noteReconcile(ap);
   toast.success(mode === 'merge'
     ? 'تم الدمج — ارفع الآن لتحديث السحابة بالنتيجة'
     : 'تم التنزيل — افتح أي صفحة لرؤية البيانات');

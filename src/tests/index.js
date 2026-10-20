@@ -93,5 +93,6 @@ import './modules/v3380-stock-shadow-merge.test.js';
 import './modules/v3381-ledger-authority.test.js';
 import './modules/v3381-ledger-authority-ui.test.js';
 import './modules/v3382-ledger-apply.test.js';
+import './modules/v3383-ledger-reconcile.test.js';
 
 export { runAll, register } from './registry.js';

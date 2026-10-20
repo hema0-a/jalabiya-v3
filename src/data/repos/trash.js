@@ -10,6 +10,8 @@ import { STORES, LIMITS } from '../../core/config.js';
 import * as idb from '../idb.js';
 import { customers as customersRepo } from './customers.js';
 import { recordStockMove } from '../../services/ledger-shadow.js';
+import { isAuthorityActive } from '../../services/ledger-flag.js';
+import { ledgerWalletOf } from '../../services/ledger-apply.js';
 
 const base = createRepository(STORES.TRASH);
 
@@ -70,6 +72,14 @@ export const trash = {
       });
     }
     delete data.creditRefunded;
+    /* حراسة السلة (v3.3.83): حين يكون الدفتر مرجعاً لا نثق بعدّادات العميل المحفوظة في السلة (قديمة)؛
+       يُشتق الرصيد والنقاط من الدفتر قبل الكتابة، فلا يظهر العميل بأرقام قديمة ولا نافذة مزامنة بها.
+       (walletLog يبقى كما هو: سجل عرض فقط.) */
+    if (item.originalStore === STORES.CUSTOMERS && await isAuthorityActive()) {
+      const w = await ledgerWalletOf(data.id);
+      data.creditBalance = Math.max(0, w.balance);
+      data.points = Math.max(0, w.points);
+    }
     /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
     await idb.put(item.originalStore, { ...data, updatedAt: Date.now() });
     /* الدفتر الظلّي (v3.3.80): استرجاع صنف يعيد كميته؛ المعرّف مشتق من عنصر السلة فلا يتكرر */

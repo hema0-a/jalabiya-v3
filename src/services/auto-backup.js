@@ -13,6 +13,9 @@ import { STORES, LIMITS, STORAGE_KEYS } from '../core/config.js';
 import { settings } from '../data/repos/settings.js';
 import { uid, localDateInput } from '../core/utils.js';
 import * as idb from '../data/idb.js';
+import { SETTINGS_ID } from '../data/schema.js';
+import { planLedgerUnion, logLedgerConflicts } from './ledger-union.js';
+import { reconcileDerivedCounters } from './ledger-apply.js';
 
 /* --- المخازن المُشتركة في النسخة (كل المخازن ما عدا backups) --- */
 const BACKUP_STORES = [
@@ -266,12 +269,19 @@ export async function getBackup(id) {
    5. استرجاع نسخة
    ========================================================================== */
 
+/** أقصى محاولات عند تغيّر الدفتر/الإعدادات أثناء حساب خطة الاستعادة (guard-mismatch). */
+const RESTORE_MAX_ATTEMPTS = 3;
+
 /**
- * استرجاع نسخة احتياطية (يستبدل كل البيانات الحالية).
+ * استرجاع نسخة احتياطية: يستبدل بيانات المخازن العادية، أما **الدفتر المالي فيُدمج ولا يُمسح** (v3.3.83).
+ *  - الدفتر: اتحاد حركات النسخة مع الحالية (الأسطر ثابتة؛ لا حذف ولا استبدال). حركة مالية بعد تاريخ النسخة تبقى.
+ *  - مفتاح «الدفتر مرجع» (settings.ledgerAuthority) محلي للجهاز: يبقى كما هو على الجهاز ولا تُغيّره النسخة
+ *    (وإن لم يكن لدى الجهاز مفتاح يُحذف من السجل المستعاد فلا يُفعَّل الدفتر خارج لوحة الجاهزية).
+ *  - بعد الكتابة تُشتق عدّادات العملاء من الدفتر فوراً إن كان مرجعاً (النسخة القديمة تحمل أرصدة قديمة).
  *
- * ⚠️ خطير — لا رجعة فيه.
+ * ⚠️ استبدال بقية البيانات لا رجعة فيه (توجد نسخة «قبل الاستعادة» للطوارئ).
  * @param {string} id
- * @returns {Promise<{ok:boolean, restored?:Object, error?:string}>}
+ * @returns {Promise<{ok:boolean, restored?:Object, ledger?:{added:number, localOnly:number, conflicts:number}, reconciled?:number, error?:string}>}
  */
 export async function restoreBackup(id) {
   try {
@@ -286,19 +296,64 @@ export async function restoreBackup(id) {
       return { ok: false, error: 'تعذّر إنشاء نسخة أمان قبل الاستعادة: ' + (safety.error || '') };
     }
 
-    /* استبدال ذرّي: إن فشل أي سجل تُلغى العملية كلها وتبقى البيانات كما هي */
-    const plan = {};
-    for (const s of BACKUP_STORES) {
-      /* مخزن غائب من النسخة (نسخة أقدم أُضيفت بعدها مخازن جديدة) لا يُمسح من البيانات الحالية */
-      if (!Array.isArray(backup.stores[s])) continue;
-      plan[s] = { clear: true, records: backup.stores[s].filter((r) => r && typeof r === 'object' && r.id != null) };
-    }
-    if (Object.keys(plan).length === 0) {
-      return { ok: false, error: 'النسخة لا تحتوي أي بيانات صالحة' };
-    }
-    const restored = await idb.writeBatch(plan);
+    for (let attempt = 1; ; attempt++) {
+      /* استبدال ذرّي: إن فشل أي سجل تُلغى العملية كلها وتبقى البيانات كما هي */
+      const plan = {};
+      const guards = {};
+      let ledgerInfo = { added: 0, localOnly: 0, conflicts: 0 };
+      let conflicts = [];
+      for (const s of BACKUP_STORES) {
+        /* مخزن غائب من النسخة (نسخة أقدم أُضيفت بعدها مخازن جديدة) لا يُمسح من البيانات الحالية */
+        if (!Array.isArray(backup.stores[s])) continue;
+        const recs = backup.stores[s].filter((r) => r && typeof r === 'object' && r.id != null);
+        if (s === STORES.LEDGER) {
+          /* دمج لا استبدال: يُضاف ما ينقص فقط، وحارس كل سطر مضاف = غير موجود (سباق مع مزامنة ⟵ إعادة حساب) */
+          const cur = await idb.getAll(STORES.LEDGER);
+          const u = planLedgerUnion(Array.isArray(cur) ? cur : [], recs);
+          plan[s] = { clear: false, records: u.toPut, deletes: [] };
+          if (u.toPut.length) guards[s] = new Map(u.toPut.map((e) => [e.id, null]));
+          ledgerInfo = { added: u.added, localOnly: u.localOnly, conflicts: u.conflicts.length };
+          conflicts = u.conflicts;
+          continue;
+        }
+        if (s === STORES.SETTINGS) {
+          /* مفتاح مرجعية الدفتر محلي للجهاز: يُحفظ من الحالي ويُحرَس السجل */
+          const curSet = await idb.get(STORES.SETTINGS, SETTINGS_ID);
+          const keep = curSet && curSet.ledgerAuthority ? curSet.ledgerAuthority : null;
+          const sig = new Map();
+          const out = recs.map((r) => {
+            if (r.id !== SETTINGS_ID) return r;
+            const { ledgerAuthority: _drop, ...rest } = r;
+            return keep ? { ...rest, ledgerAuthority: keep } : rest;
+          });
+          plan[s] = { clear: true, records: out };
+          sig.set(SETTINGS_ID, curSet ? (Number(curSet.updatedAt) || 0) : null);
+          guards[s] = sig;
+          continue;
+        }
+        plan[s] = { clear: true, records: recs };
+      }
+      if (Object.keys(plan).length === 0) {
+        return { ok: false, error: 'النسخة لا تحتوي أي بيانات صالحة' };
+      }
+      let restored;
+      try {
+        restored = await idb.writeBatch(plan, { guards });
+      } catch (e) {
+        if (e && e.code === 'guard-mismatch' && attempt < RESTORE_MAX_ATTEMPTS) continue;
+        if (e && e.code === 'guard-mismatch') {
+          return { ok: false, error: 'تغيّرت البيانات أثناء الاستعادة — لم يُطبَّق شيء. أعد المحاولة' };
+        }
+        throw e;
+      }
 
-    return { ok: true, restored };
+      try { logLedgerConflicts(conflicts); } catch (e) { /* ignore */ }
+      /* العدّادات القديمة في النسخة تُعاد من الدفتر المدموج فوراً (تصحيح متوقع: لا يُسجَّل كشذوذ) */
+      let reconciled = 0;
+      try { reconciled = (await reconcileDerivedCounters({ reason: 'restore' })).fixed; }
+      catch (e) { console.warn('[restore] تعذّرت إعادة اشتقاق العدّادات:', e); }
+      return { ok: true, restored, ledger: ledgerInfo, reconciled };
+    }
   } catch (err) {
     return { ok: false, error: err.message || String(err) };
   }

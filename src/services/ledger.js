@@ -343,8 +343,10 @@ export function isReversed(entries, id) {
  *  - reversal_mismatch (warn): عكس لا يطابق أصله (مقدار/حساب مختلف).
  *  - orphan_reversal (info): عكس أصله لم يصل بعد (قد يصل بمزامنة لاحقة).
  *  - reversal_of_reversal (warn): عكس يشير إلى عكس.
+ *  - cache_diverged (warn): عدّاد مشتق (رصيد/نقاط) خالف الدفتر بعد مزامنة/كتابة خارجية — غالباً جهاز قديم
+ *    يكتب العدّادات مباشرة؛ صُحّح العدّاد من الدفتر (v3.3.83). يأتي من extra.diverged.
  * @param {Array} entries
- * @param {{conflicts?:Array, rejected?:Array}} [extra] — نتيجة آخر دمج
+ * @param {{conflicts?:Array, rejected?:Array, diverged?:Array<{acct:string, unit?:string, from?:number, to?:number, at?:number}>}} [extra] — نتيجة آخر دمج + سجل الانحرافات
  * @returns {Array<{kind:string, severity:'warn'|'info', unit?:string, acct?:string, balance?:number, id?:string, message:string}>}
  */
 export function findAnomalies(entries, extra = {}) {
@@ -375,6 +377,13 @@ export function findAnomalies(entries, extra = {}) {
   for (const c of Array.isArray(extra.conflicts) ? extra.conflicts : []) {
     out.push({ kind: 'id_conflict', severity: 'warn', id: c.id, unit: c.kept && c.kept.unit, acct: c.kept && c.kept.acct, message: 'حركتان بنفس المعرّف ومقدارين مختلفين — اعتُمدت إحداهما' });
   }
+  for (const d of Array.isArray(extra.diverged) ? extra.diverged : []) {
+    if (!d || d.acct == null) continue;
+    out.push({
+      kind: 'cache_diverged', severity: 'warn', acct: String(d.acct), unit: d.unit,
+      message: 'عدّاد ' + (d.unit && UNITS[d.unit] ? UNITS[d.unit].label : 'العميل') + ' خالف الدفتر (كان ' + d.from + ' والدفتر ' + d.to + ') — غالباً جهاز قديم كتب العدّاد مباشرة؛ صُحّح من الدفتر',
+    });
+  }
   for (const r of Array.isArray(extra.rejected) ? extra.rejected : []) {
     out.push({ kind: 'invalid_entry', severity: 'warn', id: r && r.id ? String(r.id) : undefined, message: 'سطر دفتر غير صالح استُبعد من الأرصدة' });
   }
@@ -395,6 +404,31 @@ export function compareToLegacy(entries, legacy) {
     const have = (bal.get(accountKey(l.unit, l.acct)) || { balance: 0 }).balance;
     const want = Number(l.balance) || 0;
     if (have !== want) out.push({ unit: l.unit, acct: l.acct, ledger: have, legacy: want, diff: have - want });
+  }
+  return out;
+}
+
+
+/**
+ * يخطط تصحيح العدّادات المشتقة (الرصيد/النقاط على سجل العميل) من الدفتر. دالة نقية — لا تكتب شيئاً.
+ * المقارنة بأصغر وحدة؛ الرصيد السالب في الدفتر يُقصّ إلى صفر في العدّاد (والسالب يظهر في findAnomalies).
+ * @param {Array<{id:*, creditBalance?:number, points?:number}>} customers
+ * @param {Array} entries — أسطر الدفتر
+ * @returns {Array<{id:string, from:{balance:number, points:number}, to:{balance:number, points:number}}>} ما يحتاج تصحيحاً فقط (الرصيد بالجنيه)
+ */
+export function planCounterFixes(customers, entries) {
+  const bal = balances(entries);
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const out = [];
+  for (const c of Array.isArray(customers) ? customers : []) {
+    if (!c || c.id == null) continue;
+    const acct = String(c.id);
+    const to = {
+      balance: Math.max(0, r2(fromMinor('wallet', (bal.get(accountKey('wallet', acct)) || { balance: 0 }).balance))),
+      points: Math.max(0, Math.round((bal.get(accountKey('points', acct)) || { balance: 0 }).balance)),
+    };
+    const from = { balance: Math.max(0, r2(c.creditBalance)), points: Math.max(0, Math.round(Number(c.points) || 0)) };
+    if (from.balance !== to.balance || from.points !== to.points) out.push({ id: acct, from, to });
   }
   return out;
 }

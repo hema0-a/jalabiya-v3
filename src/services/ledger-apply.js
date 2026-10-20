@@ -18,7 +18,8 @@ import * as idb from '../data/idb.js';
 import { STORES } from '../core/config.js';
 import { stampForWrite } from '../data/record-meta.js';
 import { ledgerRepo } from '../data/repos/ledger.js';
-import { balanceOf, balances, toMinor, fromMinor, makeEntry } from './ledger.js';
+import { balanceOf, toMinor, fromMinor, makeEntry, planCounterFixes } from './ledger.js';
+import { logDivergences } from './ledger-union.js';
 import { mapLegacyType, getDeviceId, takeLedgerSeq } from './ledger-shadow.js';
 import { isAuthorityActive } from './ledger-flag.js';
 
@@ -42,6 +43,7 @@ export const applyDeps = {
   deviceId: () => getDeviceId(),
   writeBatch: (plan, opts) => idb.writeBatch(plan, opts),
   now: () => Date.now(),
+  logDivergence: (fixes) => logDivergences(fixes),
 };
 
 /* ----- قفل لكل عميل داخل التبويب (يمنع تداخل حركتين على الحساب نفسه) ----- */
@@ -190,37 +192,58 @@ export async function checkCustomerDeletable(id, overrides = {}) {
  * يعيد اشتقاق creditBalance/points لكل العملاء من الدفتر ويصحّح ما اختلف (فقط حين يكون الدفتر مرجعاً).
  * يعالج: استعادة نسخة، سحب مزامنة، استرجاع عميل من السلة، أي كتابة التفّت على الحارس.
  * لا يمسّ walletLog. يكتب بمعاملة وحارس لكل عميل (إن تغيّر العميل أثناءها يُترك للجولة التالية).
- * @param {Object} [overrides]
- * @returns {Promise<{status:'inactive'|'ok', checked:number, fixed:number, fixes:Array<{id:string, from:Object, to:Object}>}>}
+ * السبب reason يحدّد هل التصحيح «شذوذ»: 'sync' و'auto' (كتابة خارجية غير متوقعة، غالباً جهاز قديم) تُسجَّل
+ * كـ cache_diverged؛ أما 'restore' و'trash' فتصحيح متوقع ويمرّ بصمت (v3.3.83).
+ * @param {Object} [overrides] — تبعيات بديلة + {reason?:'auto'|'sync'|'restore'|'trash', onlyIds?:string[], isActive?:Function}
+ * @returns {Promise<{status:'inactive'|'ok', reason:string, checked:number, fixed:number, fixes:Array<{id:string, from:Object, to:Object}>, diverged:number}>}
  */
 export async function reconcileDerivedCounters(overrides = {}) {
   const deps = { ...applyDeps, ...overrides };
+  const reason = overrides.reason || 'auto';
   const active = overrides.isActive ? await overrides.isActive() : await isAuthorityActive();
-  if (!active) return { status: 'inactive', checked: 0, fixed: 0, fixes: [] };
+  if (!active) return { status: 'inactive', reason, checked: 0, fixed: 0, fixes: [], diverged: 0 };
 
-  const [custs, entries] = await Promise.all([deps.listCustomers(), deps.listLedger()]);
-  const bal = balances(entries);
+  const [all, entries] = await Promise.all([deps.listCustomers(), deps.listLedger()]);
+  const only = Array.isArray(overrides.onlyIds) ? new Set(overrides.onlyIds.map(String)) : null;
+  const custs = only ? all.filter((c) => c && only.has(String(c.id))) : all;
+  const byId = new Map(custs.map((c) => [String(c.id), c]));
   const fixes = [];
-  for (const c of custs) {
-    const acct = String(c.id);
-    const wantBal = Math.max(0, r2(fromMinor('wallet', (bal.get('wallet:' + acct) || { balance: 0 }).balance)));
-    const wantPts = Math.max(0, Math.round((bal.get('points:' + acct) || { balance: 0 }).balance));
-    const haveBal = Math.max(0, r2(c.creditBalance));
-    const havePts = Math.max(0, Math.round(Number(c.points) || 0));
-    if (haveBal === wantBal && havePts === wantPts) continue;
+  for (const f of planCounterFixes(custs, entries)) {
+    const c = byId.get(f.id);
     const now = deps.now();
-    const nextRec = { ...c, creditBalance: wantBal, points: wantPts, updatedAt: Math.max(now, (Number(c.updatedAt) || 0) + 1) };
+    const nextRec = { ...c, creditBalance: f.to.balance, points: f.to.points, updatedAt: Math.max(now, (Number(c.updatedAt) || 0) + 1) };
     try {
       await selfWrite(() => deps.writeBatch(
         { [STORES.CUSTOMERS]: { records: [stampForWrite(STORES.CUSTOMERS, c, nextRec, nextRec.updatedAt)] } },
-        { guards: { [STORES.CUSTOMERS]: new Map([[acct, Number(c.updatedAt) || 0]]) } },
+        { guards: { [STORES.CUSTOMERS]: new Map([[f.id, Number(c.updatedAt) || 0]]) } },
       ));
-      fixes.push({ id: acct, from: { balance: haveBal, points: havePts }, to: { balance: wantBal, points: wantPts } });
+      fixes.push(f);
     } catch (e) {
-      if (!(e && e.code === 'guard-mismatch')) wlog('تعذّر تصحيح عدّادات', acct, e);
+      if (!(e && e.code === 'guard-mismatch')) wlog('تعذّر تصحيح عدّادات', f.id, e);
     }
   }
-  return { status: 'ok', checked: custs.length, fixed: fixes.length, fixes };
+  let diverged = 0;
+  if (fixes.length && (reason === 'sync' || reason === 'auto')) {
+    diverged = fixes.length;
+    try { deps.logDivergence(fixes); } catch (e) { wlog('تعذّر تسجيل الانحراف', e); }
+  }
+  return { status: 'ok', reason, checked: custs.length, fixed: fixes.length, fixes, diverged };
+}
+
+/**
+ * مصالحة فورية بعد سحب المزامنة (تُنتظر من مسار المزامنة قبل عرض النتيجة، فلا ينتظر المستخدم مؤقتاً مؤجلاً).
+ * لا ترمي أبداً: فشلها لا يُفشل المزامنة (المؤقت التلقائي شبكة أمان ثانية).
+ * @param {Object} [overrides]
+ * @returns {Promise<{status:string, fixed:number, diverged:number}>}
+ */
+export async function reconcileAfterSync(overrides = {}) {
+  try {
+    const r = await reconcileDerivedCounters({ ...overrides, reason: 'sync' });
+    return { status: r.status, fixed: r.fixed, diverged: r.diverged };
+  } catch (e) {
+    wlog('فشلت المصالحة بعد المزامنة', e);
+    return { status: 'error', fixed: 0, diverged: 0 };
+  }
 }
 
 /* ----- اشتقاق تلقائي بعد الكتابات الخارجية (استعادة/مزامنة/سلة) ----- */

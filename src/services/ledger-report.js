@@ -19,6 +19,7 @@ import {
 } from './ledger.js';
 import { getDeviceId, getShadowFailures, shadowDeps, _resetShadowState } from './ledger-shadow.js';
 import { isAuthorityActive } from './ledger-flag.js';
+import { loadLedgerIssues } from './ledger-union.js';
 
 /** وحدات الوضع الظلّي: المحفظة والنقاط (حسابها العميل) والمخزون (حسابه الصنف، v3.3.80). */
 export const SHADOW_UNITS = Object.freeze(['wallet', 'points', 'stock']);
@@ -173,7 +174,9 @@ export function formatAmount(unit, minor) {
  */
 export async function loadShadowReport() {
   const [custs, entries, items] = await Promise.all([customersRepo.list(), ledgerRepo.list(), inventoryRepo.list()]);
-  return buildShadowReport(custs, entries, { items });
+  /* بلاغات محلية من المزامنة/الاستعادة: انحراف عدّادات (cache_diverged) وتعارض معرّفات (v3.3.83) */
+  const issues = loadLedgerIssues();
+  return buildShadowReport(custs, entries, { items, diverged: issues.diverged, conflicts: issues.conflicts });
 }
 
 /**

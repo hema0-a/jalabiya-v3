@@ -23,6 +23,7 @@ import { UNITS } from '../services/ledger.js';
 import { resetShadowFailures } from '../services/ledger-shadow.js';
 import { collectReadiness, activateLedgerAuthority, deactivateLedgerAuthority } from '../services/ledger-authority.js';
 import { formatDate } from '../core/utils.js';
+import { clearLedgerIssues } from '../services/ledger-union.js';
 
 const MAX_ROWS = 25;
 
@@ -35,10 +36,12 @@ export function buildLedgerShadowCard() {
   const btnRefresh = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-refresh', onClick: () => load() }, '🔄 إعادة الفحص');
   const btnOpen = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-opening', onClick: () => runOpening() }, '📒 اكتب الأسطر الافتتاحية');
   const btnReset = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-reset', onClick: () => runReset() }, '♻️ إعادة ضبط الدفتر');
+  /* مراجعة بلاغات المزامنة (cache_diverged/id_conflict): يمسح السجل المحلي فقط، لا الدفتر (v3.3.83) */
+  const btnAck = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', hidden: true, 'data-action': 'ledger-ack-issues', onClick: () => { clearLedgerIssues(); load(); } }, '✔️ راجعتُ البلاغات');
   const authBox = el('div', { className: 'ledauth', 'data-role': 'ledger-authority' });
   const card = el('div', { className: 'card ledcard', 'data-role': 'ledger-shadow' }, [
     el('div', { className: 'ledcard__head' }, [title, btnRefresh]), body,
-    el('div', { className: 'ledcard__actions' }, [btnOpen, btnReset]),
+    el('div', { className: 'ledcard__actions' }, [btnOpen, btnReset, btnAck]),
     authBox,
     el('div', { className: 'ledcard__hint' },
       'التطبيق يعمل بالعدّادات القديمة كالمعتاد، ويُسجَّل كل تغيير في الدفتر في الخلفية للمقارنة فقط. '
@@ -59,6 +62,7 @@ export function buildLedgerShadowCard() {
         body.appendChild(el('div', { className: 'ledcard__warn', 'data-role': 'ledger-failures' },
           '⚠️ فشلت الكتابة في الدفتر ' + r.failures + ' مرة على هذا الجهاز (العمليات الأصلية سليمة). أعد الضبط أو راجع الفروق.'));
       }
+      btnAck.hidden = !r.anomalies.some((a) => a.kind === 'cache_diverged' || a.kind === 'id_conflict');
       r.anomalies.filter((a) => a.severity === 'warn').slice(0, 5).forEach((a) => {
         body.appendChild(el('div', { className: 'ledcard__warn' }, '⚠️ ' + a.message));
       });
