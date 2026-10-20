@@ -86,6 +86,17 @@ function noteReconcile(ap) {
 }
 
 /**
+ * تنبيه: آخر رفع للسحابة جاء من إصدار أقدم من الحد الأدنى (v3.3.84). يظهر فقط حين يكون الدفتر مرجعاً هنا.
+ * @param {{oldWriter?:boolean}} pulled — نتيجة pull
+ * @param {{reconciled?:{status?:string}}} ap — نتيجة apply
+ */
+function noteOldWriter(pulled, ap) {
+  if (!pulled || !pulled.oldWriter) return;
+  if (!ap || !ap.reconciled || ap.reconciled.status === 'inactive') return;
+  toast.warning('⚠️ آخر رفع للسحابة جاء من جهاز بإصدار أقدم — حدّثه. عدّاداته (إن كتبها مباشرة) تُصحَّح من الدفتر تلقائياً.', { duration: 10000 });
+}
+
+/**
  * تنزيل ودمج مع بيانات الجهاز (يحفظ كل شيء). يُستعمل من pullFlow ومن pushFlow عند التعارض.
  * @returns {Promise<{ok:boolean, error?:string}>}
  */
@@ -99,6 +110,7 @@ async function pullAndMerge(uid) {
   if (!ap.ok) return { ok: false, error: ap.error || 'فشل الدمج' };
   await noteMergeResult(ap.merge);
   noteReconcile(ap);
+  noteOldWriter(res, ap);
   return { ok: true, stats: ap.merge };
 }
 
@@ -229,6 +241,7 @@ export async function pullFlow(uid) {
   markSynced();
   if (mode === 'merge') await noteMergeResult(ap.merge);
   noteReconcile(ap);
+  noteOldWriter(res, ap);
   toast.success(mode === 'merge'
     ? 'تم الدمج — ارفع الآن لتحديث السحابة بالنتيجة'
     : 'تم التنزيل — افتح أي صفحة لرؤية البيانات');

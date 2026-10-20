@@ -35,6 +35,17 @@ for (const [file, v] of Object.entries(versions)) {
   else if (v !== ref) fail(`إصدار ${file} = ${v} لكن package.json = ${ref} (استخدم: npm run bump -- ${ref})`);
 }
 
+/* حارس الإصدار الأدنى (v3.3.84): الرقم في قواعد Firestore = MIN_CLIENT_BUILD، وليس أعلى من إصدار التطبيق الحالي */
+{
+  const mv = (read('src/sync/min-version.js').match(/MIN_CLIENT_BUILD\s*=\s*([\d_]+)/) || [])[1];
+  const rules = (read('firestore.rules').match(/writerBuild\s*>=\s*(\d+)/) || [])[1];
+  const min = mv ? Number(mv.replace(/_/g, '')) : NaN;
+  const [a, b, c] = String(ref).split('.').map(Number);
+  if (!Number.isFinite(min)) fail('لم أجد MIN_CLIENT_BUILD في src/sync/min-version.js');
+  else if (String(min) !== String(rules)) fail(`MIN_CLIENT_BUILD (${min}) لا يطابق الرقم في firestore.rules (${rules})`);
+  else if (min > a * 1000000 + b * 1000 + c) fail(`MIN_CLIENT_BUILD (${min}) أعلى من إصدار التطبيق ${ref} — سيحجب هذا الجهاز نفسه`);
+}
+
 /* 2) قائمة الكاش */
 const sw = read('sw.js');
 const block = (sw.match(/PRECACHE_URLS\s*=\s*\[([\s\S]*?)\n\];/) || [])[1];

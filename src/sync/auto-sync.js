@@ -49,9 +49,12 @@ export function getBlocked() {
 function setBlocked(code) {
   try { localStorage.setItem(K_BLOCK, code); } catch (e) { /* ignore */ }
 }
+function clearBlocked() {
+  try { localStorage.removeItem(K_BLOCK); } catch (e) { /* ignore */ }
+}
 /** تُستدعى بعد أي رفع/تنزيل يدوي ناجح: يعود الرفع التلقائي للعمل. */
 export function onManualSyncDone() {
-  try { localStorage.removeItem(K_BLOCK); } catch (e) { /* ignore */ }
+  clearBlocked();
   emit();
 }
 
@@ -126,6 +129,8 @@ export async function tryAutoPush() {
 export function start() {
   if (started) return;
   started = true;
+  /* حجب «إصدار قديم» يزول بتحديث التطبيق: نفكّه عند الإقلاع، وأول رفع يعيد الفحص فيُحجَب ثانية إن لم يُحدَّث (v3.3.84) */
+  if (getBlocked() === 'client-outdated') clearBlocked();
   dirty.installTracking(fsync.SYNC_STORES);
   tombstones.install(fsync.SYNC_STORES);   /* شواهد الحذف: لا يضيع أي حذف قبل أول مزامنة */
 

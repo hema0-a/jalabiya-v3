@@ -269,7 +269,9 @@ function buildAutoSyncCard() {
     'آخر رفع: ' + relativeTime(st.lastPush)));
   if (st.blocked) {
     card.appendChild(el('div', { style: { fontSize: '12px', color: '#C62828', marginTop: '6px', lineHeight: '1.6' } },
-      'السحابة فيها بيانات من جهاز آخر. اضغط «رفع إلى السحابة» واختر «دمج ثم رفع» — لن يُرفع شيء تلقائياً قبل ذلك.'));
+      st.blocked === 'client-outdated'
+        ? 'إصدار التطبيق على هذا الجهاز أقدم من المسموح للمزامنة. حدّث التطبيق (أغلقه وأعد فتحه) ثم اضغط «رفع إلى السحابة».'
+        : 'السحابة فيها بيانات من جهاز آخر. اضغط «رفع إلى السحابة» واختر «دمج ثم رفع» — لن يُرفع شيء تلقائياً قبل ذلك.'));
   }
 
   const cb = el('input', { type: 'checkbox' });

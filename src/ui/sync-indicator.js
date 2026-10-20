@@ -31,7 +31,9 @@ function update(st) {
   node.dataset.kind = kind;
   if (kind === 'blocked') {
     icon.textContent = '🔴';
-    text.textContent = 'المزامنة متوقفة وتحتاج قرارك — اضغط للمراجعة';
+    text.textContent = st.blocked === 'client-outdated'
+      ? 'المزامنة متوقفة: حدّث التطبيق على هذا الجهاز'
+      : 'المزامنة متوقفة وتحتاج قرارك — اضغط للمراجعة';
   } else {
     const days = Math.max(2, Math.floor((Date.now() - st.dirtySince) / 86400000));
     icon.textContent = '🟠';

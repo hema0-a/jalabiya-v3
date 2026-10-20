@@ -38,6 +38,7 @@ import * as settingsSync from './settings-sync.js';
 import { mergeRecords } from './record-merge.js';
 import { planLedgerUnion, logLedgerConflicts } from '../services/ledger-union.js';
 import { reconcileAfterSync } from '../services/ledger-apply.js';
+import { checkClient, writerStamp, isOldWriter, OUTDATED_MESSAGE } from './min-version.js';
 
 /* --- المخازن المُزامَنة (لا تشمل settings ولا trash ولا backups) --- */
 export const SYNC_STORES = [
@@ -283,6 +284,10 @@ async function pushImpl(uid, opts = {}) {
     const oldManifest = remote && remote.manifest ? remote.manifest : null;
     const oldGen = remote && remote.gen ? remote.gen : null;
 
+    /* حارس الإصدار الأدنى (v3.3.84): لا رفع من إصدار أقدم من المسموح — حتى مع force (القوة لحماية البيانات لا الإصدار) */
+    const gate = checkClient(remote);
+    if (!gate.ok) return { ok: false, code: 'client-outdated', minBuild: gate.minBuild, error: OUTDATED_MESSAGE };
+
     if (remote && !force) {
       const known = getKnownRev();
       if (known === null || known !== remoteRev) {
@@ -319,7 +324,7 @@ async function pushImpl(uid, opts = {}) {
       }
 
       /* 2) المستند الرئيسي أخيراً = لحظة اعتماد النسخة (مقارنة-وتبديل: يفشل إن تغيّرت السحابة أثناء الرفع) */
-      await commitMain(fsMod, db, uid, { version: 2, gen, updatedAt: newRev, manifest }, force ? undefined : remoteRev);
+      await commitMain(fsMod, db, uid, { version: 2, gen, updatedAt: newRev, manifest, ...writerStamp(remote) }, force ? undefined : remoteRev);
     } catch (err) {
       /* النسخة القديمة سليمة؛ ننظّف الشرائح اليتيمة (best-effort) */
       for (const path of written) {
@@ -377,9 +382,13 @@ export async function pull(uid) {
         return { ok: true, data: null };
       }
       const main = snap.data();
+      /* الإصدار الأدنى: جهاز أقدم من المسموح لا يُنزِّل (تطبيق بمنطق قديم قد يُفسد الدفتر محلياً) */
+      const gate = checkClient(main);
+      if (!gate.ok) return { ok: false, code: 'client-outdated', minBuild: gate.minBuild, error: OUTDATED_MESSAGE };
+      const oldWriter = isOldWriter(main);   /* آخر رفع جاء من إصدار أقدم من الحد ⟵ تنبيه (والمصالحة تصحّح العدّادات) */
 
       /* الصيغة القديمة: المستند الواحد فيه stores */
-      if (!main.manifest) return { ok: true, data: { ...main, updatedAt: Number(main.updatedAt) || 0 } };
+      if (!main.manifest) return { ok: true, oldWriter, data: { ...main, updatedAt: Number(main.updatedAt) || 0 } };
 
       const gen = main.gen || null;
       const stores = {};
@@ -421,7 +430,7 @@ export async function pull(uid) {
         stores[s] = records;
       }
       if (retry) continue;
-      return { ok: true, data: { stores, updatedAt: Number(main.updatedAt) || 0 } };
+      return { ok: true, oldWriter, data: { stores, updatedAt: Number(main.updatedAt) || 0 } };
     }
     return { ok: false, error: lastError };
   } catch (err) {

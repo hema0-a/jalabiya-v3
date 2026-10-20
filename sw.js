@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.83 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
+   الإصدار: v3.3.84 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.83';
+const CACHE_VERSION = 'v3.3.84';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -194,6 +194,7 @@ const PRECACHE_URLS = [
   './src/sync/dirty-state.js',
   './src/sync/firebase-config.js',
   './src/sync/firestore-sync.js',
+  './src/sync/min-version.js',
   './src/sync/offline-queue.js',
   './src/sync/record-merge.js',
   './src/sync/settings-sync.js',

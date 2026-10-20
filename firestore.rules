@@ -3,11 +3,20 @@ rules_version = '2';
 // قواعد Firestore لتطبيق ورشة الجلابيب — كل مستخدم يصل لبياناته فقط.
 // المسار الذي يستخدمه التطبيق: users_v3/{uid}/data/{main | store_<المخزن>_<رقم>}
 // طريقة التطبيق: Firebase Console → Firestore Database → Rules → الصق المحتوى → Publish.
+// ⚠️ انشرها بعد أن تُحدَّث كل أجهزتك إلى 3.3.84 أو أحدث (وإلا يفشل رفع الجهاز غير المحدَّث — وهذا المقصود).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /users_v3/{uid}/data/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+
+      // حارس الإصدار الأدنى (v3.3.84): المستند الرئيسي `main` لا يُكتب إلا من إصدار يختمه بـ writerBuild كافٍ.
+      // الجهاز القديم (قبل 3.3.84) لا يحمل الختم فيُرفض رفعه ولا يُفسد الدفتر/العدّادات في السحابة.
+      // الرقم = major*1000000 + minor*1000 + patch (3.3.84 ⟵ 3003084) ويجب أن يطابق MIN_CLIENT_BUILD في
+      // src/sync/min-version.js (يتحقق منه npm run check:consistency). شرائح البيانات (store_*) غير مقيَّدة.
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && (docId != 'main'
+            || (request.resource.data.writerBuild is int && request.resource.data.writerBuild >= 3003084));
     }
 
     // أي مسار آخر مرفوض
