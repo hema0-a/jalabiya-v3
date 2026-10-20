@@ -10,6 +10,9 @@ import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
 import { normalizePhone } from '../../core/utils.js';
 import { recordWalletMove } from '../../services/ledger-shadow.js';
+import { isAuthorityActive } from '../../services/ledger-flag.js';
+import { applyWalletMove, checkCustomerDeletable, PROTECTED_MESSAGE } from '../../services/ledger-apply.js';
+import { deepEqual } from '../record-meta.js';
 
 const base = createRepository(STORES.CUSTOMERS);
 
@@ -115,6 +118,10 @@ export function pointsForAmount(amount, cfg) {
  * @returns {Promise<{balance:number, points:number}>}
  */
 customers.walletAdjust = async function walletAdjust(id, d) {
+  /* v3.3.82 (الخطوة 2ب): إن كان الدفتر «مرجعاً أساسياً» على هذا الجهاز فالكتابة تمرّ عبره أولاً
+     (معاملة واحدة مع العدّادات، وفشل الدفتر = فشل العملية). غير ذلك: المسار القديم أدناه بلا تغيير. */
+  if (await isAuthorityActive()) return applyWalletMove(id, d);
+
   /* ذرّي: كل الحساب داخل قفل السجل (حركتان متزامنتان كانتا تُضيّعان إحداهما) */
   let out = null;
   let logEntry = null;   /* حركة walletLog المكتوبة — تُسجَّل ظلّياً في الدفتر بعد نجاح الكتابة القديمة */
@@ -137,6 +144,78 @@ customers.walletAdjust = async function walletAdjust(id, d) {
   /* الوضع الظلّي (v3.3.79): لا يرمي ولا يغيّر نتيجة العملية — العدّادات القديمة هي المرجع */
   if (logEntry) await recordWalletMove(id, logEntry);
   return out;
+};
+
+/* ==========================================================================
+   حراس الحقول المشتقة (v3.3.82): حين يكون الدفتر مرجعاً، لا يُكتب creditBalance/points/walletLog
+   إلا عبر walletAdjust (الدفتر أولاً). أي update/modify/create يحاول تغيير قيمتها يُرفض برسالة
+   واضحة؛ وإعادة كتابة القيمة نفسها (كائن عميل كامل) تُقبل وتُسقَّط الحقول المشتقة من الكتابة.
+   (الكتابات الدفعية — استعادة/مزامنة/استيراد — تُصحَّح بعدها بإعادة الاشتقاق من الدفتر.)
+   ========================================================================== */
+
+const PROTECTED_FIELDS = ['creditBalance', 'points', 'walletLog'];
+const protectedDefault = (k) => (k === 'walletLog' ? [] : 0);
+const normProtected = (k, v) => (v === undefined || v === null ? protectedDefault(k) : v);
+
+/** الحقول المشتقة التي يغيّرها patch فعلاً عن السجل الحالي. */
+function changedProtected(patch, existing) {
+  return PROTECTED_FIELDS.filter((k) => k in patch
+    && !deepEqual(normProtected(k, patch[k]), normProtected(k, existing ? existing[k] : undefined)));
+}
+
+/** نسخة patch بلا الحقول المشتقة. */
+function stripProtected(patch) {
+  const clean = { ...patch };
+  PROTECTED_FIELDS.forEach((k) => { delete clean[k]; });
+  return clean;
+}
+
+const baseUpdate = customers.update;
+const baseModify = customers.modify;
+const baseCreate = customers.create;
+const baseRemove = customers.remove;
+
+customers.update = async function update(id, patch) {
+  if (patch && typeof patch === 'object' && PROTECTED_FIELDS.some((k) => k in patch) && (await isAuthorityActive())) {
+    if (changedProtected(patch, await base.find(id)).length > 0) throw new Error(PROTECTED_MESSAGE);
+    return baseUpdate(id, stripProtected(patch));
+  }
+  return baseUpdate(id, patch);
+};
+
+customers.modify = async function modify(id, fn) {
+  if (!(await isAuthorityActive())) return baseModify(id, fn);
+  return baseModify(id, async (existing) => {
+    const patch = await fn(existing);
+    if (!patch || typeof patch !== 'object') return patch;
+    if (changedProtected(patch, existing).length > 0) throw new Error(PROTECTED_MESSAGE);
+    return stripProtected(patch);
+  });
+};
+
+customers.create = async function create(data) {
+  if (data && typeof data === 'object' && PROTECTED_FIELDS.some((k) => k in data) && (await isAuthorityActive())) {
+    if (changedProtected(data, null).length > 0) throw new Error(PROTECTED_MESSAGE);
+    return baseCreate(stripProtected(data));
+  }
+  return baseCreate(data);
+};
+
+/**
+ * هل يمكن حذف العميل؟ (حين الدفتر مرجع: لا حذف لعميل رصيده أو نقاطه في الدفتر غير صفرية.)
+ * @param {string} id
+ * @returns {Promise<{ok:boolean, reason:string}>}
+ */
+customers.canDelete = async function canDelete(id) {
+  if (!(await isAuthorityActive())) return { ok: true, reason: '' };
+  const r = await checkCustomerDeletable(id);
+  return { ok: r.ok, reason: r.reason };
+};
+
+customers.remove = async function remove(id) {
+  const chk = await customers.canDelete(id);
+  if (!chk.ok) throw new Error(chk.reason);
+  return baseRemove(id);
 };
 
 /**

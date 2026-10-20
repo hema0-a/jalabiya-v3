@@ -59,6 +59,14 @@ async function takeSeq(dev) {
 }
 
 /**
+ * الرقم التسلسلي التالي لهذا الجهاز — عدّاد واحد مشترك بين الكتابة الظلّية (المخزون) والكتابة المرجعية
+ * (المحفظة والنقاط، v3.3.82) كي لا يتكرر seq على الجهاز نفسه.
+ * @param {string} dev
+ * @returns {Promise<number>}
+ */
+export function takeLedgerSeq(dev) { return takeSeq(dev); }
+
+/**
  * يُسجَّل أثر حركة محفظة/نقاط في الدفتر. لا يرمي أبداً.
  * @param {string} customerId
  * @param {{id:string, at:number, type:string, balance:number, points:number, orderId?:string|null, note?:string}} log — حركة walletLog

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.81 — الدفتر المرجع: لوحة التفعيل (الخطوة 2أ)
+   الإصدار: v3.3.82 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.81';
+const CACHE_VERSION = 'v3.3.82';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -152,7 +152,9 @@ const PRECACHE_URLS = [
   './src/services/invoice-print.js',
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
+  './src/services/ledger-apply.js',
   './src/services/ledger-authority.js',
+  './src/services/ledger-flag.js',
   './src/services/ledger-report.js',
   './src/services/ledger-shadow.js',
   './src/services/ledger.js',

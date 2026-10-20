@@ -18,6 +18,7 @@ import {
   makeEntry, toMinor, balances, accountKey, findAnomalies, fromMinor,
 } from './ledger.js';
 import { getDeviceId, getShadowFailures, shadowDeps, _resetShadowState } from './ledger-shadow.js';
+import { isAuthorityActive } from './ledger-flag.js';
 
 /** وحدات الوضع الظلّي: المحفظة والنقاط (حسابها العميل) والمخزون (حسابه الصنف، v3.3.80). */
 export const SHADOW_UNITS = Object.freeze(['wallet', 'points', 'stock']);
@@ -73,6 +74,7 @@ function legacyAccounts(custs, items) {
  * @returns {Promise<{status:'written'|'nothing'|'gated', written:number, reason?:string, gatedBy?:string}>}
  */
 export async function ensureOpening(input = {}) {
+  const authority = await isAuthorityActive();   /* v3.3.82: الدفتر مرجع ⟵ لا يُصحَّح باتجاه العدّادات المشتقة */
   const st = reportDeps.syncState();
   if (st.usedCloud && st.dirtySince) {
     return { status: 'gated', written: 0, gatedBy: 'sync-dirty', reason: 'توجد تغييرات لم تُرفع إلى السحابة — ارفعها أولاً ثم أعد المحاولة' };
@@ -88,6 +90,7 @@ export async function ensureOpening(input = {}) {
   let seq = (entries.filter((e) => e.dev === dev).reduce((m, e) => Math.max(m, e.seq), -1)) + 1;
 
   for (const a of legacyAccounts(custs, items)) {
+    if (authority && (a.unit === 'wallet' || a.unit === 'points')) continue;   /* المحفظة والنقاط مرجعها الدفتر نفسه */
     const key = 'opening:' + a.unit + ':' + a.acct;
     if (have.has('k:' + key)) continue;
     const delta = a.legacy - ((bal.get(accountKey(a.unit, a.acct)) || { balance: 0 }).balance);
@@ -179,6 +182,10 @@ export async function loadShadowReport() {
  * @returns {Promise<{status:string, written:number, reason?:string}>}
  */
 export async function resetShadowLedger() {
+  /* مسح الدفتر يمحو تاريخ المحفظة المرجعي — ممنوع ما دام الدفتر مرجعاً (ألغِ التفعيل أولاً) */
+  if (await isAuthorityActive()) {
+    return { status: 'gated', written: 0, gatedBy: 'authority', reason: 'الدفتر مرجع أساسي الآن — لا يمكن إعادة ضبطه (ألغِ التفعيل أولاً إن كنت متأكداً)' };
+  }
   const st = reportDeps.syncState();
   if (st.usedCloud && st.dirtySince) {
     return { status: 'gated', written: 0, reason: 'توجد تغييرات لم تُرفع إلى السحابة — ارفعها أولاً' };

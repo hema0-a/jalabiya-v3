@@ -583,6 +583,9 @@ function openCustomerForm(existing = null) {
    ========================================================================== */
 
 async function deleteCustomer(customer) {
+  /* v3.3.82: حين الدفتر مرجع لا يُحذف عميل له رصيد/نقاط (كان هذا يُضيّع المال — يظهر كحساب يتيم في الدفتر) */
+  const chk = await customers.canDelete(customer.id);
+  if (!chk.ok) { toast.warning(chk.reason); return; }
   /* تنبيه بالسجلات المرتبطة: تبقى في التطبيق بلا اسم عميل حتى يُسترجع من السلة */
   let linkedNote = '';
   try {
