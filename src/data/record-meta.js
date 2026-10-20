@@ -25,7 +25,7 @@ export const RECORD_STORES = [
   'workers', 'expenses', 'appointments', 'activity',
   'portfolio', 'commitments', 'commitmentPayments', 'savingsGoals',
   'houseExpenses', 'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
-  'quotes', 'ledger',
+  'quotes', 'ledger', 'orderMedia',
 ];
 
 /** حقول وصفية لا تدخل في مقارنة «هل تغيّر الحقل؟». */

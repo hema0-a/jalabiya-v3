@@ -107,7 +107,7 @@ async function runTests() {
   try {
     const guarded = ['customers', 'orders', 'payments', 'inventory', 'workers',
       'expenses', 'appointments', 'portfolio', 'commitments', 'houseExpenses',
-      'personalLoans', 'referrals'];
+      'personalLoans', 'referrals', 'quotes', 'ledger', 'orderMedia'];
     let real = 0;
     for (const sn of guarded) real += await idb.count(sn).catch(() => 0);
     if (real > 0) {

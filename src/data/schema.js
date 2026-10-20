@@ -179,6 +179,13 @@ export const SCHEMA = {
       idx('by_at', 'at'),
     ],
   },
+  /* --- جديد v12: وسائط الطلبات (صورة مرجعية/توقيعات) — المعرّف orderId + ':' + slot --- */
+  [STORES.ORDER_MEDIA]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_orderId', 'orderId'),
+    ],
+  },
 };
 
 /**

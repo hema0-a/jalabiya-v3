@@ -35,14 +35,14 @@ const ORIGINAL_SYNC_STATE = reportDeps.syncState; /* الأصل الافتراض
 const restoreReportDeps = () => { reportDeps.syncState = ORIGINAL_SYNC_STATE; };
 
 register('v3.3.79 ledger — المخزن والمخطط والترحيل', async (t) => {
-  t.test('1. إصدار قاعدة البيانات 11 واسم المخزن', DB_CONFIG.version === 11 && STORES.LEDGER === 'ledger');
+  t.test('1. إصدار قاعدة البيانات ≥ 11 واسم المخزن', DB_CONFIG.version >= 11 && STORES.LEDGER === 'ledger');
   t.test('2. المخطط يعرّف المخزن بفهرسَي by_acct وby_at', SCHEMA.ledger && SCHEMA.ledger.keyPath === 'id' && SCHEMA.ledger.indexes.map((i) => i.name).join() === 'by_acct,by_at');
   t.test('3. validateSchema يمر', validateSchema() === true);
   t.test('4. المخزن ضمن المزامنة وسجلات الختم ومتطابقان', SYNC_STORES.includes('ledger') && RECORD_STORES.includes('ledger')
     && [...SYNC_STORES].sort().join() === [...RECORD_STORES].sort().join());
   const db = await idb.openDB();
-  t.test('5. قاعدة البيانات المفتوحة بالإصدار 11 وفيها المخزن وفهارسه',
-    db.version === 11 && db.objectStoreNames.contains('ledger')
+  t.test('5. قاعدة البيانات المفتوحة بالإصدار الحالي وفيها المخزن وفهارسه',
+    db.version === DB_CONFIG.version && db.objectStoreNames.contains('ledger')
     && [...db.transaction('ledger').objectStore('ledger').indexNames].sort().join() === 'by_acct,by_at');
 
   await resetAll();
@@ -91,7 +91,7 @@ register('v3.3.79 ledger — المخزن والمخطط والترحيل', asyn
     await new Promise((r) => { const q = indexedDB.deleteDatabase(testName); q.onsuccess = q.onerror = q.onblocked = () => r(); });
     await idb.openDB();
   }
-  t.test('7. ترحيل 10→11: ينجح ويُنشئ المخزن والفهارس ويُبقي بيانات العملاء كاملة', migOk && ver === 11 && hasStore && hasIdx && kept);
+  t.test('7. ترحيل 10→الحالي: ينجح ويُنشئ المخزن والفهارس ويُبقي بيانات العملاء كاملة', migOk && ver === DB_CONFIG.version && hasStore && hasIdx && kept);
 });
 
 register('v3.3.79 ledger — مستودع الدفتر', async (t) => {

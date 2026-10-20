@@ -65,7 +65,7 @@ register('v3.3.85 perf-probe — runProbe (قراءة فقط) والتقدير �
 
   const small = await runProbe({ deps: fakeDeps({ orders: [orderRec(1, 0), orderRec(2, 0)] }).deps });
   const gs = projectGrowth(small);
-  await t.test('7. بيانات قليلة (طلبان) ⟵ يُعلَن أن التقدير ضعيف ولا يُدّعى دقة', gs.reliable === false && /ضعيف/.test(formatReport(small)));
+  await t.test('7. بيانات قليلة (طلبان) ⟵ يُعلَن أن الزمن لا يُقدَّر ولا يُدّعى دقة', gs.reliable === false && /لا يُقدَّر/.test(formatReport(small)));
 
   const capped = await runProbe({ deps: fakeDeps({ orders: [orderRec(1, ORDERS_GETALL_CAP + 10)] }).deps });
   const cd = capped.pages.find((p) => p.id === 'dashboard');

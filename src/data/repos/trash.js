@@ -12,8 +12,20 @@ import { customers as customersRepo } from './customers.js';
 import { recordStockMove } from '../../services/ledger-shadow.js';
 import { isAuthorityActive } from '../../services/ledger-flag.js';
 import { ledgerWalletOf } from '../../services/ledger-apply.js';
+import { orderMedia } from './order-media.js';
 
 const base = createRepository(STORES.TRASH);
+
+/**
+ * عند الحذف **النهائي** لطلب من السلة تُحذف وسائطه من orderMedia (v3.3.86). وجود الطلب في السلة يحفظ وسائطه
+ * (قد يُسترجع)، وإن وُجد طلب حيّ بالمعرّف نفسه لا نحذف شيئاً.
+ * @param {Object} item — عنصر السلة
+ */
+async function dropOrderMediaIfOrder(item) {
+  if (!item || item.originalStore !== STORES.ORDERS || item.originalId == null) return;
+  if (await idb.get(STORES.ORDERS, item.originalId)) return;
+  await orderMedia.removeByOrder(item.originalId);
+}
 
 export const trash = {
   ...base,
@@ -102,6 +114,7 @@ export const trash = {
     let removed = 0;
     for (const item of all) {
       if ((item.deletedAt || 0) < cutoff) {
+        await dropOrderMediaIfOrder(item);
         await base.remove(item.id);
         removed++;
       }
@@ -121,8 +134,33 @@ export const trash = {
     const sorted = all.sort((a, b) => a.deletedAt - b.deletedAt);
     const excess = sorted.slice(0, all.length - LIMITS.maxTrashItems);
     for (const item of excess) {
+      await dropOrderMediaIfOrder(item);
       await base.remove(item.id);
     }
     return excess.length;
+  },
+
+  /**
+   * حذف نهائي لعنصر من السلة مع وسائط طلبه (إن كان طلباً).
+   * @param {string} trashId
+   * @returns {Promise<boolean>} true إن وُجد العنصر وحُذف
+   */
+  async removeForever(trashId) {
+    const item = await base.find(trashId);
+    if (!item) return false;
+    await dropOrderMediaIfOrder(item);
+    await base.remove(trashId);
+    return true;
+  },
+
+  /**
+   * تفريغ السلة نهائياً مع وسائط الطلبات التي فيها.
+   * @returns {Promise<number>} عدد العناصر المحذوفة
+   */
+  async clearAllForever() {
+    const all = await base.list();
+    for (const item of all) await dropOrderMediaIfOrder(item);
+    await base.clear();
+    return all.length;
   },
 };

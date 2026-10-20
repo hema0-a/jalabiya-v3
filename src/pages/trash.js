@@ -118,7 +118,7 @@ async function deletePermanent(item) {
   });
   if (!ok) return;
   try {
-    await trash.remove(item.id);
+    await trash.removeForever(item.id);
     toast.success('تم الحذف النهائي');
     await refreshAll();
   } catch (e) { toast.danger('فشل: ' + e.message); }
@@ -138,7 +138,7 @@ async function clearAll() {
   });
   if (!ok2) return;
   try {
-    await trash.clear();
+    await trash.clearAllForever();
     toast.success('تم تفريغ السلة');
     await refreshAll();
   } catch (e) { toast.danger('فشل: ' + e.message); }

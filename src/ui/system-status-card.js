@@ -10,6 +10,7 @@ import { payments } from '../data/repos/payments.js';
 import { appointments } from '../data/repos/appointments.js';
 import { quotes } from '../data/repos/quotes.js';
 import { scanIntegrity } from '../services/data-integrity.js';
+import { loadMediaScanInputs } from '../services/order-media-scan.js';
 import { getStorageStatus } from '../services/storage-health.js';
 import { listBackups, getLastExternalBackupAt } from '../services/auto-backup.js';
 import { getStatus as getSyncStatus } from '../sync/auto-sync.js';
@@ -36,8 +37,8 @@ export async function collectStatus(env = {}) {
   snap.storage = await part(() => getStorageStatus(nav), {});
   if (env.integrity !== false) {
     snap.integrity = await part(async () => {
-      const [c, o, p, a, q] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
-      return scanIntegrity({ customers: c, orders: o, payments: p, appointments: a, quotes: q });
+      const [c, o, p, a, q, mi] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list(), loadMediaScanInputs()]);
+      return scanIntegrity({ customers: c, orders: o, payments: p, appointments: a, quotes: q, ...mi });
     }, null);
   }
   const backups = await part(() => listBackups(), []);

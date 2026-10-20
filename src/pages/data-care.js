@@ -23,6 +23,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { scanIntegrity, ISSUE_LABELS } from '../services/data-integrity.js';
+import { loadMediaScanInputs } from '../services/order-media-scan.js';
 import { findDuplicateGroups, pickPrimary } from '../services/customer-merge.js';
 import { mergeCustomers } from '../services/customer-merge-exec.js';
 import { loadVipRules, saveVipRules, computeVipPromotions } from '../services/vip-rules.js';
@@ -59,8 +60,8 @@ async function loadData(full = state.full) {
     state.data = { customers: await customers.list(), orders: [], payments: [], appointments: [], quotes: [] };
     return;
   }
-  const [cus, ord, pay, apt, qts] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list()]);
-  state.data = { customers: cus, orders: ord, payments: pay, appointments: apt, quotes: qts };
+  const [cus, ord, pay, apt, qts, mi] = await Promise.all([customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list(), loadMediaScanInputs()]);
+  state.data = { customers: cus, orders: ord, payments: pay, appointments: apt, quotes: qts, ...mi };
   state.full = true;
 }
 

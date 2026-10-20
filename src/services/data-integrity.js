@@ -5,13 +5,15 @@
    ما يمسّ الأرقام يُعرض للتقرير فقط ويقرّره المستخدم.
    ========================================================================== */
 
+import { findOrphanMedia } from './order-media.js';
+
 const ids = (list) => new Set((Array.isArray(list) ? list : []).filter(Boolean).map((x) => x.id));
 
 /**
  * @returns {{issues:Array, counts:Object, total:number}}
  *   issue = {type, severity:'error'|'warn'|'info', message, store, id, fix?:{store,id,patch}}
  */
-export function scanIntegrity({ customers, orders, payments, appointments, quotes } = {}) {
+export function scanIntegrity({ customers, orders, payments, appointments, quotes, orderMediaKeys, trashOrderIds } = {}) {
   const cs = Array.isArray(customers) ? customers : [];
   const os = Array.isArray(orders) ? orders : [];
   const ps = Array.isArray(payments) ? payments : [];
@@ -76,6 +78,17 @@ export function scanIntegrity({ customers, orders, payments, appointments, quote
         fix: { store: 'quotes', id: q.id, patch: { orderId: null }, label: 'فكّ الربط' } });
     }
   }
+  /* وسائط الطلبات (v3.3.86): من المفاتيح فقط (بلا قراءة الصور). تُعرض للتقرير ولا يُصلَح تلقائياً (حذف غير قابل للتراجع).
+     يُتخطّى الفحص إن لم تُمرَّر المفاتيح (الصفحات التي لا تقرأها). طلب في السلة ليس يتيماً. */
+  if (Array.isArray(orderMediaKeys) && orderMediaKeys.length) {
+    const m = findOrphanMedia(orderMediaKeys, oMap.keys(), Array.isArray(trashOrderIds) ? trashOrderIds : []);
+    for (const k of m.orphans) {
+      add({ type: 'media_orphan', severity: 'warn', store: 'orderMedia', id: k, message: 'وسيط (صورة/توقيع) لطلب غير موجود ولا في السلة' });
+    }
+    for (const k of m.invalid) {
+      add({ type: 'media_bad_key', severity: 'warn', store: 'orderMedia', id: k, message: 'سجل وسائط بمعرّف غير صالح' });
+    }
+  }
   const counts = {};
   issues.forEach((i) => { counts[i.type] = (counts[i.type] || 0) + 1; });
   return { issues, counts, total: issues.length };
@@ -93,4 +106,6 @@ export const ISSUE_LABELS = {
   appointment_orphan_order: 'مواعيد مربوطة بطلب محذوف',
   quote_missing_customer: 'عروض أسعار لعميل محذوف',
   quote_orphan_order: 'عروض مربوطة بطلب محذوف',
+  media_orphan: 'وسائط (صور/توقيعات) لطلب غير موجود',
+  media_bad_key: 'سجلات وسائط بمعرّف غير صالح',
 };

@@ -103,7 +103,7 @@ async function timeGetAll(store, deps) {
  * @returns {Promise<{count:number, bytes:number, mediaBytes:number, capped:boolean}>}
  */
 async function scanStore(store, deps, o = {}) {
-  const batch = store === STORES.BACKUPS ? 1 : (store === STORES.ORDERS ? 25 : 100);   /* النسخ الاحتياطية سجلات ضخمة */
+  const batch = store === STORES.BACKUPS ? 1 : ((store === STORES.ORDERS || store === STORES.ORDER_MEDIA) ? 25 : 100);   /* النسخ والوسائط سجلات ضخمة */
   let after; let count = 0; let bytes = 0; let mediaBytes = 0; let capped = false;
   for (;;) {
     const { records, lastKey, done } = await deps.readBatch(store, after, batch);
@@ -162,8 +162,9 @@ export async function runProbe(opts = {}) {
     if (cancelled()) { report.cancelled = true; break; }
     progress({ step: 'مخزن ' + s });
     try {
-      const sc = await scanStore(s, deps, s === STORES.ORDERS ? { stopAtBytes: ORDERS_GETALL_CAP } : {});
-      const row = { store: s, count: sc.count, bytes: sc.bytes, mediaBytes: sc.mediaBytes, timing: null, skipped: '' };
+      const sc = await scanStore(s, deps, (s === STORES.ORDERS || s === STORES.ORDER_MEDIA) ? { stopAtBytes: ORDERS_GETALL_CAP } : {});
+      /* مخزن orderMedia كله وسائط (حقل data) */
+      const row = { store: s, count: sc.count, bytes: sc.bytes, mediaBytes: s === STORES.ORDER_MEDIA ? sc.bytes : sc.mediaBytes, timing: null, skipped: '' };
       if (s === STORES.BACKUPS) row.skipped = 'ليس ضمن قراءات الصفحات (حجمه فقط)';
       else if (sc.capped) { row.skipped = 'تخطّي القياس الزمني حمايةً (حجم كبير جداً)'; report.skipped.push(s); }
       else row.timing = summarizeTimes((await timeGetAll(s, deps)).times);
@@ -174,8 +175,10 @@ export async function runProbe(opts = {}) {
   }
 
   const ord = report.stores.find((r) => r.store === STORES.ORDERS);
+  const sep = report.stores.find((r) => r.store === STORES.ORDER_MEDIA);
   if (ord) {
     report.orders = {
+      separatedBytes: sep ? sep.bytes : 0,        /* وسائط في مخزن orderMedia (لا تبطئ قراءة الطلبات) */
       count: ord.count, totalBytes: ord.bytes, mediaBytes: ord.mediaBytes,
       mediaShare: ord.bytes > 0 ? ord.mediaBytes / ord.bytes : 0,
       avgBytes: ord.count > 0 ? Math.round(ord.bytes / ord.count) : 0,
@@ -210,24 +213,25 @@ function countReads(p) { return p.waves.reduce((a, w) => a + w.length, 0); }
 function ordersReads(p) { return p.waves.reduce((a, w) => a + w.filter((s) => s === STORES.ORDERS).length, 0); }
 
 /**
- * تقدير النمو: حجم وزمن قراءة الطلبات عند أعداد أكبر، بمعدل نقل مقيس على جهازك.
- * (تقدير خطي تقريبي؛ للتأكيد استعمل الاختبار التخيّلي.)
+ * تقدير النمو: حجم الطلبات عند أعداد أكبر (موثوق: حساب مباشر)، وزمن القراءة (يُقدَّر فقط بمعدل موثوق).
+ * مصدر معدل النقل بالترتيب: (1) قياس الطلبات الفعلي إن كان كبيراً (≥ 2MB) · (2) الاختبار التخيّلي إن وُجد ·
+ * (3) لا شيء ⟵ الأعمدة الزمنية null (v3.3.86: كان يُستعمل معدل من بيانات صغيرة جداً فيعطي أرقاماً أبطأ بـ 60 ضعفاً).
  * @param {Object} report — ناتج runProbe
  * @param {number[]} [counts]
- * @returns {{throughputMBs:number|null, reliable:boolean, rows:Array}}
+ * @param {{rows?:Array}|null} [synthetic] — ناتج runSynthetic (اختياري)
+ * @returns {{throughputMBs:number|null, reliable:boolean, source:'measured'|'synthetic'|'none', rows:Array}}
  */
-export function projectGrowth(report, counts = [100, 500, 1000]) {
+export function projectGrowth(report, counts = [100, 500, 1000], synthetic = null) {
   const ord = report && report.stores ? report.stores.find((r) => r.store === STORES.ORDERS) : null;
   const o = report && report.orders;
-  if (!ord || !ord.timing || !o) return { throughputMBs: null, reliable: false, rows: [] };
-  const mb = ord.bytes / 1048576;
-  /* المعدل يوثق به فقط حين تكون البيانات كبيرة بما يكفي (زمن الإعداد الثابت يطغى على القليل) */
-  const reliable = ord.bytes >= 2 * 1024 * 1024 && ord.timing.median > 0;
-  let rate = ord.timing.median > 0 && mb > 0 ? mb / (ord.timing.median / 1000) : null;
-  if (!reliable) {
-    const all = report.stores.filter((r) => r.timing && r.store !== STORES.ORDERS);
-    const b = all.reduce((a, r) => a + r.bytes, 0) + ord.bytes; const ms = all.reduce((a, r) => a + r.timing.median, 0) + ord.timing.median;
-    rate = ms > 0 && b > 0 ? (b / 1048576) / (ms / 1000) : null;
+  if (!ord || !o) return { throughputMBs: null, reliable: false, source: 'none', rows: [] };
+  let rate = null; let source = 'none';
+  if (ord.timing && ord.bytes >= 2 * 1024 * 1024 && ord.timing.median > 0) {
+    rate = (ord.bytes / 1048576) / (ord.timing.median / 1000); source = 'measured';
+  } else if (synthetic && Array.isArray(synthetic.rows)) {
+    const good = synthetic.rows.filter((r) => r && r.full && r.full.median > 0 && r.fullBytes > 0);
+    const big = good[good.length - 1];
+    if (big) { rate = (big.fullBytes / 1048576) / (big.full.median / 1000); source = 'synthetic'; }
   }
   const rows = counts.map((n) => {
     const full = o.avgBytes * n; const slim = o.avgSlimBytes * n;
@@ -237,7 +241,7 @@ export function projectGrowth(report, counts = [100, 500, 1000]) {
       slimMs: rate ? Math.round((slim / 1048576) / rate * 1000) : null,
     };
   });
-  return { throughputMBs: rate ? Math.round(rate * 10) / 10 : null, reliable, rows };
+  return { throughputMBs: rate ? Math.round(rate * 10) / 10 : null, reliable: source !== 'none', source, rows };
 }
 
 /**
@@ -255,8 +259,9 @@ export function verdictLines(report) {
   }
   const o = report.orders;
   if (o && o.count > 0) {
-    out.push('الصور والتوقيعات = ' + Math.round(o.mediaShare * 100) + '% من حجم الطلبات (' + fmtBytes(o.mediaBytes) + ' من ' + fmtBytes(o.totalBytes) + ')');
-    if (o.mediaShare > 0.5) out.push('أغلب حجم الطلبات وسائط ⟵ فصلها عن سجل الطلب سيعطي أكبر مكسب عند النمو');
+    out.push('وسائط مضمَّنة في سجل الطلب (تُقرأ مع كل قراءة للطلبات) = ' + Math.round(o.mediaShare * 100) + '% من حجم الطلبات (' + fmtBytes(o.mediaBytes) + ' من ' + fmtBytes(o.totalBytes) + ')');
+    if (o.separatedBytes > 0) out.push('وسائط مفصولة في orderMedia: ' + fmtBytes(o.separatedBytes) + ' (لا تبطئ قراءة الطلبات)');
+    if (o.mediaShare > 0.5 && o.mediaBytes > 1024 * 1024) out.push('أغلب حجم الطلبات وسائط مضمَّنة ⟵ فصلها عن سجل الطلب يعطي أكبر مكسب عند النمو');
   } else if (o) out.push('لا طلبات بعد — القياس الحالي على بيانات قليلة جداً؛ استعمل اختبار النمو التخيّلي');
   if (report.skipped && report.skipped.length) out.push('تخطّينا قياس: ' + report.skipped.join('، ') + ' (حجم كبير جداً — هذا بحد ذاته مؤشر)');
   return out;
@@ -292,11 +297,12 @@ export function formatReport(report, synthetic = null) {
   for (const p of report.pages) {
     L.push(p.label + ': ' + (p.timing ? fmtMs(p.timing.median) + ' (الأول ' + fmtMs(p.timing.first) + ')' : '—') + ' · ' + p.reads + ' قراءة (الطلبات ' + p.ordersReads + '×)' + (p.skipped ? ' · ' + p.skipped : ''));
   }
-  const g = projectGrowth(report);
+  const g = projectGrowth(report, undefined, synthetic);
   if (g.rows.length) {
     L.push('');
-    L.push('— تقدير النمو (قراءة الطلبات الواحدة) —' + (g.reliable ? '' : ' [تقدير ضعيف: بيانات قليلة]'));
-    L.push('معدل النقل المقيس: ' + (g.throughputMBs === null ? '—' : g.throughputMBs + ' MB/s'));
+    L.push('— تقدير النمو (قراءة الطلبات الواحدة) —');
+    if (g.source === 'none') L.push('الزمن: لا يُقدَّر من بياناتك الحالية (قليلة جداً) — شغّل «اختبار النمو التخيّلي» للحصول عليه. الأحجام أدناه حساب مباشر.');
+    else L.push('معدل النقل: ' + g.throughputMBs + ' MB/s (' + (g.source === 'synthetic' ? 'من الاختبار التخيّلي' : 'مقيس على بياناتك') + ')');
     for (const r of g.rows) L.push(r.orders + ' طلب: ' + fmtBytes(r.fullBytes) + (r.fullMs !== null ? ' ≈ ' + r.fullMs + ' ms' : '') + ' · بلا وسائط ' + fmtBytes(r.slimBytes) + (r.slimMs !== null ? ' ≈ ' + r.slimMs + ' ms' : ''));
   }
   if (synthetic) {

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.85 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
+   الإصدار: v3.3.86 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.85';
+const CACHE_VERSION = 'v3.3.86';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -68,6 +68,7 @@ const PRECACHE_URLS = [
   './src/data/repos/inventory.js',
   './src/data/repos/ledger.js',
   './src/data/repos/loan-payments.js',
+  './src/data/repos/order-media.js',
   './src/data/repos/orders.js',
   './src/data/repos/payments.js',
   './src/data/repos/personal-loans.js',
@@ -167,6 +168,8 @@ const PRECACHE_URLS = [
   './src/services/message-templates.js',
   './src/services/morning-summary.js',
   './src/services/notifications.js',
+  './src/services/order-media-scan.js',
+  './src/services/order-media.js',
   './src/services/order-profit.js',
   './src/services/order-risk.js',
   './src/services/order-scheduler.js',

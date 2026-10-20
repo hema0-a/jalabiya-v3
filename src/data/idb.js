@@ -301,6 +301,16 @@ export async function getAll(storeName) {
   return wrap(store.getAll());
 }
 
+/**
+ * مفاتيح مخزن فقط (بلا قراءة السجلات) — للفحوص الخفيفة على مخازن ضخمة مثل orderMedia (v3.3.86). قراءة فقط.
+ * @param {string} storeName
+ * @returns {Promise<Array>}
+ */
+export async function getAllKeys(storeName) {
+  const store = await getStore(storeName);
+  return wrap(store.getAllKeys());
+}
+
 export async function remove(storeName, id) {
   const res = await writeOp(storeName, (store) => store.delete(id));
   notifyRec(removeListeners, storeName, id);

@@ -38,6 +38,7 @@ const BACKUP_STORES = [
   STORES.WORKER_PAYMENTS,
   STORES.QUOTES,
   STORES.LEDGER,
+  STORES.ORDER_MEDIA,
 ];
 
 /* ==========================================================================
