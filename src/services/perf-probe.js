@@ -361,7 +361,7 @@ export async function runSynthetic(opts = {}) {
   const counts = opts.counts || [100, 300];
   const mediaKB = opts.mediaKB || 250;
   const dep = opts.deps || {};
-  const factory = dep.indexedDB || (typeof indexedDB !== 'undefined' ? indexedDB : null);
+  const factory = ('indexedDB' in dep) ? dep.indexedDB : (typeof indexedDB !== 'undefined' ? indexedDB : null);
   const now = dep.now || defaultNow;
   const estimate = dep.storageEstimate || defaultDeps().storageEstimate;
   const progress = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
