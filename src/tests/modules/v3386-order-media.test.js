@@ -45,7 +45,7 @@ register('v3.3.86 order-media — المنطق النقي', async (t) => {
   await t.test('5. findOrphanMedia: اليتيم = لا طلب حيّ ولا في السلة؛ والمعرّف الفاسد منفصل؛ العدّ لكل طلب',
     f.orphans.join() === 'gone:ref' && f.invalid.join() === 'weird,x:nope' && f.byOrder.get('live') === 2);
   await t.test('6. حارس الكتابة: ممنوعة قبل رفع الحد (3003086) ومسموحة بعده', MEDIA_MIN_BUILD === 3003086 && !mediaWritesAllowed(3003085) && mediaWritesAllowed(3003086) && mediaWritesAllowed(4000000));
-  await t.test('7. 3.3.86 بلا تغيير سلوك: الحد الأدنى الحالي أقل من حد الوسائط (يُرفع في 3.3.87 مع قواعد Firestore)', MIN_CLIENT_BUILD < MEDIA_MIN_BUILD);
+  await t.test('7. (3.3.87) رُفع الحد الأدنى للمزامنة فصار كافياً لكتابة الوسائط', MIN_CLIENT_BUILD >= MEDIA_MIN_BUILD && mediaWritesAllowed(MIN_CLIENT_BUILD));
 
   const s0 = scanIntegrity({ orders: [{ id: 'live' }], orderMediaKeys: ['live:ref', 'gone:sig', 'bad'], trashOrderIds: [] });
   const s1 = scanIntegrity({ orders: [{ id: 'live' }], orderMediaKeys: ['gone:sig'], trashOrderIds: ['gone'] });
@@ -110,8 +110,9 @@ register('v3.3.86 order-media — المخزن (قاعدة فعلية) والت�
 
 register('v3.3.86 order-media — المستودع والقراءة المزدوجة', async (t) => {
   await resetAll();
+  _setWriteGateForTest(() => false);
   const e = await throwsAsync(() => orderMedia.put('o1', 'ref', IMG));
-  await t.test('1. الكتابة محروسة افتراضياً (media-writes-disabled) ولا يُكتب شيء', !!e && e.code === 'media-writes-disabled' && (await orderMedia.count()) === 0);
+  await t.test('1. الحارس يعمل: عند إغلاقه ⟵ media-writes-disabled ولا يُكتب شيء (والافتراضي مفتوح منذ 3.3.87)', !!e && e.code === 'media-writes-disabled' && (await orderMedia.count()) === 0 && mediaWritesAllowed(MIN_CLIENT_BUILD));
 
   _setWriteGateForTest(() => true);
   try {

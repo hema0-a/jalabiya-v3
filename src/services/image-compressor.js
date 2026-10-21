@@ -139,6 +139,27 @@ export async function compress(file, options = {}) {
    ========================================================================== */
 
 /**
+ * مصغّر مربّع صغير جداً من dataURL (v3.3.87): يبقى داخل سجل الطلب (refThumb) لتُرسم قوائم الطلبات بلا قراءة الصورة الكاملة.
+ * ≈ 2–4KB. فشل أي خطوة ⟵ '' (القائمة تعرض رمزاً بديلاً).
+ * @param {string} dataUrl
+ * @param {number} [size=96]
+ * @param {number} [quality=0.6]
+ * @returns {Promise<string>} dataURL أو ''
+ */
+export async function thumbFromDataUrl(dataUrl, size = 96, quality = 0.6) {
+  try {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return '';
+    const img = await loadImage(dataUrl);
+    const minSide = Math.min(img.naturalWidth, img.naturalHeight);
+    if (!minSide) return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - minSide) / 2, (img.naturalHeight - minSide) / 2, minSide, minSide, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch (e) { return ''; }
+}
+
+/**
  * توليد thumbnail مربّع.
  * @param {File} file
  * @param {number} [size=200]

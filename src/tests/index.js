@@ -97,5 +97,6 @@ import './modules/v3383-ledger-reconcile.test.js';
 import './modules/v3384-min-version.test.js';
 import './modules/v3385-perf-probe.test.js';
 import './modules/v3386-order-media.test.js';
+import './modules/v3387-order-media-write.test.js';
 
 export { runAll, register } from './registry.js';

@@ -11,6 +11,7 @@
    دوال نقية بلا DOM ولا قاعدة بيانات.
    ========================================================================== */
 
+import { deliveryHasSignature } from './order-media.js';
 import { uid } from '../core/utils.js';
 
 export const SINGLE_ID = '__single__';
@@ -85,7 +86,7 @@ export function deliveryProgress(order) {
     }
     if (items.length > 0) {
       history.push({
-        id: d.id, at: d.at, note: String(d.note || ''), hasSignature: !!d.signature,
+        id: d.id, at: d.at, note: String(d.note || ''), hasSignature: deliveryHasSignature(d),
         units: items.reduce((s, x) => s + x.qty, 0), items,
       });
     }

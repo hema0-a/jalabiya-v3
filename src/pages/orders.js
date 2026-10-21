@@ -21,6 +21,9 @@ import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad, SIGNATURE_SKIPPED } from '../ui/signature-pad.js';
 import { getAskSignature, setAskSignature } from '../services/signature-pref.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
+import { getOrderMedia } from '../data/repos/order-media.js';
+import { hasReferenceImage, hasOrderSignature } from '../services/order-media.js';
+import { thumbFromDataUrl } from '../services/image-compressor.js';
 import { printOrderInvoice } from '../services/invoice-print.js';
 import { shareOrderInvoiceImage } from '../services/invoice-image.js';
 import { getOrderMessageOptions } from '../services/auto-messages.js';
@@ -539,11 +542,23 @@ function openOrderForm(existing = null) {
   refreshCapOrders().then(() => { try { capStrip.refresh(); } catch (e) { /* النموذج أُغلق */ } });
 
   /* --- الصورة المرجعية --- */
+  /* الصورة المضمَّنة القديمة تظهر فوراً؛ المفصولة (orderMedia) تُحمَّل بعد فتح النموذج بلا تعطيله (v3.3.87).
+     loadedRef = ما حُمِّل (للمقارنة عند الحفظ فلا تُعاد كتابة صورة لم تتغيّر)، وrefReady = اكتمل التحميل
+     (قبله لا نكتب الصورة أبداً، فلا يُحذف وسيط بسبب حفظ سريع قبل وصوله). */
+  const inlineRef = isEdit ? (existing.referenceImage || '') : '';
   const imagePicker = createOrderImagePicker({
-    value: isEdit ? (existing.referenceImage || '') : '',
+    value: inlineRef,
     label: '🖼️ صورة مرجعية',
     hint: 'صورة الموديل المطلوب (اختياري)',
   });
+  let loadedRef = inlineRef;
+  let refReady = !isEdit || !!inlineRef || !hasReferenceImage(existing);
+  if (!refReady) {
+    getOrderMedia(existing, 'ref').then((v) => {
+      loadedRef = v || '';
+      if (loadedRef && !imagePicker.getValue()) imagePicker.setValue(loadedRef);
+    }).catch((e) => console.warn('[orders] تعذّر تحميل الصورة المرجعية', e)).finally(() => { refReady = true; });
+  }
 
   /* --- البنود --- */
   const itemsContainer = el('div', {});
@@ -700,7 +715,7 @@ function openOrderForm(existing = null) {
   const hasExtras = isEdit && (
     (existing.discountType && existing.discountType !== 'none' && Number(existing.discountValue) > 0) ||
     (Array.isArray(existing.extraFees) && existing.extraFees.length > 0) ||
-    Number(existing.cost) > 0 || !!existing.notes || !!existing.referenceImage || !!existing.receivedDate || !!existing.urgent
+    Number(existing.cost) > 0 || !!existing.notes || hasReferenceImage(existing) || !!existing.receivedDate || !!existing.urgent
   );
   const extras = el('details', { className: 'order-extras' }, [
     el('summary', { className: 'order-extras__summary' }, [
@@ -866,9 +881,16 @@ function openOrderForm(existing = null) {
             subtotal: totals.subtotal, deposit, amount: totals.amount,
             cost: toNonNegative(costInput.value),
             notes: notesInput.value.trim(),
-            referenceImage: imagePicker.getValue() || '',
             urgent: urgentInput.checked,
           };
+          /* الصورة المرجعية: طلب جديد ⟵ تُكتب (إن وُجدت)؛ تعديل ⟵ فقط إن تغيّرت بعد اكتمال تحميلها.
+             المصغّر refThumb يبقى في سجل الطلب لقوائم سريعة، والأصل يذهب إلى orderMedia (انظر orders repo). */
+          {
+            const curImg = imagePicker.getValue() || '';
+            if (!isEdit) data.referenceImage = curImg;
+            else if (refReady && curImg !== loadedRef) data.referenceImage = curImg;
+            if (data.referenceImage) data.refThumb = await thumbFromDataUrl(data.referenceImage);
+          }
           /* إعادة فتح طلب ملغى: تُلغى علامة «تم الرد» حتى لا تبقى على طلب عاد فعّالاً */
           if (isEdit && existing.status === 'cancelled' && data.status !== 'cancelled' && existing.refundedAt) {
             data.refundedAt = null;
@@ -1367,6 +1389,30 @@ export function openPartialDelivery(order) {
   });
 }
 
+/**
+ * يفتح الصورة المرجعية الكاملة: القراءة المزدوجة (المضمَّنة القديمة أو orderMedia). يُعرض المصغّر إن تعذّر الأصل.
+ * @param {Object} o — الطلب
+ * @param {string} title
+ */
+async function openReferenceImage(o, title) {
+  try {
+    const full = await getOrderMedia(o, 'ref');
+    if (full || o.refThumb) showReferenceImage(full || o.refThumb, title);
+    else toast.warning('تعذّر العثور على الصورة');
+  } catch (e) { toast.danger('تعذّر فتح الصورة: ' + e.message); }
+}
+
+/**
+ * يفتح توقيع الطلب (مضمَّن قديم أو من orderMedia).
+ * @param {Object} o — الطلب
+ */
+async function openSignature(o) {
+  try {
+    const sig = await getOrderMedia(o, 'sig');
+    if (sig) showSignature(sig); else toast.warning('تعذّر العثور على التوقيع');
+  } catch (e) { toast.danger('تعذّر فتح التوقيع: ' + e.message); }
+}
+
 function showSignature(dataUrl) {
   if (!dataUrl) return;
   const body = el('div', {}, [
@@ -1601,7 +1647,7 @@ function buildOrderCard(o) {
   const phone = c ? c.phone : '';
   const statusInfo = STATUS_MAP[o.status] || { label: o.status, badge: 'badge--info' };
   const itemsCount = Array.isArray(o.items) ? o.items.length : 0;
-  const hasImage = !!o.referenceImage;
+  const hasImage = hasReferenceImage(o);
 
   const isDelivered = o.status === 'delivered' || o.status === 'cancelled';
   const canDeliver = o.status === 'ready' || o.status === 'in_progress';
@@ -1612,18 +1658,17 @@ function buildOrderCard(o) {
   const totalMs = getTotalWorkTime(sessions);
 
   /* --- الصورة المصغّرة (إن وُجدت) --- */
-  const thumb = hasImage ? el('img', {
-    src: o.referenceImage, alt: 'مرجع',
-    style: {
-      width: '56px', height: '56px', borderRadius: '8px',
-      objectFit: 'cover', flexShrink: '0', cursor: 'pointer',
-      border: '1px solid #E5DDD0',
-    },
-    onClick: (e) => {
-      e.stopPropagation();
-      showReferenceImage(o.referenceImage, 'صورة مرجعية — ' + name);
-    },
-  }) : null;
+  /* المصغّر المحفوظ (refThumb) أو الصورة المضمَّنة القديمة؛ مفصولة بلا مصغّر ⟵ رمز بديل. الضغط يفتح الأصل. */
+  const thumbSrc = o.refThumb || o.referenceImage || '';
+  const thumbStyle = {
+    width: '56px', height: '56px', borderRadius: '8px',
+    objectFit: 'cover', flexShrink: '0', cursor: 'pointer',
+    border: '1px solid #E5DDD0',
+  };
+  const thumbClick = (e) => { e.stopPropagation(); openReferenceImage(o, 'صورة مرجعية — ' + name); };
+  const thumb = hasImage ? (thumbSrc
+    ? el('img', { src: thumbSrc, alt: 'مرجع', style: thumbStyle, onClick: thumbClick })
+    : el('div', { style: { ...thumbStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F6F1E6', fontSize: '22px' }, onClick: thumbClick }, '🖼️')) : null;
 
   const headerChildren = [
     thumb,
@@ -1681,11 +1726,11 @@ function buildOrderCard(o) {
     }, (isRunning ? '⏱️ يعمل · ' : '⏱️ ') + formatDuration(totalMs)));
   }
 
-  if (o.signature) {
+  if (hasOrderSignature(o)) {
     badgesRow.appendChild(el('span', {
       style: { fontSize: '11px', fontWeight: '600', padding: '3px 8px',
         borderRadius: '10px', color: '#2E7D32', background: '#E8F5E9', cursor: 'pointer' },
-      onClick: (e) => { e.stopPropagation(); showSignature(o.signature); },
+      onClick: (e) => { e.stopPropagation(); openSignature(o); },
     }, '✍️ موقّع'));
   }
 
@@ -1801,9 +1846,9 @@ function buildMiniCard(o, opts = {}) {
   });
 
   /* صورة مصغّرة */
-  if (o.referenceImage) {
+  if (o.refThumb || o.referenceImage) {
     card.appendChild(el('img', {
-      src: o.referenceImage, alt: 'مرجع',
+      src: o.refThumb || o.referenceImage, alt: 'مرجع',
       style: {
         width: '36px', height: '36px', borderRadius: '6px',
         objectFit: 'cover', flexShrink: '0',

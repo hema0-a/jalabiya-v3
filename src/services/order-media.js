@@ -5,7 +5,7 @@
    الفصل: كل وسيط سجل مستقل في مخزن orderMedia معرّفه  orderId + ':' + slot.
    هذه الوحدة نقية (بلا idb): صيغ المعرّفات، المسافات (slots)، قراءة الوسائط المضمَّنة في الطلب،
    وكشف السجلات اليتيمة من المفاتيح فقط (بلا قراءة الصور).
-   المراحل:  3.3.86 المخزن والمستودع والقراءة المزدوجة (لا كتابة)  ·  3.3.87 الكتابة الجديدة في المخزن  ·  3.3.88 نقل القديم.
+   المراحل:  3.3.86 المخزن والمستودع والقراءة المزدوجة  ·  3.3.87 الكتابة الجديدة في المخزن (externalizeMedia)  ·  3.3.88 نقل القديم.
    ========================================================================== */
 
 /** المسافات الثابتة. توقيعات التسليم: del-<رقم/معرّف التسليم>. */
@@ -123,3 +123,94 @@ export function findOrphanMedia(mediaKeys, orderIds, trashOrderIds = []) {
  * @returns {boolean}
  */
 export function mediaWritesAllowed(minClientBuild) { return Number(minClientBuild) >= MEDIA_MIN_BUILD; }
+
+/* ==========================================================================
+   الكتابة (v3.3.87): إخراج الوسائط الجديدة من سجل الطلب إلى orderMedia
+   ========================================================================== */
+
+/**
+ * هل القيمة وسيط صالح للتخزين (dataURL)؟ ما سواها يبقى مضمَّناً ولا يُمسّ (دفاعي: لا نُضيّع صيغة لا نعرفها).
+ * @param {*} v
+ * @returns {boolean}
+ */
+export function isMediaData(v) { return typeof v === 'string' && v.startsWith('data:') && v.length > 5; }
+
+/**
+ * هل للطلب صورة مرجعية (مضمَّنة قديمة أو مفصولة بعلامة)؟ — بلا قراءة المخزن.
+ * @param {Object} o
+ * @returns {boolean}
+ */
+export function hasReferenceImage(o) { return !!(o && (o.hasReferenceImage === true || str(o.referenceImage))); }
+
+/**
+ * هل للطلب توقيع تسليم؟ (مضمَّن أو مفصول بعلامة)
+ * @param {Object} o
+ * @returns {boolean}
+ */
+export function hasOrderSignature(o) { return !!(o && (o.hasSignature === true || str(o.signature))); }
+
+/**
+ * هل لتسليمة توقيع؟ (مضمَّن أو مفصول بعلامة)
+ * @param {Object} d
+ * @returns {boolean}
+ */
+export function deliveryHasSignature(d) { return !!(d && (d.hasSignature === true || str(d.signature))); }
+
+/**
+ * يفصل الوسائط **التي تغيّرت** عن حقول الطلب المراد كتابتها. دالة نقية (لا تعدّل المدخلات).
+ *  - صورة/توقيع جديد (dataURL) ⟵ يذهب إلى orderMedia ويُفرَّغ الحقل ويُضاف علم hasReferenceImage/hasSignature.
+ *  - القيمة المضمَّنة القديمة **غير المتغيّرة** تبقى مضمَّنة (لا ترحيل ضمني؛ الترحيل في 3.3.88).
+ *  - إفراغ صريح ('' أو null) ⟵ حذف الوسيط من المخزن وإسقاط العلم. لكن حقل فارغ مع علم true (نسخة من سجل مفصول
+ *    مثل {...order, status}) يعني «لم يتغيّر» ولا يحذف شيئاً.
+ *  - التسليمات: كل تسليمة بتوقيع جديد ⟵ مسافة del-<id>؛ تسليمة حُذفت (تراجع) ⟵ يُحذف وسيطها.
+ * @param {Object} patch — حقول الكتابة (عند الإنشاء: السجل كاملاً)
+ * @param {Object|null} [existing] — السجل الحالي (null عند الإنشاء)
+ * @returns {{record:Object, puts:Array<{slot:string,data:string}>, deletes:string[]}}
+ */
+export function externalizeMedia(patch, existing = null) {
+  const record = { ...(patch || {}) };
+  const ex = existing && typeof existing === 'object' ? existing : null;
+  const puts = []; const deletes = [];
+
+  const one = (field, slot, flag, isRef) => {
+    if (!(field in record)) return;
+    const v = record[field];
+    if (isMediaData(v)) {
+      if (ex && ex[field] === v) return;                       /* مضمَّن قديم لم يتغيّر */
+      puts.push({ slot, data: v });
+      record[field] = ''; record[flag] = true;
+      if (isRef) record.refThumb = typeof patch.refThumb === 'string' ? patch.refThumb : '';
+    } else if (v === '' || v === null || v === undefined) {
+      if (record[flag] === true) { record[field] = ''; return; }   /* نسخة من سجل مفصول: لم يتغيّر */
+      if (ex && (ex[flag] === true || str(ex[field]))) {
+        if (ex[flag] === true) deletes.push(slot);
+        record[field] = ''; record[flag] = false;
+        if (isRef) record.refThumb = '';
+      } else {
+        record[field] = '';
+        if (flag in record) record[flag] = false;
+      }
+    }
+  };
+  one('referenceImage', SLOT_REF, 'hasReferenceImage', true);
+  one('signature', SLOT_SIG, 'hasSignature', false);
+
+  if (Array.isArray(record.deliveries)) {
+    const exArr = ex && Array.isArray(ex.deliveries) ? ex.deliveries : [];
+    const exById = new Map(exArr.filter((d) => d && d.id != null).map((d) => [String(d.id), d]));
+    const seen = new Set();
+    record.deliveries = record.deliveries.map((d) => {
+      if (!d || typeof d !== 'object') return d;
+      if (d.id != null) seen.add(String(d.id));
+      if (d.id == null || !isMediaData(d.signature)) return d;
+      const old = exById.get(String(d.id));
+      if (old && old.signature === d.signature) return d;      /* مضمَّن قديم لم يتغيّر */
+      puts.push({ slot: deliverySlot(d.id), data: d.signature });
+      return { ...d, signature: '', hasSignature: true };
+    });
+    for (const [id, old] of exById) {
+      if (!seen.has(id) && old.hasSignature === true) deletes.push(deliverySlot(id));
+    }
+  }
+  return { record, puts, deletes: [...new Set(deletes)] };
+}

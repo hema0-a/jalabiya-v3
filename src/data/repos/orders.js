@@ -10,6 +10,9 @@ import { customers as customersRepo, walletOf, loyaltyConfig, pointsForAmount, p
 import { payments as paymentsRepo } from './payments.js';
 import { settings as settingsRepo } from './settings.js';
 import { getActiveSession, stopSession } from '../../services/order-timing.js';
+import { orderMedia } from './order-media.js';
+import { externalizeMedia } from '../../services/order-media.js';
+import { uid } from '../../core/utils.js';
 
 const base = createRepository(STORES.ORDERS);
 
@@ -103,6 +106,31 @@ async function _snapshotFor(customerId) {
   }
 }
 
+/** حقول تستدعي معالجة الوسائط عند الكتابة (v3.3.87). */
+const MEDIA_KEYS = ['referenceImage', 'signature', 'deliveries'];
+const touchesMedia = (p) => !!p && typeof p === 'object' && MEDIA_KEYS.some((k) => k in p);
+
+/**
+ * يكتب وسائط جديدة في orderMedia. الترتيب الآمن: **الوسائط أولاً ثم الطلب** — فشل الطلب بعدها يترك بايتات غير مشار
+ * إليها (تُنظَّف)، أما العكس فيترك طلباً يشير لوسيط مفقود (ضياع صورة).
+ * @param {string} id
+ * @param {Array<{slot:string,data:string}>} puts
+ */
+async function writeMedia(id, puts) {
+  for (const p of puts) await orderMedia.put(id, p.slot, p.data);
+}
+
+/**
+ * يحذف وسائط (تنظيف أو بعد إفراغ صريح). لا يرمي: فشله يترك بايتات يتيمة يكشفها فحص السلامة.
+ * @param {string} id
+ * @param {string[]} slots
+ */
+async function dropMedia(id, slots) {
+  for (const slot of slots) {
+    try { await orderMedia.remove(id, slot); } catch (e) { console.warn('[orders] تعذّر حذف وسيط', id, slot, e); }
+  }
+}
+
 export const orders = {
   ...base,
 
@@ -114,6 +142,14 @@ export const orders = {
     if (!('measurementsSnapshot' in d)) {
       const snap = await _snapshotFor(d.customerId);
       if (snap) d.measurementsSnapshot = snap;
+    }
+    /* الوسائط (v3.3.87): الصورة والتوقيعات الجديدة تذهب إلى orderMedia ولا تدخل سجل الطلب */
+    if (touchesMedia(d)) {
+      const id = d.id || uid();
+      const ex = externalizeMedia({ ...d, id }, null);
+      if (ex.puts.length) await writeMedia(id, ex.puts);
+      try { return await base.create(ex.record); }
+      catch (e) { await dropMedia(id, ex.puts.map((p) => p.slot)); throw e; }
     }
     return base.create(d);
   },
@@ -147,7 +183,20 @@ export const orders = {
       /* readyAt صريح (مثل التراجع عن «تسليم») يُحفظ كما هو بدل إعادة ضبط عمر الجاهزية */
       if (prev && prev.status !== 'ready' && !('readyAt' in p)) p = { ...p, readyAt: Date.now() };
     }
+    /* الوسائط (v3.3.87): نفصل ما تغيّر فقط؛ المضمَّن القديم غير المتغيّر يبقى حيث هو (الترحيل في 3.3.88) */
+    let ex = null;
+    if (touchesMedia(p)) {
+      const cur = prev || await base.find(id);
+      if (!cur) return null;
+      ex = externalizeMedia(p, cur);
+      p = ex.record;
+      if (ex.puts.length) await writeMedia(id, ex.puts);
+    }
     const res = await base.update(id, p);
+    if (ex) {
+      if (!res) await dropMedia(id, ex.puts.map((x) => x.slot));       /* الطلب غير موجود: لا بايتات يتيمة */
+      else if (ex.deletes.length) await dropMedia(id, ex.deletes);
+    }
     /* نقاط الولاء: تُمنح عند التسليم وتتبع حالة الطلب ومبلغه (انظر _syncPoints) */
     if (res && prev) await _syncPoints(id, prev, res);
     return res;
