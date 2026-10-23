@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.88 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
+   الإصدار: v3.4.0 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.88';
+const CACHE_VERSION = 'v3.4.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================

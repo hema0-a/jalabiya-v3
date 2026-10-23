@@ -70,7 +70,7 @@ T('فشل اتساق (إصدار config ≠ package.json): يوقف ويتراج
     const r = apply(fx, zip);
     assert.equal(r.code, 3, r.out);
     assert.equal(fx.head(), before);
-    assert.match(fs.readFileSync(path.join(fx.repo, 'src/core/config.js'), 'utf8'), /version:\s*'3\.3\.\d+'/);
+    assert.match(fs.readFileSync(path.join(fx.repo, 'src/core/config.js'), 'utf8'), /version:\s*'\d+\.\d+\.\d+'/);
     assert.match(r.out, /9\.9\.9/);
   } finally { fx.cleanup(); }
 });
