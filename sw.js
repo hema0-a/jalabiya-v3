@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.87 — الدفتر المرجع: الكتابة عبر الدفتر (الخطوة 2ب)
+   الإصدار: v3.3.88 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.87';
+const CACHE_VERSION = 'v3.3.88';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -224,6 +224,7 @@ const PRECACHE_URLS = [
   './src/ui/form-builder.js',
   './src/ui/layout.js',
   './src/ui/ledger-shadow-card.js',
+  './src/ui/lock-failure.js',
   './src/ui/lock-screen.js',
   './src/ui/message-composer-dialog.js',
   './src/ui/modal.js',

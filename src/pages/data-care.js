@@ -42,7 +42,7 @@ const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
  */
 const freshState = (container = null) => ({
   container, data: null, full: false, scan: null, backups: null, verifyResult: null,
-  media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null,
+  media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null, mediaPhase: 'orders', mediaCount: 0,
   mediaError: '', mediaUsage: null, mediaProgressNode: null,
   perf: null, perfSynth: null, perfRunning: false, perfCancel: false, perfStep: '', perfError: '', perfProgressNode: null,
 });
@@ -244,7 +244,8 @@ function mergeSection() {
 
 /** نص تقدم الفحص. */
 function mediaProgressText() {
-  return 'جارٍ الفحص… ' + state.mediaScanned + (state.mediaTotal !== null ? ' / ' + state.mediaTotal : '') + ' طلب';
+  if (state.mediaPhase === 'media') return 'جارٍ فحص مخزن الوسائط… ' + state.mediaCount + ' وسيط';
+  return 'جارٍ فحص الطلبات… ' + state.mediaScanned + (state.mediaTotal !== null ? ' / ' + state.mediaTotal : '') + ' طلب';
 }
 
 /**
@@ -254,7 +255,7 @@ function mediaProgressText() {
 async function runMediaScan() {
   if (state.mediaRunning) return;
   const mine = state;                                     /* إن غادر المستخدم الصفحة يتغير state فنتوقف */
-  mine.mediaRunning = true; mine.mediaCancel = false; mine.mediaScanned = 0;
+  mine.mediaRunning = true; mine.mediaCancel = false; mine.mediaScanned = 0; mine.mediaPhase = 'orders'; mine.mediaCount = 0;
   mine.mediaTotal = null; mine.mediaError = ''; mine.media = null; mine.mediaUsage = null;
   draw();
   try {
@@ -263,6 +264,8 @@ async function runMediaScan() {
       shouldCancel: () => mine.mediaCancel || state !== mine,
       onProgress: (p) => {
         mine.mediaScanned = p.scanned;
+        mine.mediaPhase = p.phase || 'orders';
+        mine.mediaCount = p.mediaScanned || 0;
         if (state === mine && mine.mediaProgressNode) mine.mediaProgressNode.textContent = mediaProgressText();
       },
     });
@@ -296,6 +299,12 @@ function mediaResultNodes(r) {
     statRow('حجم التوقيعات', formatKB(r.signatureBytes)),
     statRow('الإجمالي', formatKB(r.totalBytes) + (r.totalBytes >= 1048576 ? ' (' + formatBytes(r.totalBytes) + ')' : '')),
     r.ordersWithMedia > 0 ? statRow('متوسط الوسائط للطلب الواحد (ممّن له وسائط)', formatKB(r.avgBytesPerMediaOrder)) : null,
+    /* أين تُخزَّن: ما داخل الطلبات يُقرأ مع القائمة، وما في مخزن الوسائط لا يُقرأ معها (v3.3.88) */
+    r.inline ? statRow('داخل سجلات الطلبات (قديمة)', formatKB(r.inline.totalBytes)) : null,
+    r.separated ? statRow('في مخزن الوسائط المستقل', formatKB(r.separated.totalBytes) + ' (' + r.separated.records + ' وسيط)') : null,
+    r.thumbBytes > 0 ? statRow('مصغّرات القوائم (داخل الطلبات)', formatKB(r.thumbBytes)) : null,
+    r.inline ? statRow('يُقرأ مع قائمة الطلبات', formatKB(r.listBytes)) : null,
+    r.detached && r.detached.records > 0 ? statRow('وسائط بلا طلب في القائمة (محذوف/سلة/يتيمة)', r.detached.records + ' · ' + formatKB(r.detached.bytes)) : null,
     verdict.sharePercent !== null ? statRow('نسبتها من تخزين التطبيق', verdict.sharePercent + '%') : null,
     statRow('مدة الفحص', r.durationMs + ' ms'),
   ].filter(Boolean);
@@ -319,7 +328,8 @@ function mediaResultNodes(r) {
 function mediaDiagSection() {
   const kids = [
     el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.7' } },
-      'يحسب حجم الصور المرجعية والتوقيعات المخزّنة داخل سجلات الطلبات — وهي سبب بطء قراءة قائمة الطلبات. ' +
+      'يحسب حجم الصور المرجعية والتوقيعات في مكانين: داخل سجلات الطلبات (الشكل القديم، وهو ما يبطّئ قراءة القائمة) ' +
+      'وفي مخزن الوسائط المستقل (الشكل الجديد، ولا يؤثر على سرعة القائمة). ' +
       'للقراءة فقط: لا يعدّل أي بيانات، ولا يعمل إلا عند الضغط، ويقرأ على دفعات صغيرة دون تجميد التطبيق.'),
   ];
   if (state.mediaRunning) {

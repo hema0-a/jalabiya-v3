@@ -113,23 +113,17 @@ try {
   if (pinSet) {
     const appEl = document.getElementById('app');
     if (appEl) {
-      appEl.removeAttribute('inert');
-      appEl.removeAttribute('aria-hidden');
-      appEl.style.visibility = 'visible';
-      appEl.innerHTML = '';
-      const box = document.createElement('div');
-      box.className = 'boot';
-      box.style.flexDirection = 'column';
-      box.style.gap = '12px';
-      const msg = document.createElement('div');
-      msg.textContent = '🔒 تعذّر عرض شاشة القفل. لحماية بياناتك لم يُفتح التطبيق.';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = 'إعادة المحاولة';
-      btn.style.cssText = 'padding:10px 20px;border-radius:10px;border:0;background:#1F6D57;color:#fff;font:inherit;cursor:pointer';
-      btn.addEventListener('click', () => location.reload());
-      box.append(msg, btn);
-      appEl.appendChild(box);
+      /* تُحمَّل هنا فقط (مسار الفشل) فلا تزيد نقطة فشل في إقلاع التطبيق؛ وإن تعذّر تحميلها نكتب نصاً آمناً */
+      try {
+        const { renderLockFailure } = await import('./ui/lock-failure.js');
+        renderLockFailure(appEl);
+      } catch (renderErr) {
+        console.error('[Lock] تعذّر عرض شاشة الفشل:', renderErr);
+        appEl.removeAttribute('inert');
+        appEl.removeAttribute('aria-hidden');
+        appEl.style.visibility = 'visible';
+        appEl.textContent = '🔒 تعذّر عرض شاشة القفل. لحماية بياناتك لم يُفتح التطبيق. أعد تحميل الصفحة.';
+      }
     }
     throw e;
   }

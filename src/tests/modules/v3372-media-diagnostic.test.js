@@ -12,7 +12,13 @@ import {
 } from '../../services/media-diagnostic.js';
 import { readBatchAfter, getWriteVersion } from '../../data/idb.js';
 import { orders } from '../../data/repos/orders.js';
+import { orderMedia } from '../../data/repos/order-media.js';
 import { STORES } from '../../core/config.js';
+
+/** orders.clear() لا يحذف وسائط orderMedia (منذ v3.3.87 تُحفظ الصور هناك) فنحذف وسائط طلبات الاختبار صراحةً. */
+const dropMedia = async () => {
+  for (let i = 1; i <= 7; i++) { try { await orderMedia.removeByOrder('ord' + i); } catch (e) { /* ignore */ } }
+};
 
 const img = (n) => 'data:image/jpeg;base64,' + 'A'.repeat(n);
 
@@ -104,6 +110,7 @@ register('v3.3.72 media diagnostic', async (t) => {
 
   /* --- قارئ الدفعات على قاعدة البيانات الفعلية (قراءة فقط) --- */
   await orders.clear();
+  await dropMedia();
   try {
     for (let i = 1; i <= 7; i++) {
       await orders.create({ id: 'ord' + i, customerId: 'c' + (i % 2), amount: 100, status: 'pending',
@@ -131,5 +138,6 @@ register('v3.3.72 media diagnostic', async (t) => {
     await t.test('21. للقراءة فقط: رقم الكتابة لم يتغيّر وعدد السجلات كما هو', getWriteVersion() === beforeVersion && (await orders.count()) === 7);
   } finally {
     await orders.clear();
+    await dropMedia();
   }
 });

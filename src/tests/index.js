@@ -98,5 +98,7 @@ import './modules/v3384-min-version.test.js';
 import './modules/v3385-perf-probe.test.js';
 import './modules/v3386-order-media.test.js';
 import './modules/v3387-order-media-write.test.js';
+import './modules/v3388-media-diagnostic.test.js';
+import './modules/v3388-lock-failure-rules.test.js';
 
 export { runAll, register } from './registry.js';
