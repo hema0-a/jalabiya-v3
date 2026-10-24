@@ -155,6 +155,75 @@ export function applyWalletMove(id, d, overrides = {}) {
 }
 
 /**
+ * يُلحق سطراً واحداً بحساب عميل (محفظة/نقاط) ويشتق العدّادين وسجل العميل في معاملة واحدة —
+ * لحالات التسوية (مثل تسجيل حركة أُسقطت بتعارض معرّف، v3.4.2). نفس ضمانات applyWalletMove:
+ * قفل لكل عميل + حارس updatedAt + حارس «السطر غير موجود»، والرصيد لا يصير سالباً، وفشل الكتابة = لا أثر.
+ * idempotent: إن وُجد سطر بالمعرّف نفسه يُرجع status='exists' دون كتابة.
+ * @param {string} customerId
+ * @param {(ctx:{dev:string, seq:number, now:number})=>Object} buildEntry — يبني السطر (makeEntry)
+ * @param {Object} [overrides]
+ * @returns {Promise<{status:'added'|'exists', entry:Object, balance?:number, points?:number}>}
+ * @throws {Error} العميل غير موجود / وحدة غير مدعومة / الرصيد لا يكفي / النقاط لا تكفي / تعذّر الحفظ
+ */
+export function applyLedgerEntry(customerId, buildEntry, overrides = {}) {
+  const deps = { ...applyDeps, ...overrides };
+  return withLock('w:' + customerId, async () => {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const existing = await deps.getCustomer(customerId);
+      if (!existing) throw new Error('العميل غير موجود');
+      const acct = String(customerId);
+      const entries = await deps.listByAcct(acct);
+
+      const now = deps.now();
+      const dev = deps.deviceId();
+      const entry = buildEntry({ dev, seq: await deps.takeSeq(dev), now });
+      if (!entry || entry.acct !== acct) throw new Error('السطر لا يخص هذا الحساب');
+      if (entry.unit !== 'wallet' && entry.unit !== 'points') throw new Error('وحدة غير مدعومة للتسوية (المحفظة والنقاط فقط)');
+      if (entries.some((e) => e.id === entry.id)) return { status: 'exists', entry };
+
+      const curMinor = balanceOf(entries, 'wallet', acct);
+      const curPts = balanceOf(entries, 'points', acct);
+      const nbMinor = curMinor + (entry.unit === 'wallet' ? entry.delta : 0);
+      const np = curPts + (entry.unit === 'points' ? entry.delta : 0);
+      if (nbMinor < 0) throw new Error('الرصيد لا يكفي');
+      if (np < 0) throw new Error('النقاط لا تكفي');
+
+      const log = {
+        id: 'w' + now.toString(36) + Math.random().toString(36).slice(2, 6),
+        at: now, type: 'adjust',
+        balance: entry.unit === 'wallet' ? r2(fromMinor('wallet', entry.delta)) : 0,
+        points: entry.unit === 'points' ? entry.delta : 0,
+        orderId: null, note: String(entry.note || ''),
+      };
+      const prevLog = Array.isArray(existing.walletLog) ? existing.walletLog : [];
+      const nb = r2(fromMinor('wallet', nbMinor));
+      const nextRec = {
+        ...existing, creditBalance: nb, points: np,
+        walletLog: [log, ...prevLog].slice(0, WALLET_LOG_MAX),
+        updatedAt: Math.max(now, (Number(existing.updatedAt) || 0) + 1),
+      };
+      const plan = {
+        [STORES.CUSTOMERS]: { records: [stampForWrite(STORES.CUSTOMERS, existing, nextRec, nextRec.updatedAt)] },
+        [STORES.LEDGER]: { records: [entry] },
+      };
+      const guards = {
+        [STORES.CUSTOMERS]: new Map([[acct, Number(existing.updatedAt) || 0]]),
+        [STORES.LEDGER]: new Map([[entry.id, null]]),
+      };
+      try {
+        await selfWrite(() => deps.writeBatch(plan, { guards }));
+        return { status: 'added', entry, balance: nb, points: np };
+      } catch (e) {
+        if (e && e.code === 'guard-mismatch' && attempt < MAX_RETRIES - 1) continue;
+        if (e && e.code === 'guard-mismatch') throw new Error('تعذّر الحفظ بسبب تعديلات متزامنة — أعد المحاولة');
+        throw e;
+      }
+    }
+    throw new Error('تعذّر الحفظ بسبب تعديلات متزامنة — أعد المحاولة');
+  });
+}
+
+/**
  * رصيد ونقاط عميل من الدفتر (للقراءة).
  * @param {string} id
  * @returns {Promise<{balance:number, points:number}>}

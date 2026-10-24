@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.4.1 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
+   الإصدار: v3.4.2 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.4.1';
+const CACHE_VERSION = 'v3.4.2';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -155,6 +155,7 @@ const PRECACHE_URLS = [
   './src/services/kpis-calculator.js',
   './src/services/ledger-apply.js',
   './src/services/ledger-authority.js',
+  './src/services/ledger-conflicts.js',
   './src/services/ledger-flag.js',
   './src/services/ledger-report.js',
   './src/services/ledger-shadow.js',

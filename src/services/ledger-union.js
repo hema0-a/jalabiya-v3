@@ -35,8 +35,9 @@ function readIssues() {
     return {
       diverged: Array.isArray(raw && raw.diverged) ? raw.diverged : [],
       conflicts: Array.isArray(raw && raw.conflicts) ? raw.conflicts : [],
+      resolved: Array.isArray(raw && raw.resolved) ? raw.resolved : [],
     };
-  } catch (e) { return { diverged: [], conflicts: [] }; }
+  } catch (e) { return { diverged: [], conflicts: [], resolved: [] }; }
 }
 function writeIssues(v) {
   try { localStorage.setItem(K_ISSUES, JSON.stringify(v)); } catch (e) { /* لا يكسر المسار الأصلي */ }
@@ -75,5 +76,29 @@ export function logLedgerConflicts(conflicts) {
 /** @returns {{diverged:Array, conflicts:Array}} */
 export function loadLedgerIssues() { return readIssues(); }
 
-/** يمسح سجل البلاغات (بعد مراجعة المستخدم). */
-export function clearLedgerIssues() { writeIssues({ diverged: [], conflicts: [] }); }
+/** يمسح سجل البلاغات (بعد مراجعة المستخدم). سجل التسويات المحسومة (resolved) يبقى كأثر تدقيق. */
+export function clearLedgerIssues() { const cur = readIssues(); writeIssues({ diverged: [], conflicts: [], resolved: cur.resolved }); }
+
+/** يمسح انحرافات العدّادات فقط ويُبقي تعارضات المعرّفات حتى تُحسم (v3.4.2). */
+export function clearDivergences() { const cur = readIssues(); cur.diverged = []; writeIssues(cur); }
+
+/**
+ * يحسم تعارضاً: يُخرجه من القائمة المعلّقة ويُسجّله في سجل التسويات (أثر تدقيق محلي، حدّه ISSUES_MAX).
+ * @param {string} id — معرّف السطر المتعارض
+ * @param {'keep'|'record'} action — اعتماد المحفوظ | تسجيل المُسقَط كتسوية جديدة
+ * @param {{newId?:string, at?:number}} [extra]
+ * @returns {boolean} هل كان التعارض موجوداً؟
+ */
+export function resolveLedgerConflict(id, action, extra = {}) {
+  const cur = readIssues();
+  const found = cur.conflicts.find((c) => c.id === id);
+  if (!found) return false;
+  cur.conflicts = cur.conflicts.filter((c) => c.id !== id);
+  cur.resolved = [{
+    id, action, at: Number.isFinite(extra.at) ? extra.at : Date.now(), newId: extra.newId || null,
+    unit: found.dropped && found.dropped.unit, acct: found.dropped && found.dropped.acct,
+    keptDelta: found.kept && found.kept.delta, droppedDelta: found.dropped && found.dropped.delta,
+  }, ...cur.resolved].slice(0, ISSUES_MAX);
+  writeIssues(cur);
+  return true;
+}

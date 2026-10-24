@@ -102,5 +102,7 @@ import './modules/v3388-media-diagnostic.test.js';
 import './modules/v3388-lock-failure-rules.test.js';
 import './modules/v341-media-migration.test.js';
 import './modules/v341-media-migration-ui.test.js';
+import './modules/v342-ledger-conflicts.test.js';
+import './modules/v342-ledger-conflicts-ui.test.js';
 
 export { runAll, register } from './registry.js';

@@ -23,7 +23,8 @@ import { UNITS } from '../services/ledger.js';
 import { resetShadowFailures } from '../services/ledger-shadow.js';
 import { collectReadiness, activateLedgerAuthority, deactivateLedgerAuthority } from '../services/ledger-authority.js';
 import { formatDate } from '../core/utils.js';
-import { clearLedgerIssues } from '../services/ledger-union.js';
+import { clearDivergences } from '../services/ledger-union.js';
+import { describeConflicts, keepStoredConflict, recordDroppedConflict } from '../services/ledger-conflicts.js';
 
 const MAX_ROWS = 25;
 
@@ -37,11 +38,13 @@ export function buildLedgerShadowCard() {
   const btnOpen = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-opening', onClick: () => runOpening() }, '📒 اكتب الأسطر الافتتاحية');
   const btnReset = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-reset', onClick: () => runReset() }, '♻️ إعادة ضبط الدفتر');
   /* مراجعة بلاغات المزامنة (cache_diverged/id_conflict): يمسح السجل المحلي فقط، لا الدفتر (v3.3.83) */
-  const btnAck = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', hidden: true, 'data-action': 'ledger-ack-issues', onClick: () => { clearLedgerIssues(); load(); } }, '✔️ راجعتُ البلاغات');
+  const btnAck = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', hidden: true, 'data-action': 'ledger-ack-issues', onClick: () => { clearDivergences(); load(); } }, '✔️ راجعتُ انحرافات العدّادات');
   const authBox = el('div', { className: 'ledauth', 'data-role': 'ledger-authority' });
+  const conflictsBox = el('div', { className: 'ledconf', 'data-role': 'ledger-conflicts', hidden: true });
   const card = el('div', { className: 'card ledcard', 'data-role': 'ledger-shadow' }, [
     el('div', { className: 'ledcard__head' }, [title, btnRefresh]), body,
     el('div', { className: 'ledcard__actions' }, [btnOpen, btnReset, btnAck]),
+    conflictsBox,
     authBox,
     el('div', { className: 'ledcard__hint' },
       'التطبيق يعمل بالعدّادات القديمة كالمعتاد، ويُسجَّل كل تغيير في الدفتر في الخلفية للمقارنة فقط. '
@@ -62,8 +65,8 @@ export function buildLedgerShadowCard() {
         body.appendChild(el('div', { className: 'ledcard__warn', 'data-role': 'ledger-failures' },
           '⚠️ فشلت الكتابة في الدفتر ' + r.failures + ' مرة على هذا الجهاز (العمليات الأصلية سليمة). أعد الضبط أو راجع الفروق.'));
       }
-      btnAck.hidden = !r.anomalies.some((a) => a.kind === 'cache_diverged' || a.kind === 'id_conflict');
-      r.anomalies.filter((a) => a.severity === 'warn').slice(0, 5).forEach((a) => {
+      btnAck.hidden = !r.anomalies.some((a) => a.kind === 'cache_diverged');
+      r.anomalies.filter((a) => a.severity === 'warn' && a.kind !== 'id_conflict').slice(0, 5).forEach((a) => {
         body.appendChild(el('div', { className: 'ledcard__warn' }, '⚠️ ' + a.message));
       });
       if (r.rows.length) {
@@ -78,11 +81,76 @@ export function buildLedgerShadowCard() {
         if (r.rows.length > MAX_ROWS) list.appendChild(el('div', { className: 'ledcard__more' }, 'و' + (r.rows.length - MAX_ROWS) + ' فرقاً آخر…'));
         body.appendChild(list);
       }
+      await renderConflicts();
       await renderAuthority(r);
     } catch (e) {
       clear(body);
       body.appendChild(el('div', { className: 'ledcard__warn' }, 'تعذّر الفحص: ' + (e && e.message ? e.message : e)));
     } finally { btnRefresh.disabled = false; }
+  }
+
+  /** سطر وصف جانب من التعارض: «+250 ج.م (شحن) — 12/10 · جهاز abc». */
+  const sideText = (unit, s) => formatAmount(unit, s.delta) + (s.type ? ' (' + s.type + ')' : '')
+    + (s.at ? ' — ' + formatDate(s.at) : '') + (s.dev ? ' · جهاز ' + s.dev.slice(0, 6) : '');
+
+  /** تعارضات معرّفات الدفتر المعلّقة (id_conflict): اعتماد المحفوظ أو تسجيل المُسقَط كتسوية. فشلها لا يُسقط البطاقة. */
+  async function renderConflicts() {
+    try {
+      const list = await describeConflicts();
+      clear(conflictsBox);
+      conflictsBox.hidden = list.length === 0;
+      if (list.length === 0) return;
+      conflictsBox.appendChild(el('div', { className: 'ledconf__title' }, '⚖️ تعارضات معرّفات الدفتر (' + list.length + ')'));
+      conflictsBox.appendChild(el('div', { className: 'ledconf__note' },
+        'حركتان بالمعرّف نفسه وبمبلغين مختلفين (من مزامنة أو استعادة). أُبقي المحفوظ ولم يُكتب فوقه شيء. اختر لكل تعارض: '
+        + 'اعتماد المحفوظ (الوارد خطأ/مكرر)، أو تسجيل المُسقَطة كتسوية جديدة بمعرّف جديد (إن كانت حركة حقيقية).'));
+      list.slice(0, 10).forEach((c) => {
+        const btnKeep = el('button', { className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'ledger-conflict-keep', 'data-id': c.id, onClick: () => runKeep(c) }, '✅ اعتمد المحفوظ');
+        const btnRec = el('button', { className: 'btn btn--sm btn--primary', type: 'button', 'data-action': 'ledger-conflict-record', 'data-id': c.id, title: c.canRecord.reason, onClick: () => runRecord(c) }, '➕ سجّل المُسقَطة كتسوية جديدة');
+        btnRec.disabled = !c.canRecord.ok;
+        conflictsBox.appendChild(el('div', { className: 'ledconf__item', 'data-id': c.id }, [
+          el('div', { className: 'ledconf__who' }, c.title + ' — ' + (UNITS[c.unit] ? UNITS[c.unit].label : c.unit)),
+          el('div', { className: 'ledconf__side' }, '📌 المحفوظة: ' + sideText(c.unit, c.kept)),
+          el('div', { className: 'ledconf__side' }, '↩️ المُسقَطة: ' + sideText(c.unit, c.dropped)),
+          c.canRecord.ok ? null : el('div', { className: 'ledconf__why' }, '⛔ ' + c.canRecord.reason),
+          el('div', { className: 'ledcard__actions' }, [btnKeep, btnRec]),
+        ]));
+      });
+      if (list.length > 10) conflictsBox.appendChild(el('div', { className: 'ledcard__more' }, 'و' + (list.length - 10) + ' تعارضاً آخر بعد حسم هذه…'));
+    } catch (e) {
+      clear(conflictsBox);
+      conflictsBox.hidden = false;
+      conflictsBox.appendChild(el('div', { className: 'ledcard__warn' }, 'تعذّر عرض التعارضات: ' + (e && e.message ? e.message : e)));
+    }
+  }
+
+  async function runKeep(c) {
+    const ok = await modal.confirm({
+      title: 'اعتماد المحفوظ',
+      message: 'ستبقى الحركة المحفوظة (' + sideText(c.unit, c.kept) + ') وتُهمَل المُسقَطة (' + sideText(c.unit, c.dropped)
+        + ') نهائياً. لا يتغيّر شيء في الدفتر. متابعة؟',
+      confirmText: 'اعتمد المحفوظ', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+    const r = await keepStoredConflict(c.id);
+    if (r.status === 'resolved') toast.success('حُسم التعارض: اعتُمد المحفوظ'); else toast.warning(r.reason);
+    await load();
+  }
+
+  async function runRecord(c) {
+    const ok = await modal.confirm({
+      title: 'تسجيل المُسقَطة كتسوية',
+      message: 'سيُضاف سطر جديد بمعرّف جديد: ' + sideText(c.unit, c.dropped) + ' لحساب «' + c.title + '»، فيتغيّر رصيده. '
+        + 'لا يُكتب فوق أي سطر موجود. متابعة؟',
+      confirmText: 'سجّل التسوية', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+    const r = await recordDroppedConflict(c.id);
+    if (r.status === 'recorded') toast.success('سُجّلت التسوية بمعرّف جديد');
+    else if (r.status === 'exists') toast.info('التسوية مسجّلة سابقاً — حُسم التعارض');
+    else if (r.status === 'failed') toast.danger('تعذّر التسجيل: ' + r.reason);
+    else toast.warning(r.reason);
+    await load();
   }
 
   /** لوحة التفعيل: شروط الجاهزية + زر التفعيل/الإلغاء. فشلها لا يُسقط البطاقة. */
