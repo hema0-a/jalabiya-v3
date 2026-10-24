@@ -18,6 +18,13 @@ let writeGate = () => mediaWritesAllowed(MIN_CLIENT_BUILD);
 /** للاختبار فقط: يستبدل شرط السماح بالكتابة (null ⟵ الأصلي). @param {Function|null} fn */
 export function _setWriteGateForTest(fn) { writeGate = fn || (() => mediaWritesAllowed(MIN_CLIENT_BUILD)); }
 
+/**
+ * هل الكتابة في مخزن الوسائط مسموحة الآن؟ (نفس شرط assertWritable؛ لمن يكتب بمعاملة ذرّية خارج هذا المستودع،
+ * مثل ترحيل الوسائط القديمة v3.4.1، فلا يلتفّ على الحارس.)
+ * @returns {boolean}
+ */
+export function isMediaWritable() { return !!writeGate(); }
+
 function assertWritable() {
   if (!writeGate()) {
     const e = new Error('الكتابة في وسائط الطلبات غير مفعّلة بعد (ينتظر رفع الحد الأدنى لإصدار المزامنة — v3.3.87)');

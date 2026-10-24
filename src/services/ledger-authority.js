@@ -74,7 +74,8 @@ export function isLedgerAuthorityEnabled(settingsObj) {
 
 const minutesSince = (ts, now) => Math.max(0, Math.round((now - ts) / 60000));
 
-function checkSync(sync) {
+/** فحص المزامنة (يُستعمل أيضاً في ترحيل الوسائط v3.4.1). */
+export function checkSync(sync) {
   const base = { id: 'sync', label: 'المزامنة نظيفة' };
   if (!sync || typeof sync !== 'object') {
     return { ...base, ok: false, detail: 'تعذّر قراءة حالة المزامنة', hint: 'أعد الفحص' };
@@ -109,7 +110,8 @@ function checkDiffs(report) {
   };
 }
 
-function checkBackup(backup, live, now) {
+/** فحص النسخة الاحتياطية (يُستعمل أيضاً في ترحيل الوسائط v3.4.1). */
+export function checkBackup(backup, live, now) {
   const base = { id: 'backup', label: 'نسخة احتياطية جديدة وسليمة' };
   if (!backup || typeof backup !== 'object') {
     return { ...base, ok: false, detail: 'لم تُؤخذ نسخة احتياطية بعد', hint: 'تُؤخذ وتُفحص تلقائياً عند الضغط على «فعّل»' };

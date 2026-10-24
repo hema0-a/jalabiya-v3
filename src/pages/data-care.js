@@ -31,6 +31,7 @@ import { listBackups, verifyBackup, getLastVerification } from '../services/auto
 import { formatDate } from '../core/utils.js';
 import { buildSystemStatusCard } from '../ui/system-status-card.js';
 import { buildLedgerShadowCard } from '../ui/ledger-shadow-card.js';
+import { buildMediaMigrationCard, cancelMediaMigration } from '../ui/media-migration-card.js';
 import { diagnoseOrderMedia, assessMedia, formatKB } from '../services/media-diagnostic.js';
 import { getStorageStatus, formatBytes } from '../services/storage-health.js';
 import { runProbe, runSynthetic, formatReport } from '../services/perf-probe.js';
@@ -433,6 +434,7 @@ function draw() {
   c.appendChild(buildSystemStatusCard({ lazyIntegrity: true }));
   c.appendChild(buildLedgerShadowCard());
   c.appendChild(mediaDiagSection());
+  c.appendChild(buildMediaMigrationCard());
   c.appendChild(perfSection());
   c.appendChild(vipSection());
   c.appendChild(integritySection());
@@ -450,5 +452,5 @@ export const dataCarePage = {
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { state.mediaCancel = true; state.perfCancel = true; state = freshState(); },
+  destroy() { state.mediaCancel = true; state.perfCancel = true; cancelMediaMigration(); state = freshState(); },
 };
