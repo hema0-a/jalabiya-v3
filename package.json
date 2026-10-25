@@ -1,6 +1,6 @@
 {
   "name": "jalabiya-v3",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "private": true,
   "description": "ورشة تفصيل الجلابيب V3 — PWA بلا اعتماديات تشغيل",
   "type": "module",
@@ -14,7 +14,7 @@
     "check:syntax": "node scripts/check-syntax.cjs",
     "check:consistency": "node scripts/check-consistency.cjs",
     "check:static": "npm run check:syntax && npm run check:consistency",
-    "test:scripts": "node --test scripts/tests/*.test.cjs",
+    "test:scripts": "node --test --test-reporter=spec scripts/tests/*.test.cjs",
     "test:browser": "node scripts/ci-check.cjs",
     "check": "npm run check:static && npm run test:scripts && npm run test:browser",
     "bump": "node scripts/bump-version.cjs",
