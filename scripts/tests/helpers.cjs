@@ -20,8 +20,24 @@ function copyTree(src, dst) {
 
 function tmpDir(prefix) { return fs.mkdtempSync(path.join(os.tmpdir(), prefix)); }
 
+/* منع git من تشغيل gc/maintenance في الخلفية: كان يكتب في .git/objects أثناء حذف المشروع المؤقت
+   فيفشل الحذف بـ ENOTEMPTY (فشل متقطع على CI فقط). يصل للسكربت المُختبَر أيضاً عبر وراثة البيئة. */
+const GIT_NO_BG = {
+  GIT_CONFIG_COUNT: '4',
+  GIT_CONFIG_KEY_0: 'gc.auto', GIT_CONFIG_VALUE_0: '0',
+  GIT_CONFIG_KEY_1: 'maintenance.auto', GIT_CONFIG_VALUE_1: 'false',
+  GIT_CONFIG_KEY_2: 'receive.autogc', GIT_CONFIG_VALUE_2: 'false',
+  GIT_CONFIG_KEY_3: 'gc.autoDetach', GIT_CONFIG_VALUE_3: 'false',
+};
+
+/** حذف مجلد مؤقت بإعادة محاولة؛ فشل التنظيف لا يُفشل الاختبار (مجلد /tmp يُمسح لاحقاً). */
+function rmTree(dir) {
+  try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+  catch (e) { /* تنظيف فقط — لا يؤثر على نتيجة الاختبار */ }
+}
+
 function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_TERMINAL_PROMPT: '0', ...(opts.env || {}) }, ...opts });
+  const r = spawnSync(cmd, args, { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_TERMINAL_PROMPT: '0', ...GIT_NO_BG, ...(opts.env || {}) }, ...opts });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || ''), stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 const git = (cwd, ...args) => run('git', args, { cwd });
@@ -39,7 +55,7 @@ function makeFixture() {
   git(repo, 'remote', 'add', 'origin', remote);
   const p = git(repo, 'push', '-q', '-u', 'origin', 'main');
   if (p.code !== 0) throw new Error('fixture push failed: ' + p.out);
-  return { base, repo, remote, head: () => git(repo, 'rev-parse', 'HEAD').stdout.trim(), remoteHead: () => git(remote, 'rev-parse', 'main').stdout.trim(), cleanup: () => fs.rmSync(base, { recursive: true, force: true }) };
+  return { base, repo, remote, head: () => git(repo, 'rev-parse', 'HEAD').stdout.trim(), remoteHead: () => git(remote, 'rev-parse', 'main').stdout.trim(), cleanup: () => rmTree(base) };
 }
 
 const PY = (() => { for (const c of ['python3', 'python']) { const r = run(c, ['--version']); if (r.code === 0) return c; } return null; })();
