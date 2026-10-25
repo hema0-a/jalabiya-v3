@@ -21,7 +21,7 @@ register('v3.5.1 dashboard — تخصيص اللوحة (DOM)', async (t) => {
     await dashboardPage.render(box);
     await t.test('1. الافتراضي: سبعة أقسام بالترتيب القديم + الإجراءات السريعة + أربع بطاقات + زر «تخصيص»',
       ids(box) === 'dash-appts,dash-week,dash-due,dash-sales,dash-finance,dash-orders,dash-recent' &&
-      !!box.querySelector('.dash-quick') && box.querySelectorAll('.stat--link').length === 4 && !!box.querySelector('.dash-sections__custom'));
+      !!box.querySelector('.dash-hero .dash-quick') && box.querySelectorAll('.stat--link').length === 4 && !!box.querySelector('.dash-sections__custom'));
 
     await t.test('2. زر «فتح الكل» ما زال أول زر بالشريط (لا يتغيّر سلوكه)',
       box.querySelector('.dash-sections__bar').firstElementChild.classList.contains('dash-sections__toggle'));
@@ -29,7 +29,7 @@ register('v3.5.1 dashboard — تخصيص اللوحة (DOM)', async (t) => {
     localStorage.setItem(LAYOUT_KEY, JSON.stringify({ hidden: ['dash-sales', 'quick'], order: ['dash-recent'] }));
     await dashboardPage.render(box);
     await t.test('3. تفضيل محفوظ: قسم مخفي، وقسم مُقدَّم، وإجراءات سريعة مخفية',
-      ids(box) === 'dash-recent,dash-appts,dash-week,dash-due,dash-finance,dash-orders' && !box.querySelector('.dash-quick'));
+      ids(box) === 'dash-recent,dash-appts,dash-week,dash-due,dash-finance,dash-orders' && !box.querySelector('.dash-quick') && !!box.querySelector('.dash-hero'));
 
     await t.test('4. «يحتاج إجراءك» وبطاقات الأرقام باقيتان ولا تتأثران', !!box.querySelector('.dash-attention') && box.querySelectorAll('.stat--link').length === 4);
 

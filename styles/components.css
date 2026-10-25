@@ -1065,6 +1065,8 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 .dash-quick__btn:active { transform: scale(0.96); }
 .dash-quick__icon { font-size: 22px; line-height: 1; }
 @media (max-width: 340px) { .dash-quick { grid-template-columns: repeat(2, 1fr); } }
+/* الإجراءات السريعة داخل بطاقة الترحيب (v3.5.2) */
+.dash-hero .dash-quick { margin: var(--space-m) 0 0; }
 
 /* بطاقات KPI قابلة للنقر */
 .stat--link { text-decoration: none; color: inherit; cursor: pointer; transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }

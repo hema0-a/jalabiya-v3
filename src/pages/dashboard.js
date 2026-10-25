@@ -413,7 +413,7 @@ function dashGroup(title, count, rows, moreHash) {
    3. بناء المكونات
    ========================================================================== */
 
-function buildHeader(data) {
+function buildHeader(data, extra = null) {
   const hour = new Date().getHours();
   let greeting = 'أهلاً';
   if (hour < 12) greeting = 'صباح الخير';
@@ -444,15 +444,9 @@ function buildHeader(data) {
 
   const textWrap = el('div', { style: { flex: '1', minWidth: '0' } }, [nameEl, subEl]);
 
-  return el('div', {
-    className: 'card',
-    style: {
-      marginBottom: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-    },
-  }, [logoEl, textWrap]);
+  /* v3.5.2: بطاقة واحدة = الترحيب + الإجراءات السريعة (كانا بطاقتين منفصلتين تستهلكان ارتفاعاً على الجوال) */
+  const row = el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, [logoEl, textWrap]);
+  return el('div', { className: 'card dash-hero', style: { marginBottom: '16px' } }, [row, extra]);
 }
 
 
@@ -831,13 +825,12 @@ export const dashboardPage = {
     state.data = data;
 
     /* بناء */
-    container.appendChild(buildHeader(data));
+    const layout = readLayout();   /* v3.5.1: الافتراضي = اللوحة كما كانت */
+    container.appendChild(buildHeader(data, isVisible(layout, 'quick') ? buildQuickActions() : null));
     if (data.hasDemo) container.appendChild(buildDemoBanner());
     const nudgeSlot = el('div', { 'data-role': 'nudge-slot' });
     container.appendChild(nudgeSlot);
     buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
-    const layout = readLayout();   /* v3.5.1: الافتراضي = اللوحة كما كانت */
-    if (isVisible(layout, 'quick')) container.appendChild(buildQuickActions());
     if (isVisible(layout, 'kpis')) container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data));
 
