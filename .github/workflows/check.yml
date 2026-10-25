@@ -27,7 +27,21 @@ jobs:
       # صياغة كل ملفات js + اتساق الإصدار + مطابقة PRECACHE_URLS للمولَّدة
       - run: npm run check:static
       # اختبارات سكربتات الأدوات (apply-update.sh ومولّد الكاش) على مشروع مؤقت
-      - run: npm run test:scripts
+      - name: اختبارات السكربتات
+        id: scripts
+        run: |
+          set -o pipefail
+          npm run test:scripts 2>&1 | tee test-scripts.log
+      # عند الفشل: الاختبار الفاشل وسببه في صفحة الـ Run نفسها (Summary) دون فتح السجل الطويل
+      - name: ملخص الفشل
+        if: failure() && steps.scripts.outcome == 'failure'
+        run: |
+          {
+            echo '### ❌ فشل اختبار في سكربتات الأدوات'
+            echo '```'
+            sed -n '/failing tests/,$p' test-scripts.log | head -90
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   browser:
     name: اختبارات المتصفح + كل الصفحات (${{ matrix.tz }})
