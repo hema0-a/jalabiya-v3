@@ -107,5 +107,7 @@ import './modules/v342-ledger-conflicts-ui.test.js';
 import './modules/v347-save-error.test.js';
 import './modules/v350-nav-groups.test.js';
 import './modules/v350-sidebar-accordion.test.js';
+import './modules/v351-dashboard-layout.test.js';
+import './modules/v351-dashboard-customize.test.js';
 
 export { runAll, register } from './registry.js';

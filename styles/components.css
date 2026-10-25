@@ -1185,7 +1185,7 @@ body.wall-open { overflow: hidden; }
 /* ============================================================
    لوحة التحكم — أقسام قابلة للطي (v3.3.63)
    ============================================================ */
-.dash-sections__bar { display: flex; justify-content: flex-end; margin: 0 0 var(--space-s); }
+.dash-sections__bar { display: flex; justify-content: flex-end; gap: var(--space-xs); margin: 0 0 var(--space-s); }
 .dash-sections__toggle {
   font-family: inherit; font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
   color: var(--color-primary); background: transparent; border: none; cursor: pointer;
@@ -1193,6 +1193,34 @@ body.wall-open { overflow: hidden; }
 }
 .dash-sections__toggle:hover { background: rgba(31, 109, 87, 0.08); }
 .dash-sections__toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* زر «⚙️ تخصيص» بنفس مظهر زر فتح/طيّ الكل (v3.5.1) */
+.dash-sections__custom {
+  font-family: inherit; font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
+  color: var(--color-primary); background: transparent; border: none; cursor: pointer;
+  min-height: 40px; padding: var(--space-xs) var(--space-s); border-radius: var(--radius-m);
+}
+.dash-sections__custom:hover { background: rgba(31, 109, 87, 0.08); }
+.dash-sections__custom:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* نافذة تخصيص اللوحة */
+.dash-custom { display: flex; flex-direction: column; gap: 2px; }
+.dash-custom__group {
+  padding: var(--space-s) var(--space-xs) var(--space-xs);
+  font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-primary-light);
+}
+.dash-custom__row { display: flex; align-items: center; gap: 4px; min-height: 48px; border-radius: var(--radius-m); }
+.dash-custom__row--off .dash-custom__title { opacity: 0.5; text-decoration: line-through; }
+.dash-custom__label { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-s); padding: var(--space-xs); cursor: pointer; }
+.dash-custom__check { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--color-primary); }
+.dash-custom__icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.dash-custom__title { flex: 1; min-width: 0; }
+.dash-custom__move {
+  flex-shrink: 0; width: 40px; height: 40px; border: none; background: transparent; cursor: pointer;
+  border-radius: var(--radius-m); color: var(--color-primary); font-size: 14px; line-height: 1; font-family: inherit;
+}
+.dash-custom__move:hover:not(:disabled) { background: rgba(31, 109, 87, 0.08); }
+.dash-custom__move:disabled { opacity: 0.25; cursor: default; }
+.dash-custom__move:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .dash-section__action { margin-top: var(--space-s); text-align: end; }
 .dash-section .dash-row:last-child { border-bottom: none; }
 .dash-chart { padding: 0; }

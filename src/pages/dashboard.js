@@ -32,6 +32,10 @@ import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
 import { saveFailMessage } from '../core/save-error.js';
+import {
+  DASH_BLOCKS, DASH_SECTIONS, readLayout, writeLayout, isVisible, toggleVisible, moveSection,
+  orderedSectionIds, visibleSectionIds, defaultLayout, isDefault,
+} from '../services/dashboard-layout.js'; /* v3.5.1 */
 import { startOfDayPlus, startOfDay, startOfNextDay } from '../core/day-math.js';
 import { buildWeekVisits, buildVisitText, dayLabel } from '../services/week-visits.js'; /* v3.3.55 */
 import { customers } from '../data/repos/customers.js';
@@ -725,7 +729,7 @@ function buildChartSections(data) {
 }
 
 /* شريط «فتح الكل / طيّ الكل»: التسمية تعكس الحالة الفعلية دائماً */
-function buildSectionsBar(host) {
+function buildSectionsBar(host, onCustomize) {
   const btn = el('button', { type: 'button', className: 'dash-sections__toggle' }, 'فتح الكل');
   const allOpen = () => {
     const list = Array.from(host.querySelectorAll('.dash-section'));
@@ -734,9 +738,83 @@ function buildSectionsBar(host) {
   const sync = () => { btn.textContent = allOpen() ? 'طيّ الكل' : 'فتح الكل'; };
   btn.addEventListener('click', () => { (allOpen() ? closeAll : openAll)(host); sync(); });
   host.addEventListener('click', () => setTimeout(sync, 0));   // أي فتح/طيّ فردي يحدّث التسمية
-  const bar = el('div', { className: 'dash-sections__bar' }, [btn]);
+  const custom = el('button', {
+    type: 'button',
+    className: 'dash-sections__custom',
+    'aria-label': 'تخصيص لوحة التحكم',
+    onClick: () => { if (typeof onCustomize === 'function') onCustomize(); },
+  }, '⚙️ تخصيص');
+  const bar = el('div', { className: 'dash-sections__bar' }, [btn, custom]);
   bar.update = sync;
   return bar;
+}
+
+/* نافذة تخصيص اللوحة: إظهار/إخفاء + ترتيب الأقسام؛ التطبيق عند الإغلاق بإعادة رسم اللوحة (v3.5.1) */
+function openCustomize() {
+  let layout = readLayout();
+  const startKey = JSON.stringify(layout);
+  const list = el('div', { className: 'dash-custom' });
+  const info = {};
+  DASH_BLOCKS.concat(DASH_SECTIONS).forEach((it) => { info[it.id] = it; });
+
+  function save(next) {
+    layout = next;
+    writeLayout(layout);
+    paint();
+  }
+
+  function row(id, canMove, idx, total) {
+    const it = info[id];
+    const shown = isVisible(layout, id);
+    const cb = el('input', { type: 'checkbox', className: 'dash-custom__check', id: 'dash-custom-' + id, 'aria-label': it.title });
+    cb.checked = shown;
+    cb.addEventListener('change', () => save(toggleVisible(layout, id)));
+    const mv = (dir, label, glyph, disabled) => {
+      const b = el('button', {
+        type: 'button', className: 'dash-custom__move', 'aria-label': label + ' «' + it.title + '»',
+        onClick: () => save(moveSection(layout, id, dir)),
+      }, glyph);
+      if (disabled) b.disabled = true;
+      return b;
+    };
+    return el('div', { className: 'dash-custom__row' + (shown ? '' : ' dash-custom__row--off') }, [
+      el('label', { className: 'dash-custom__label', for: 'dash-custom-' + id }, [
+        cb,
+        el('span', { className: 'dash-custom__icon', 'aria-hidden': 'true' }, it.icon),
+        el('span', { className: 'dash-custom__title' }, it.title),
+      ]),
+      canMove ? mv(-1, 'تحريك لأعلى', '▲', idx === 0) : null,
+      canMove ? mv(1, 'تحريك لأسفل', '▼', idx === total - 1) : null,
+    ]);
+  }
+
+  function paint() {
+    clear(list);
+    list.appendChild(el('div', { className: 'dash-custom__group', text: 'الكتل' }));
+    DASH_BLOCKS.forEach((b) => list.appendChild(row(b.id, false, 0, 0)));
+    list.appendChild(el('div', { className: 'dash-custom__group', text: 'الأقسام (رتّبها كما تريد)' }));
+    const order = orderedSectionIds(layout);
+    order.forEach((id, i) => list.appendChild(row(id, true, i, order.length)));
+    list.appendChild(el('p', { className: 'dash-note', text: '«يحتاج إجراءك» تظهر دائماً في أعلى اللوحة.' }));
+  }
+  paint();
+
+  const handle = modal.open({
+    title: '⚙️ تخصيص لوحة التحكم',
+    body: list,
+    variant: 'sheet',
+    closable: true,
+    onClose: () => {
+      /* لا إعادة رسم إن لم يتغيّر شيء */
+      if (JSON.stringify(layout) !== startKey && state.container) {
+        Promise.resolve(dashboardPage.render(state.container)).catch((e) => console.error('[Dashboard] re-render after customize failed:', e));
+      }
+    },
+    actions: [
+      { text: 'استعادة الافتراضي', variant: 'ghost', action: 'reset', onClick: () => { if (!isDefault(layout)) save(defaultLayout()); } },
+      { text: 'تم', variant: 'primary', action: 'done', onClick: () => handle.close() },
+    ],
+  });
 }
 
 /* ==========================================================================
@@ -758,19 +836,25 @@ export const dashboardPage = {
     const nudgeSlot = el('div', { 'data-role': 'nudge-slot' });
     container.appendChild(nudgeSlot);
     buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
-    container.appendChild(buildQuickActions());
-    container.appendChild(buildKPICards(data));
+    const layout = readLayout();   /* v3.5.1: الافتراضي = اللوحة كما كانت */
+    if (isVisible(layout, 'quick')) container.appendChild(buildQuickActions());
+    if (isVisible(layout, 'kpis')) container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data));
 
     /* أقسام قابلة للطي: مواعيد · عملاء الأسبوع · مستحقة · رسوم · أحدث العملاء */
     const sections = el('div', { className: 'dash-sections' });
-    const bar = buildSectionsBar(sections);
+    const bar = buildSectionsBar(sections, openCustomize);
     sections.appendChild(bar);
-    sections.appendChild(buildTodayAppointmentsSection(data.todayApptsRows));
-    sections.appendChild(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
-    sections.appendChild(buildDueSoonSection(data.dueSoonRows));
-    buildChartSections(data).forEach((n) => sections.appendChild(n));
-    sections.appendChild(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
+    const shownIds = visibleSectionIds(layout);
+    const want = (id) => shownIds.includes(id);
+    const built = new Map();
+    const keep = (n) => { if (n) built.set(n.getAttribute('data-collapsible-id'), n); };
+    if (want('dash-appts')) keep(buildTodayAppointmentsSection(data.todayApptsRows));
+    if (want('dash-week')) keep(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
+    if (want('dash-due')) keep(buildDueSoonSection(data.dueSoonRows));
+    if (want('dash-sales') || want('dash-finance') || want('dash-orders')) buildChartSections(data).forEach(keep);
+    if (want('dash-recent')) keep(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
+    shownIds.forEach((id) => { const n = built.get(id); if (n) sections.appendChild(n); });
     bar.update();
     container.appendChild(sections);
   },

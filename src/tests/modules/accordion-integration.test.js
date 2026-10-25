@@ -22,6 +22,7 @@ const badgeOf = (n) => { const b = n.querySelector('.collapsible__badge'); retur
 
 register('accordion integration: dashboard (v3.3.63)', async (t) => {
   localStorage.removeItem(_internal.STATE_KEY);
+  localStorage.removeItem('jalabiya_v3_dash_layout');   /* تخصيص اللوحة (v3.5.1) لا يؤثر على فحص الترتيب الافتراضي */
   const cust = await customersRepo.create({ name: 't3363-dash', phone: '01063630001' });
   const o = await ordersRepo.create({ customerId: cust.id, status: 'in_progress', amount: 700, deposit: 100, dueDate: Date.now() + 2 * D });
   const ap = await appointmentsRepo.create({ customerId: cust.id, date: Math.min(Date.now() + 3600000, startOfNextDay(Date.now()) - 60000) /* دائماً ضمن اليوم الحالي (كان now+1h فيفشل بعد الساعة 23:00) */, status: 'scheduled', title: 't3363-appt' });
