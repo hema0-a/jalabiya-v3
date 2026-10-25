@@ -50,11 +50,12 @@ let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
 let createBackup, runRecordMigrations, installBatchMigrationHook;
 let APP_CONFIG;
+let NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite;
 try {
   /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
   const [
     cfg, dom, toastMod, layoutMod, eventsMod, backupMod, pwaMod,
-    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod, schemaMod,
+    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod, schemaMod, navMod,
   ] = await Promise.all([
     import('./core/config.js'),
     import('./core/dom.js'),
@@ -75,6 +76,7 @@ try {
     import('./ui/lock-screen.js'),
     import('./services/storage-health.js'),
     import('./data/record-schema.js'),
+    import('./services/nav-groups.js'),
   ]);
   ({ APP_CONFIG } = cfg);
   ({ el } = dom);
@@ -95,6 +97,7 @@ try {
   ({ ensureUnlocked, installAutoLock } = lockMod);
   ({ requestPersistence } = storageMod);
   ({ runRecordMigrations, installBatchMigrationHook } = schemaMod);
+  ({ NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite } = navMod);
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -200,58 +203,9 @@ function buildErrorPanel(title, err) {
   ]);
 }
 
-const SIDEBAR_SECTIONS = [
-  { title: 'الرئيسية', items: [
-    { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
-    { id: 'wall',      icon: '📺', label: 'شاشة الورشة' },
-  ]},
-  { title: 'العمليات', items: [
-    { id: 'customers', icon: '👥', label: 'العملاء' },
-    { id: 'orders',    icon: '📋', label: 'الطلبات' },
-    { id: 'appointments', icon: '🗓️', label: 'المواعيد' },
-    { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
-    { id: 'payments',  icon: '💰', label: 'الدفعات' },
-    { id: 'debts',     icon: '🧾', label: 'مستحقات العملاء' },
-    { id: 'pickups',   icon: '📦', label: 'جاهز للاستلام' },
-    { id: 'messages',  icon: '📣', label: 'رسائل اليوم' },
-    { id: 'quotes',    icon: '📝', label: 'عروض الأسعار' },
-  ]},
-  { title: 'إدارة الورشة', items: [
-    { id: 'inventory',          icon: '📦', label: 'المخزون' },
-    { id: 'workers',            icon: '👷', label: 'العمال' },
-    { id: 'expenses',           icon: '💸', label: 'مصروفات الورشة' },
-    { id: 'pricing-calculator', icon: '🧮', label: 'حاسبة التسعير' },
-  ]},
-  { title: 'التسويق والعرض', items: [
-    { id: 'portfolio', icon: '📸', label: 'معرض الأعمال' },
-    { id: 'referrals', icon: '🤝', label: 'الإحالات' },
-  ]},
-  { title: 'المالية الشخصية', items: [
-    { id: 'commitments',    icon: '💳', label: 'الالتزامات' },
-    { id: 'house-expenses', icon: '🏠', label: 'مصاريف البيت' },
-    { id: 'loans',          icon: '💵', label: 'القروض' },
-  ]},
-  { title: 'المواسم والمناسبات', items: [
-    { id: 'occasions', icon: '🎉', label: 'المواسم والأعياد' },
-    { id: 'season-compare', icon: '📊', label: 'مقارنة المواسم' },
-  ]},
-  { title: 'النظام', items: [
-    { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },
-    { id: 'trash',        icon: '🗑️', label: 'سلة المحذوفات' },
-    { id: 'data-care',    icon: '🧰', label: 'صيانة البيانات' },
-  ]},
-  { title: 'التحليل والتقارير', items: [
-    { id: 'financial-center', icon: '💰', label: 'المركز المالي' },
-    { id: 'kpis',             icon: '📊', label: 'مؤشرات الأداء' },
-    { id: 'reports',          icon: '📈', label: 'التقارير' },
-  ]},
-  { title: 'النظام المتقدم', items: [
-    { id: 'cloud-sync', icon: '☁️', label: 'المزامنة السحابية' },
-    { id: 'settings',   icon: '⚙️', label: 'الإعدادات' },
-  ]},
-];
-
-const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
+/* التنقل: 6 مجموعات أكورديون + مفضلة (التعريف في services/nav-groups.js) */
+const SIDEBAR_SECTIONS = NAV_GROUPS;
+const ALL_ITEMS = ALL_NAV_ITEMS;
 
 const MODULE_EXPORT_MAP = {
   dashboard:            'dashboardPage',
@@ -369,6 +323,8 @@ const layout = createLayout({
     subtitle: 'V3 — v' + APP_CONFIG.version,
     logo: '🧵',
     sections: SIDEBAR_SECTIONS,
+    accordion: true,
+    favorites: { get: () => readFavorites(), toggle: (id) => toggleFavorite(id) },
     activeId: 'dashboard',
     footer: '© 2026 — v' + APP_CONFIG.version,
   },
