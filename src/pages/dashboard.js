@@ -31,6 +31,7 @@ import { createCollapsible, openAll, closeAll } from '../ui/collapsible.js'; /* 
 import { toast } from '../ui/toast.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 import { el, clear } from '../core/dom.js';
+import { saveFailMessage } from '../core/save-error.js';
 import { startOfDayPlus, startOfDay, startOfNextDay } from '../core/day-math.js';
 import { buildWeekVisits, buildVisitText, dayLabel } from '../services/week-visits.js'; /* v3.3.55 */
 import { customers } from '../data/repos/customers.js';
@@ -348,7 +349,7 @@ function quickPay({ customerId, orderId, name, remaining }) {
             await refresh();
           });
           await refresh();
-        } catch (e) { toast.danger('تعذّر الحفظ: ' + e.message); }
+        } catch (e) { toast.danger(saveFailMessage(e, 'تعذّر الحفظ')); }
       } },
     ],
   });

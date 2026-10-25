@@ -9,6 +9,7 @@
 
 import { applyAllSettings } from '../../ui/display-settings.js';
 import { el, clear } from '../../core/dom.js';
+import { saveFailMessage } from '../../core/save-error.js';
 import { settings } from '../../data/repos/settings.js';
 import { toast } from '../../ui/toast.js';
 import { events } from '../../core/events.js';
@@ -43,7 +44,7 @@ async function saveSettings(patch) {
     state.settings = updated;
     toast.success('تم الحفظ');
   } catch (err) {
-    toast.danger('فشل الحفظ: ' + err.message);
+    toast.danger(saveFailMessage(err));
   }
 }
 

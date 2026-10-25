@@ -11,6 +11,7 @@ import { withDepositPayments } from '../services/payments-view.js';
 import { loadVipRules, computeVipPromotions } from '../services/vip-rules.js';
 import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
+import { saveFailMessage } from '../core/save-error.js';
 import { customers, walletOf, POSTURE_OPTIONS, buildContactsVcf } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { payments } from '../data/repos/payments.js';
@@ -509,7 +510,7 @@ function openCustomerForm(existing = null) {
             draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
-          } catch (err) { toast.danger('فشل الحفظ: ' + err.message); }
+          } catch (err) { toast.danger(saveFailMessage(err)); }
         },
       },
     ],

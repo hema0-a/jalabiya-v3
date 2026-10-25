@@ -9,6 +9,7 @@
 
 import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
+import { saveFailMessage } from '../core/save-error.js';
 import { uid, formatEGP, formatDate, parseDateInput, localDateInput, toNonNegative } from '../core/utils.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
@@ -968,7 +969,7 @@ function openOrderForm(existing = null) {
             draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
-          } catch (err) { toast.danger('فشل الحفظ: ' + err.message); }
+          } catch (err) { toast.danger(saveFailMessage(err)); }
         },
       },
     ],

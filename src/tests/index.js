@@ -104,5 +104,6 @@ import './modules/v341-media-migration.test.js';
 import './modules/v341-media-migration-ui.test.js';
 import './modules/v342-ledger-conflicts.test.js';
 import './modules/v342-ledger-conflicts-ui.test.js';
+import './modules/v347-save-error.test.js';
 
 export { runAll, register } from './registry.js';

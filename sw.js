@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.4.6 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
+   الإصدار: v3.4.7 — تشخيص الوسائط يقرأ orderMedia + إزالة innerHTML من main.js
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.4.6';
+const CACHE_VERSION = 'v3.4.7';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -47,6 +47,7 @@ const PRECACHE_URLS = [
   './src/core/error-handler.js',
   './src/core/events.js',
   './src/core/sanitize.js',
+  './src/core/save-error.js',
   './src/core/utils.js',
 
   /* --- src/data --- */
