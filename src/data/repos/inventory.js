@@ -9,6 +9,7 @@ import { createRepository } from '../repository.js';
 import { STORES, DEFAULT_SETTINGS } from '../../core/config.js';
 import { settings } from './settings.js';
 import { recordStockMove } from '../../services/ledger-shadow.js';
+import { normalizeSearch } from '../../core/utils.js';
 
 const base = createRepository(STORES.INVENTORY);
 
@@ -97,11 +98,11 @@ export const inventory = {
    * @returns {Promise<Array>}
    */
   async searchByName(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((i) =>
-      String(i.name ?? '').toLowerCase().includes(q)
+      normalizeSearch(i.name).includes(q)
     );
   },
 

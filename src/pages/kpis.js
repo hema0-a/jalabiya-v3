@@ -9,7 +9,7 @@
 import { el, clear } from '../core/dom.js';
 import { toast } from '../ui/toast.js';
 import { getKpisData, invalidateCache } from '../services/kpis-calculator.js';
-import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, csvCell } from '../core/utils.js';
 
 let state = {
   container: null,
@@ -369,10 +369,7 @@ function renderWeekdays() {
    ========================================================================== */
 
 function csvRow(arr) {
-  return arr.map((x) => {
-    const s = String(x ?? '');
-    return (s.includes(',') || s.includes('"')) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }).join(',');
+  return arr.map(csvCell).join(',');
 }
 
 function exportCSV() {

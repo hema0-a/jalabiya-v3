@@ -6,28 +6,12 @@
    - فتح نافذة الطباعة (window.print).
    ========================================================================== */
 
-import { formatEGP, formatDate, localDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, toCSV } from '../core/utils.js';
 
 /* ==========================================================================
    1. CSV
    ========================================================================== */
 
-/**
- * تحويل مصفوفة صفوف إلى نص CSV.
- * @param {Array<Array<string|number>>} rows
- * @returns {string}
- */
-function toCSV(rows) {
-  return rows.map((row) =>
-    row.map((cell) => {
-      const s = String(cell ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }).join(',')
-  ).join('\r\n');
-}
 
 /**
  * تنزيل ملف CSV مع BOM (لدعم العربية).

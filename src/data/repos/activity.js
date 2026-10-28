@@ -9,6 +9,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES, LIMITS } from '../../core/config.js';
+import { normalizeSearch } from '../../core/utils.js';
 
 const base = createRepository(STORES.ACTIVITY);
 
@@ -75,11 +76,11 @@ export const activity = {
    * @returns {Promise<Array>}
    */
   async searchByDescription(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((a) =>
-      String(a.description || '').toLowerCase().includes(q)
+      normalizeSearch(a.description).includes(q)
     );
   },
 

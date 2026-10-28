@@ -8,7 +8,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
-import { normalizePhone } from '../../core/utils.js';
+import { normalizePhone, normalizeSearch } from '../../core/utils.js';
 import { recordWalletMove } from '../../services/ledger-shadow.js';
 import { isAuthorityActive } from '../../services/ledger-flag.js';
 import { applyWalletMove, checkCustomerDeletable, PROTECTED_MESSAGE } from '../../services/ledger-apply.js';
@@ -35,11 +35,11 @@ export const customers = {
    * @returns {Promise<Array>}
    */
   async searchByName(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((c) =>
-      String(c.name ?? '').toLowerCase().includes(q)
+      normalizeSearch(c.name).includes(q)
     );
   },
 

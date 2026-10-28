@@ -54,12 +54,15 @@ export function startOfNextDay(v) {
   return startOfDayPlus(v, 1);
 }
 
-/** نهاية اليوم المحلي (23:59:59.999). */
+/**
+ * نهاية اليوم المحلي (23:59:59.999).
+ * = بداية اليوم التالي − 1ms. البناء المباشر بـ new Date(y, m, d, 23, 59, 59, 999) يُخطئ في يوم نهاية التوقيت الصيفي
+ * (مصر: آخر خميس من أكتوبر، 25 ساعة) لأن الساعة 23 تتكرر فيختار JavaScript مرورها الأول فتقع «نهاية اليوم» قبل نهايته الفعلية بساعة.
+ */
 export function endOfDay(v) {
   const t = toTimestamp(v);
   if (Number.isNaN(t)) return NaN;
-  const d = new Date(t);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+  return startOfDayPlus(t, 1) - 1;
 }
 
 /**

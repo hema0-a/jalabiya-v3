@@ -109,5 +109,6 @@ import './modules/v350-nav-groups.test.js';
 import './modules/v350-sidebar-accordion.test.js';
 import './modules/v351-dashboard-layout.test.js';
 import './modules/v351-dashboard-customize.test.js';
+import './modules/v353-audit-deep.test.js';
 
 export { runAll, register } from './registry.js';

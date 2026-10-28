@@ -20,7 +20,7 @@ import { computeReferralRewards, referralVars } from '../services/referral-rewar
 import { renderTemplate, KIND } from '../services/message-templates.js';
 import { sendLogged } from '../services/auto-messages.js';
 import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative, normalizeSearch, phoneMatches } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -349,12 +349,12 @@ function applyFilters() {
   } else if (state.activeFilter !== 'all') {
     list = list.filter((r) => (r.status || 'pending') === state.activeFilter);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((r) =>
-      String(r.referrerName || '').toLowerCase().includes(q) ||
-      String(r.referredName || '').toLowerCase().includes(q) ||
-      String(r.referredPhone || '').includes(q)
+      normalizeSearch(r.referrerName).includes(q) ||
+      normalizeSearch(r.referredName).includes(q) ||
+      StringphoneMatches(r.referredPhone, q)
     );
   }
   return list;

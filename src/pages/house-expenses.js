@@ -17,7 +17,7 @@ import {
   HOUSE_EXPENSE_CATEGORY_COLORS,
   LIMITS,
 } from '../core/config.js';
-import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput, normalizeSearch } from '../core/utils.js';
 import { dayDiff } from '../core/day-math.js';
 
 /* --- الحالة --- */
@@ -316,11 +316,11 @@ function applyFilters() {
   if (state.activeCategory !== 'all') {
     list = list.filter((e) => (e.category || 'other') === state.activeCategory);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((e) => {
-      const note = String(e.note || '').toLowerCase();
-      const label = getCategoryLabel(e.category).toLowerCase();
+      const note = normalizeSearch(e.note);
+      const label = normalizeSearch(getCategoryLabel(e.category));
       return note.includes(q) || label.includes(q);
     });
   }

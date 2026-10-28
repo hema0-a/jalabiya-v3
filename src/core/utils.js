@@ -286,3 +286,70 @@ export function parseDateInput(str) {
   if (isNaN(d.getTime()) || d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) return null;
   return d.getTime();
 }
+
+/**
+ * خلية CSV آمنة (v3.5.3).
+ * - تُحيَّد الصيغ: الخلية النصية التي تبدأ بـ = أو + أو - أو @ أو Tab أو CR تُسبق بـ ' فلا يُنفّذها Excel/Sheets
+ *   (حقن صيغ CSV: اسم عميل مثل =HYPERLINK(...) كان يُصدَّر كما هو).
+ *   الأرقام (بما فيها السالبة وأرقام الهاتف الدولية +2010…) لا تُمسّ.
+ * - تُقتبس عند وجود فاصلة أو علامة اقتباس أو سطر جديد (\n أو \r).
+ * @param {*} value
+ * @returns {string}
+ */
+export function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+([.,]\d+)?$/.test(s)) s = "'" + s;
+  if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+/**
+ * صفوف → نص CSV (فاصل سطور \r\n) مع تحييد الصيغ.
+ * @param {Array<Array<*>>} rows
+ * @returns {string}
+ */
+export function toCSV(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => row.map(csvCell).join(',')).join('\r\n');
+}
+
+/**
+ * تطبيع نص للبحث (v3.5.3): أحرف صغيرة، أرقام عربية/فارسية ← لاتينية، إزالة التشكيل والتطويل،
+ * توحيد (أ إ آ ٱ ← ا) و(ى ← ي) و(ة ← ه) و(ؤ ← و) و(ئ ← ي)، وضغط المسافات.
+ * بحث «احمد» يجد «أحمد»، و«فاطمه» يجد «فاطمة»، و«٠١٠١٢٣» يجد «0101…».
+ * @param {*} s
+ * @returns {string}
+ */
+export function normalizeSearch(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .toLowerCase()
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * هل يطابق هاتفٌ نصَّ البحث؟ يقارن الأرقام فقط (يتجاهل المسافات والشرطات وعلامة +)،
+ * ويعدّ 010… و+2010… و0020 10… الرقم نفسه. نص البحث بلا أرقام لا يطابق شيئاً هنا.
+ * @param {*} phone — هاتف مخزَّن
+ * @param {*} query — نص البحث (يُطبَّع داخلياً)
+ * @returns {boolean}
+ */
+export function phoneMatches(phone, query) {
+  const q = toLatinDigits(query).replace(/\D/g, '');
+  if (!q) return false;
+  let p = toLatinDigits(phone).replace(/\D/g, '');
+  if (!p) return false;
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.includes(q)) return true;
+  /* التكافؤ دولي ⟷ محلي (+2010… ⟷ 010…) لا يُطبَّق على الاستعلامات القصيرة كي لا تتوسّع (كتابة «010» لا تعني «10») */
+  if (q.length < 8) return false;
+  const national = (x) => { let y = x.replace(/^00/, ''); if (y.startsWith('20') && y.length >= 11) y = y.slice(2); return y.replace(/^0/, ''); };
+  return national(p).includes(national(q));
+}

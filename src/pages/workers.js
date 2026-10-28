@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewWorker } from '../ui/quick-preview.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative, normalizeSearch } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const SPECIALTIES = [
@@ -639,9 +639,9 @@ function renderFilters() {
 }
 
 function applySearch(list) {
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (!q) return list;
-  return list.filter((x) => String(x.name || '').toLowerCase().includes(q));
+  return list.filter((x) => normalizeSearch(x.name).includes(q));
 }
 
 function renderList() {

@@ -19,7 +19,7 @@ import { quotes } from '../data/repos/quotes.js';
 import { appointments } from '../data/repos/appointments.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
-import { modal } from '../ui/modal.js';
+import { modal, confirmIfStale } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewCustomer } from '../ui/quick-preview.js';
 import { printCustomerStatement } from '../services/invoice-print.js';
@@ -27,7 +27,7 @@ import { shareCustomerStatementImage } from '../services/invoice-image.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { openContactsImport } from '../ui/contacts-import-dialog.js';
-import { formatEGP } from '../core/utils.js';
+import { formatEGP, normalizeSearch, phoneMatches } from '../core/utils.js';
 import { findSimilarCustomers, phoneKey } from '../services/customer-merge.js';
 import * as draft from '../services/draft-manager.js';
 
@@ -64,12 +64,10 @@ let state = {
    ========================================================================== */
 
 export function filterCustomers(list, query) {
-  const q = String(query ?? '').trim().toLowerCase();
+  const q = normalizeSearch(query);
   if (!q) return list;
   return list.filter((c) => {
-    const name = String(c.name || '').toLowerCase();
-    const phone = String(c.phone || '');
-    return name.includes(q) || phone.includes(q);
+    return normalizeSearch(c.name).includes(q) || phoneMatches(c.phone, q);
   });
 }
 
@@ -504,8 +502,13 @@ function openCustomerForm(existing = null) {
             });
             if (!okDup) { phoneInput.focus(); return; }
           }
+          if (isEdit && !(await confirmIfStale((id) => customers.find(id), existing, 'هذا العميل'))) return;
           try {
-            if (isEdit) { await customers.update(existing.id, data); toast.success('تم تحديث العميل'); }
+            if (isEdit) {
+              const res = await customers.update(existing.id, data);
+              if (!res) { toast.danger('العميل لم يعد موجوداً (حُذف من جهاز آخر؟) — لم يُحفظ شيء'); return; }
+              toast.success('تم تحديث العميل');
+            }
             else { await customers.create(data); toast.success('تم إضافة العميل'); }
             draft.clear(DRAFT_KEY);
             handle.close();

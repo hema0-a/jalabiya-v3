@@ -27,7 +27,7 @@ import {
   COMMITMENT_CATEGORIES,
   COMMITMENT_FREQUENCIES,
 } from '../core/config.js';
-import { formatEGP, formatDate, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput, toNonNegative, normalizeSearch } from '../core/utils.js';
 import { previewCommitment, previewGoal } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -569,9 +569,9 @@ function renderCommitmentsList() {
   if (state.activeCategory !== 'all') {
     list = list.filter((c) => (c.category || 'other') === state.activeCategory);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
-    list = list.filter((c) => String(c.name || '').toLowerCase().includes(q));
+    list = list.filter((c) => normalizeSearch(c.name).includes(q));
   }
 
   if (list.length === 0) {
@@ -772,9 +772,9 @@ function renderGoalsList() {
   clear(wrap);
 
   let list = state.goals;
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
-    list = list.filter((g) => String(g.name || '').toLowerCase().includes(q));
+    list = list.filter((g) => normalizeSearch(g.name).includes(q));
   }
 
   if (list.length === 0) {

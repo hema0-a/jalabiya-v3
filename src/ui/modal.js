@@ -301,3 +301,25 @@ export const modal = {
   closeAll,
   confirm,
 };
+
+/**
+ * قبل حفظ تعديل سجل (v3.5.3): إن تغيّر السجل في قاعدة البيانات بعد فتح النموذج
+ * (مزامنة تلقائية من جهاز آخر أو تبويب آخر) يُسأل المستخدم قبل أن يستبدل الحفظ تلك التغييرات بصمت.
+ * فشل الفحص لا يمنع الحفظ.
+ * @param {(id:string) => Promise<Object|null>} find — دالة قراءة السجل الحالي (مثل repo.find)
+ * @param {{id:string, updatedAt?:number}} existing — السجل كما فُتح به النموذج
+ * @param {string} [what] — وصف السجل في الرسالة
+ * @returns {Promise<boolean>} true = تابع الحفظ
+ */
+export async function confirmIfStale(find, existing, what = 'هذا السجل') {
+  try {
+    const fresh = await find(existing.id);
+    if (!fresh) return true;   // محذوف: رسالة update الفارغة تتولى الأمر
+    if ((Number(fresh.updatedAt) || 0) === (Number(existing.updatedAt) || 0)) return true;
+    return await confirm({
+      title: 'تغيّر السجل أثناء التعديل',
+      message: 'تم تعديل ' + what + ' من مكان آخر (مزامنة أو تبويب آخر) بعد فتح النموذج.\nالحفظ الآن سيستبدل تلك التغييرات بما في النموذج. هل تريد المتابعة؟',
+      confirmText: 'نعم، احفظ', cancelText: 'مراجعة',
+    });
+  } catch (e) { return true; }
+}

@@ -12,25 +12,13 @@
    ========================================================================== */
 
 import { el } from '../core/dom.js';
+import { normalizeSearch } from '../core/utils.js';
 import { modal } from './modal.js';
 
 const RESULT_LIMIT = 60;
 
-/** تطبيع نص للبحث. */
-export function normalizeSearch(s) {
-  return String(s === undefined || s === null ? '' : s)
-    .toLowerCase()
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')       /* التشكيل والتطويل */
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+/** تطبيع نص للبحث (مصدر واحد في core/utils.js؛ يُعاد تصديره للتوافق). */
+export { normalizeSearch };
 
 const digitsOf = (s) => normalizeSearch(s).replace(/\D/g, '');
 

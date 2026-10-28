@@ -1,10 +1,10 @@
+import { endOfDay } from '../core/day-math.js';
 /* ==========================================================================
    season-compare.js — مقارنة موسم بنفس الفترة من العام الماضي (v3.3.30)
    ========================================================================== */
 
 const DAY = 86400000;
 const startOfDay = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const endOfDay = (ms) => { const d = new Date(ms); d.setHours(23, 59, 59, 999); return d.getTime(); };
 const dayKey = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
 
 export function shiftYears(range, years) {

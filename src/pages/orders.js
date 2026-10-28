@@ -16,7 +16,7 @@ import { customers } from '../data/repos/customers.js';
 import { payments as paymentsRepoForDelete, payments as paymentsRepo } from '../data/repos/payments.js';
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
-import { modal } from '../ui/modal.js';
+import { modal, confirmIfStale } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad, SIGNATURE_SKIPPED } from '../ui/signature-pad.js';
@@ -954,6 +954,8 @@ function openOrderForm(existing = null) {
             data.workPlan = null;
           }                                                      /* المسلَّم/الملغى: تبقى خطته كما هي */
 
+          /* تغيّر الطلب (مزامنة/تبويب آخر) بعد فتح النموذج؟ نسأل قبل الاستبدال */
+          if (isEdit && !(await confirmIfStale((id) => orders.find(id), existing, 'هذا الطلب'))) return;
           try {
             if (isEdit) {
               const res = await orders.update(existing.id, data);

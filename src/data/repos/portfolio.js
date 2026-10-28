@@ -8,6 +8,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
+import { normalizeSearch } from '../../core/utils.js';
 
 const base = createRepository(STORES.PORTFOLIO);
 
@@ -20,12 +21,12 @@ export const portfolio = {
    * @returns {Promise<Array>}
    */
   async searchByTitle(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((p) =>
-      String(p.title || '').toLowerCase().includes(q) ||
-      String(p.note || '').toLowerCase().includes(q)
+      normalizeSearch(p.title).includes(q) ||
+      normalizeSearch(p.note).includes(q)
     );
   },
 

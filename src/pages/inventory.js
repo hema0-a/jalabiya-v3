@@ -14,7 +14,7 @@ import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewInventory } from '../ui/quick-preview.js';
-import { formatEGP, toNonNegative } from '../core/utils.js';
+import { formatEGP, toNonNegative, normalizeSearch } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -397,11 +397,11 @@ function applyFilters() {
   if (state.activeCategory !== 'all') {
     list = list.filter((i) => (i.category || 'other') === state.activeCategory);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((i) =>
-      String(i.name || '').toLowerCase().includes(q) ||
-      String(i.notes || '').toLowerCase().includes(q)
+      normalizeSearch(i.name).includes(q) ||
+      normalizeSearch(i.notes).includes(q)
     );
   }
   return list;

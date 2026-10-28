@@ -14,7 +14,7 @@ import { toast } from '../ui/toast.js';
 import { personalLoans } from '../data/repos/personal-loans.js';
 import { loanPayments } from '../data/repos/loan-payments.js';
 import { LOAN_TYPES } from '../core/config.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, normalizeSearch, phoneMatches } from '../core/utils.js';
 import {
   getLoansWithPayments,
   getLoansStats,
@@ -513,11 +513,11 @@ function applyFilters() {
   if (state.activeFilter !== 'all') {
     list = list.filter((l) => l.type === state.activeFilter);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((l) =>
-      String(l.personName || '').toLowerCase().includes(q) ||
-      String(l.phone || '').includes(q)
+      normalizeSearch(l.personName).includes(q) ||
+      StringphoneMatches(l.phone, q)
     );
   }
   return list;

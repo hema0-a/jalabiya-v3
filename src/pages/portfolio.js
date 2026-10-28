@@ -15,7 +15,7 @@ import { trash } from '../data/repos/trash.js';
 import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
-import { formatEGP, formatDate, toNonNegative } from '../core/utils.js';
+import { formatEGP, formatDate, toNonNegative, normalizeSearch } from '../core/utils.js';
 import { previewPortfolio } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -47,11 +47,11 @@ export function filterPortfolio(list, category, query) {
   if (category && category !== 'all') {
     result = result.filter((p) => (p.category || 'other') === category);
   }
-  const q = String(query ?? '').trim().toLowerCase();
+  const q = normalizeSearch(query);
   if (q) {
     result = result.filter((p) =>
-      String(p.title || '').toLowerCase().includes(q) ||
-      String(p.note || '').toLowerCase().includes(q)
+      normalizeSearch(p.title).includes(q) ||
+      normalizeSearch(p.note).includes(q)
     );
   }
   return result;

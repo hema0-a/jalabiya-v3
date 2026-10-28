@@ -12,7 +12,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { trash } from '../data/repos/trash.js';
 import { LIMITS } from '../core/config.js';
-import { formatDate, relativeTime } from '../core/utils.js';
+import { formatDate, relativeTime, normalizeSearch } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const AUTO_DELETE_DAYS = 7;
@@ -287,11 +287,11 @@ function applyFilters() {
   if (state.activeFilter !== 'all') {
     list = list.filter((i) => i.originalStore === state.activeFilter);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((i) => {
-      const title = itemTitle(i).toLowerCase();
-      const info = storeInfo(i.originalStore).label.toLowerCase();
+      const title = normalizeSearch(itemTitle(i));
+      const info = normalizeSearch(storeInfo(i.originalStore).label);
       return title.includes(q) || info.includes(q);
     });
   }

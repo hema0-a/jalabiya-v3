@@ -59,8 +59,14 @@ export function mergeRecords(local, cloud, opts = {}) {
     return { record: cloudWins ? cloud : local, source: cloudWins ? 'cloud' : 'local', conflicts: [], dataDiffers: true };
   }
 
-  const keys = new Set([...Object.keys(local), ...Object.keys(cloud)].filter((k) => !META_FIELDS.has(k)));
-  const dataEqual = [...keys].every((k) => deepEqual(local[k], cloud[k]));
+  /* حقول _ft تدخل أيضاً: حقل محذوف عند الطرفين وزمن حذفه مسجَّل عند أحدهما يجب ألا يضيع (v3.5.3) */
+  const ftKeys = (r) => (r && r._ft && typeof r._ft === 'object' ? Object.keys(r._ft) : []);
+  const keys = new Set([...Object.keys(local), ...Object.keys(cloud), ...ftKeys(local), ...ftKeys(cloud)].filter((k) => !META_FIELDS.has(k)));
+  /* تساوي البيانات لا يكفي إن اختلفت أزمنة الحقول الصريحة (_ft): اختيار الأحدث بـ updatedAt وحده كان يُسقط زمناً أحدث لحقل
+     فيخسر لاحقاً أمام جهاز ثالث. السجلات القديمة بلا _ft تبقى على المسار السريع. */
+  const sameTimes = (k) => (explicitTime(local, k) === null && explicitTime(cloud, k) === null) || fieldTime(local, k) === fieldTime(cloud, k);
+  const dataEqual = [...keys].every((k) => deepEqual(local[k], cloud[k]) &&
+    (has(local, k) || has(cloud, k) || explicitTime(local, k) === explicitTime(cloud, k)) && sameTimes(k));
   if (dataEqual) return { record: lu >= cu ? local : cloud, source: lu >= cu ? 'local' : 'cloud', conflicts: [], dataDiffers: false };
 
   const chosen = {};     /* حقل → { has, value, t, side } */
@@ -71,7 +77,16 @@ export function mergeRecords(local, cloud, opts = {}) {
   for (const group of groups) {
     const present = group.filter((f) => keys.has(f));
     if (present.length === 0) continue;
-    if (present.every((f) => deepEqual(local[f], cloud[f]))) { present.forEach((f) => grouped.add(f)); continue; }
+    if (present.every((f) => deepEqual(local[f], cloud[f]))) {
+      /* المجموعة متطابقة عند الطرفين: يجب إدراجها في chosen أيضاً، وإلا فقدها السجل المركّب
+         (كان الطلب المدموج يخرج بلا items/subtotal/amount عند تعديل جهازين حقلين مختلفين — فقدان مبلغ الطلب!) */
+      for (const f of present) {
+        const inL = has(local, f), inC = has(cloud, f);
+        chosen[f] = { has: inL || inC, value: inL ? local[f] : cloud[f], t: Math.max(fieldTime(local, f), fieldTime(cloud, f)), side: 'local' };
+        grouped.add(f);
+      }
+      continue;
+    }
     const tL = Math.max(...present.map((f) => fieldTime(local, f)));
     const tC = Math.max(...present.map((f) => fieldTime(cloud, f)));
     let side;
@@ -105,7 +120,14 @@ export function mergeRecords(local, cloud, opts = {}) {
       else chosen[f] = { has: true, value: cloud[f], t: fieldTime(cloud, f), side: 'cloud' };
       continue;
     }
-    if (!inL && !inC) continue;
+    if (!inL && !inC) {
+      /* غائب عند الطرفين: نحفظ أحدث زمن حذف مسجَّل (إن وُجد) كي لا يُبعث الحقل عند دمج جهاز ثالث */
+      const dl = explicitTime(local, f), dc = explicitTime(cloud, f);
+      if (dl !== null || dc !== null) {
+        chosen[f] = { has: false, value: undefined, t: Math.max(dl === null ? -Infinity : dl, dc === null ? -Infinity : dc), side: (dl === null ? -Infinity : dl) >= (dc === null ? -Infinity : dc) ? 'local' : 'cloud' };
+      }
+      continue;
+    }
     /* الحقل عند الطرفين بقيمتين مختلفتين */
     const tL = fieldTime(local, f), tC = fieldTime(cloud, f);
     let side;
@@ -122,7 +144,11 @@ export function mergeRecords(local, cloud, opts = {}) {
   const matches = (rec) => [...keys].every((k) => {
     const c = chosen[k];
     if (!c) return !has(rec, k);
-    return c.has ? deepEqual(rec[k], c.value) : !has(rec, k);
+    /* القيمة تطابق لا تكفي: يجب ألا يكون زمن الحقل في السجل المُعاد أقدم من الزمن المختار، وإلا ضاع الأحدث وخسر الحقل لاحقاً أمام جهاز ثالث */
+    if (c.has) return deepEqual(rec[k], c.value) && fieldTime(rec, k) >= c.t;
+    /* حقل محذوف: لا نُعيد سجلاً لا يحمل زمن الحذف (أو حمل زمناً أقدم) وإلا ضاع الحذف وبُعث الحقل عند دمج جهاز ثالث (v3.5.3) */
+    const dt = explicitTime(rec, k);
+    return !has(rec, k) && dt !== null && dt >= c.t;
   });
   if (matches(local)) return { record: local, source: 'local', conflicts, dataDiffers: true };
   if (matches(cloud)) return { record: cloud, source: 'cloud', conflicts, dataDiffers: true };

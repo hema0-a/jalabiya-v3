@@ -12,6 +12,7 @@ import {
 } from '../../pages/appointments.js';
 import { appointments as appointmentsRepo } from '../../data/repos/appointments.js';
 import { customers as customersRepo } from '../../data/repos/customers.js';
+import { startOfNextDay, addDaysNoon } from '../../core/day-math.js';
 
 register('pages/appointments.js', async (t) => {
   /* تنظيف المخازن */
@@ -23,16 +24,18 @@ register('pages/appointments.js', async (t) => {
   await t.test('1. getTodayRange returns valid range',
     typeof range.start === 'number' &&
     typeof range.end === 'number' &&
-    range.end - range.start === 24 * 60 * 60 * 1000);
+    /* اليوم 23/24/25 ساعة بحسب التوقيت الصيفي (مصر: 24 أبريل و29 أكتوبر 2026)؛ ما يهمّ أن النهاية = بداية اليوم التالي */
+    range.end === startOfNextDay(range.start) &&
+    [23, 24, 25].includes((range.end - range.start) / 3600000));
 
   /* 2. filterAppointments: 'all' → كل المواعيد مرتّبة */
   const now = Date.now();
-  const day = 86400000;
+  /* ظهر الأيام بالتقويم (لا «الآن ± 24 ساعة»): في يوم التوقيت الصيفي (25 ساعة) كان «الآن − 24س» يقع اليوم نفسه */
   const list = [
-    { id: '1', date: now + day,      status: 'scheduled' },
-    { id: '2', date: now + 5 * day,  status: 'scheduled' },
-    { id: '3', date: now - day,      status: 'done'      },
-    { id: '4', date: now - 5 * day,  status: 'cancelled' },
+    { id: '1', date: addDaysNoon(now, 1),  status: 'scheduled' },
+    { id: '2', date: addDaysNoon(now, 5),  status: 'scheduled' },
+    { id: '3', date: addDaysNoon(now, -1), status: 'done'      },
+    { id: '4', date: addDaysNoon(now, -5), status: 'cancelled' },
   ];
   await t.test('2. filterAppointments all → sorted desc',
     filterAppointments(list, 'all').length === 4 &&
@@ -66,13 +69,13 @@ register('pages/appointments.js', async (t) => {
   await appointmentsRepo.create({
     customerId: cust.id,
     title: 'قياس',
-    date: now + 2 * day,
+    date: addDaysNoon(now, 2),
     status: 'scheduled',
   });
   await appointmentsRepo.create({
     customerId: cust.id,
     title: 'تسليم',
-    date: now - day,
+    date: addDaysNoon(now, -1),
     status: 'done',
   });
 

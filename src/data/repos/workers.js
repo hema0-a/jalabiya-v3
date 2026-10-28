@@ -7,6 +7,7 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
+import { normalizeSearch } from '../../core/utils.js';
 
 const base = createRepository(STORES.WORKERS);
 
@@ -19,11 +20,11 @@ export const workers = {
    * @returns {Promise<Array>}
    */
   async searchByName(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((w) =>
-      String(w.name ?? '').toLowerCase().includes(q)
+      normalizeSearch(w.name).includes(q)
     );
   },
 

@@ -12,11 +12,11 @@ import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { trash } from '../data/repos/trash.js';
 import { checkAmount } from '../services/amount-guard.js';
-import { modal } from '../ui/modal.js';
+import { modal, confirmIfStale } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { createCustomerPicker } from '../ui/customer-picker.js';
 import { previewPayment } from '../ui/quick-preview.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, normalizeSearch } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 import { withDepositPayments, overpaidBy, computeRefundsDue } from '../services/payments-view.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
@@ -237,6 +237,7 @@ function openPaymentForm(existing = null) {
               }
             } catch (e) { /* فشل الفحص لا يمنع الحفظ */ }
           }
+          if (isEdit && !(await confirmIfStale((id) => payments.find(id), existing, 'هذه الدفعة'))) return;
           try {
             if (isEdit) {
               const res = await payments.update(existing.id, data);
@@ -513,12 +514,12 @@ function applyFilters() {
     list = list.filter((p) => !p.orderId);
   }
 
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((p) => {
       const c = state.customerMap[p.customerId];
-      const name = c ? String(c.name || '').toLowerCase() : '';
-      const notes = String(p.notes || '').toLowerCase();
+      const name = c ? normalizeSearch(c.name) : '';
+      const notes = normalizeSearch(p.notes);
       return name.includes(q) || notes.includes(q);
     });
   }

@@ -12,7 +12,7 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { activity } from '../data/repos/activity.js';
-import { formatDate, formatTime, relativeTime } from '../core/utils.js';
+import { formatDate, formatTime, relativeTime, normalizeSearch } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -221,10 +221,10 @@ function applyFilters() {
   if (state.activeFilter !== 'all') {
     list = list.filter((a) => a.type === state.activeFilter);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((a) =>
-      String(a.description || '').toLowerCase().includes(q)
+      normalizeSearch(a.description).includes(q)
     );
   }
   return list;
