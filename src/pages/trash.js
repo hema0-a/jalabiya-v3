@@ -9,6 +9,7 @@
 
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
+import { createCollapsible } from '../ui/collapsible.js';
 import { toast } from '../ui/toast.js';
 import { trash } from '../data/repos/trash.js';
 import { LIMITS } from '../core/config.js';
@@ -178,18 +179,19 @@ function openDetail(item) {
         },
       }, left + ' يوم'),
     ]),
-    el('details', { style: { marginTop: '12px' } }, [
-      el('summary', { style: { fontSize: '12px', color: '#2E8B6F', cursor: 'pointer' } },
-        '📎 البيانات المحفوظة'),
-      el('pre', {
+    createCollapsible({
+      id: 'trash-data-' + String(item.id || 'x'),
+      variant: 'plain', persist: false,
+      title: '📎 البيانات المحفوظة',
+      content: el('pre', {
         style: {
           fontSize: '11px', color: '#666', background: '#F6F1E6',
-          padding: '8px', borderRadius: '6px', marginTop: '6px',
+          padding: '8px', borderRadius: '6px', margin: '0',
           overflow: 'auto', maxHeight: '250px',
           direction: 'ltr', textAlign: 'left',
         },
       }, JSON.stringify(item.data || {}, null, 2)),
-    ]),
+    }).node,
   ]);
 
   modal.open({

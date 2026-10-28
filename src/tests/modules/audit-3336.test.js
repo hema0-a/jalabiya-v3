@@ -62,7 +62,7 @@ register('audit v3.3.36 order form UX', async (t) => {
     const suggest = Array.from(modalEl.querySelectorAll('button')).find((b) => b.textContent.includes('اقتراح'));
     t.test('4. زر اقتراح التاريخ نصّه واضح وبعرض الحقل', !!suggest && suggest.getBoundingClientRect().width > 150);
 
-    const extras = modalEl.querySelector('details.order-extras');
+    const extras = modalEl.querySelector('.order-extras');
     t.test('5. «خيارات إضافية» مطوية افتراضياً', !!extras && !extras.open);
     t.test('6. الخصم والرسوم والملاحظات داخل الخيارات الإضافية', !!extras && extras.querySelectorAll('textarea,select').length >= 2);
 

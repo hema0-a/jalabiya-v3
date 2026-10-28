@@ -15,6 +15,11 @@
    - حفظ الحالة في localStorage عبر كاش ذاكرة (بلا JSON.parse مع كل نقرة)
      وسقف 300 معرّف لمنع تراكم المعرّفات القديمة.
    - طباعة: كل الأقسام تُعرض مفتوحة.
+   - أنماط (variant): card (افتراضي: بطاقة) · dashed (إطار منقّط للنماذج: «خيارات إضافية»)
+     · plain (سطر خفيف داخل النوافذ: «التفاصيل التقنية»). كلها نفس المحرّك والـ ARIA.
+   - className: صنف إضافي على العقدة (للربط بالاختبارات/الـ CSS الخاص).
+   - node.open: خاصية قراءة/كتابة بنفس عقد <details> (get = مفتوح؟ · set = افتح/أغلق) فيسهل
+     استبدال <details> الأصلي دون تغيير الكود الذي يقرأ `.open` أو يضبطه.
    - Static imports فقط.
    ========================================================================== */
 
@@ -119,6 +124,8 @@ const prefersReducedMotion = () =>
  * @param {string}  [options.summary] — سطر صغير تحت العنوان
  * @param {number|string} [options.badge] — شارة عدّاد (0/فارغ = مخفية)
  * @param {string}  [options.group] — مجموعة حصرية: فتح قسم يُغلق إخوته (نفس الأب + نفس group)
+ * @param {'card'|'dashed'|'plain'} [options.variant='card'] — شكل القسم (انظر رأس الملف)
+ * @param {string}  [options.className] — صنف إضافي على العقدة
  * @param {boolean} [options.persist=true] — حفظ الحالة في localStorage
  * @param {Function} [options.onToggle] — (isOpen) => void
  * @returns {{node:HTMLElement, open:Function, close:Function, toggle:Function,
@@ -173,8 +180,13 @@ export function createCollapsible(options = {}) {
     'aria-labelledby': headerId(),
   }, [bodyEl]);
 
+  const variant = (options.variant === 'dashed' || options.variant === 'plain') ? options.variant : 'card';
+  const extraClass = String(options.className || '').trim();
   const node = el('div', {
-    className: 'collapsible' + (isOpen ? ' collapsible--open' : ''),
+    className: 'collapsible'
+      + (variant !== 'card' ? ' collapsible--' + variant : '')
+      + (extraClass ? ' ' + extraClass : '')
+      + (isOpen ? ' collapsible--open' : ''),
     'data-collapsible-id': id,
   }, [header, contentWrap]);
   if (group) node.setAttribute('data-collapsible-group', group);
@@ -334,6 +346,13 @@ export function createCollapsible(options = {}) {
     else if (e.key === 'End') target = headers.length - 1;
     e.preventDefault();
     headers[target].focus();
+  });
+
+  /* واجهة مطابقة لـ <details>.open — قراءة: مفتوح؟ · كتابة: افتح/أغلق (بلا تمرير تلقائي) */
+  Object.defineProperty(node, 'open', {
+    configurable: true,
+    get: () => isOpen,
+    set: (v) => apply(!!v, { scroll: false }),
   });
 
   syncDom();

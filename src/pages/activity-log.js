@@ -10,6 +10,7 @@
 
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
+import { createCollapsible } from '../ui/collapsible.js';
 import { toast } from '../ui/toast.js';
 import { activity } from '../data/repos/activity.js';
 import { formatDate, formatTime, relativeTime, normalizeSearch } from '../core/utils.js';
@@ -124,17 +125,19 @@ function openDetail(item) {
       '📅 ' + formatDate(item.timestamp) + ' — 🕐 ' + formatTime(item.timestamp)) : null,
     item.entityId ? el('div', { style: { fontSize: '11px', color: '#999', marginTop: '8px', fontFamily: 'monospace' } },
       'ID: ' + item.entityId) : null,
-    item.metadata ? el('details', { style: { marginTop: '12px' } }, [
-      el('summary', { style: { fontSize: '12px', color: '#2E8B6F', cursor: 'pointer' } }, '📎 التفاصيل التقنية'),
-      el('pre', {
+    item.metadata ? createCollapsible({
+      id: 'activity-meta-' + String(item.id || 'x'),
+      variant: 'plain', persist: false,
+      title: '📎 التفاصيل التقنية',
+      content: el('pre', {
         style: {
           fontSize: '11px', color: '#666', background: '#F6F1E6',
-          padding: '8px', borderRadius: '6px', marginTop: '6px',
+          padding: '8px', borderRadius: '6px', margin: '0',
           overflow: 'auto', maxHeight: '200px',
           direction: 'ltr', textAlign: 'left',
         },
       }, JSON.stringify(item.metadata, null, 2)),
-    ]) : null,
+    }).node : null,
   ]);
 
   modal.open({

@@ -17,6 +17,7 @@ import { payments as paymentsRepoForDelete, payments as paymentsRepo } from '../
 import { trash } from '../data/repos/trash.js';
 import { settings } from '../data/repos/settings.js';
 import { modal, confirmIfStale } from '../ui/modal.js';
+import { createCollapsible } from '../ui/collapsible.js';
 import { toast } from '../ui/toast.js';
 import { previewOrder } from '../ui/quick-preview.js';
 import { openSignaturePad, SIGNATURE_SKIPPED } from '../ui/signature-pad.js';
@@ -718,12 +719,17 @@ function openOrderForm(existing = null) {
     (Array.isArray(existing.extraFees) && existing.extraFees.length > 0) ||
     Number(existing.cost) > 0 || !!existing.notes || hasReferenceImage(existing) || !!existing.receivedDate || !!existing.urgent
   );
-  const extras = el('details', { className: 'order-extras' }, [
-    el('summary', { className: 'order-extras__summary' }, [
-      el('span', {}, '⚙️ خيارات إضافية'),
-      el('span', { className: 'order-extras__hint' }, 'خصم · رسوم · تكلفة · ملاحظات · صورة'),
-    ]),
-    el('div', { className: 'order-extras__body' }, [
+  /* «خيارات إضافية»: المكوّن الموحّد createCollapsible بنمط dashed (v3.5.4) — بدل <details> الأصلي.
+     persist:false لأن الفتح يتبع بيانات الطلب (hasExtras) لا آخر اختيار محفوظ. extras.open يعمل كما في <details>. */
+  const extrasUi = createCollapsible({
+    id: 'order-extras-' + (isEdit ? existing.id : 'new'),
+    className: 'order-extras',
+    variant: 'dashed',
+    persist: false,
+    title: '⚙️ خيارات إضافية',
+    summary: 'خصم · رسوم · تكلفة · ملاحظات · صورة',
+    defaultOpen: hasExtras,
+    content: el('div', {}, [
       ...(isEdit ? [] : [statusField]),
       urgentField,
       fieldOf('📥 تاريخ استلام القماش', receivedDateInput),
@@ -733,8 +739,8 @@ function openOrderForm(existing = null) {
       fieldOf('📝 ملاحظات', notesInput),
       imagePicker.node,
     ]),
-  ]);
-  if (hasExtras) extras.open = true;
+  });
+  const extras = extrasUi.node;
 
   const depositField = fieldOf('💰 المقدم (ج.م)', depositInput);
   depositField.setAttribute('data-full', '1');

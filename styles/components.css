@@ -679,6 +679,71 @@
 }
 
 /* الطباعة: كل الأقسام مفتوحة (فواتير/تقارير) */
+/* ============================================================
+   أنماط المكوّن (v3.5.4) — نفس المحرّك والـ ARIA، شكل مختلف
+   ============================================================ */
+
+/* dashed: إطار منقّط خفيف داخل النماذج («خيارات إضافية») */
+.collapsible--dashed {
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-m);
+}
+.collapsible--dashed > .collapsible__header {
+  min-height: 44px;
+  padding: var(--space-s) var(--space-m);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+}
+.collapsible--dashed > .collapsible__header:focus-visible { border-radius: var(--radius-m); }
+/* الملخص يمين العنوان (تلميح) ويختفي عند الفتح كما كان في النسخة القديمة */
+.collapsible--dashed > .collapsible__header .collapsible__text {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.collapsible--dashed > .collapsible__header .collapsible__summary {
+  flex: 1;
+  text-align: end;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary-light);
+  opacity: 1;
+  /* التلميح يلتف على سطرين بدل أن يُقطع بـ «…» على الشاشات الضيقة */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.4;
+}
+.collapsible--dashed.collapsible--open > .collapsible__header .collapsible__summary { display: none; }
+.collapsible--dashed.collapsible--open > .collapsible__content { border-top: 1px dashed var(--color-border); }
+.collapsible--dashed.collapsible--open > .collapsible__content > .collapsible__body { padding: var(--space-m) var(--space-m) 0; }
+
+/* plain: سطر خفيف بلا بطاقة (تفاصيل تقنية داخل النوافذ) */
+.collapsible--plain {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin: var(--space-s) 0 0;
+  overflow: visible;
+}
+.collapsible--plain > .collapsible__header {
+  min-height: 36px;
+  padding: var(--space-xs) 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-light);
+}
+.collapsible--plain > .collapsible__header:hover,
+.collapsible--plain > .collapsible__header:active { background: transparent; }
+.collapsible--plain > .collapsible__header:focus-visible { border-radius: var(--radius-s); }
+.collapsible--plain.collapsible--open > .collapsible__content { border-top: none; }
+.collapsible--plain > .collapsible__content > .collapsible__body,
+.collapsible--plain.collapsible--open > .collapsible__content > .collapsible__body { padding: 0; }
+.collapsible--plain.collapsible--open > .collapsible__content > .collapsible__body > :first-child { margin-top: var(--space-xs); }
+
 @media print {
   .collapsible__content { grid-template-rows: 1fr; visibility: visible; transition: none; }
   .collapsible__body { padding: var(--space-m); }
@@ -1025,22 +1090,8 @@ button, a, [role="button"], input, select, textarea, label, summary { touch-acti
 .order-hint:empty { display: none; }
 .order-hint--warn { color: var(--color-warning); }
 
-/* خيارات إضافية: مطوية افتراضياً */
-.order-extras { margin-bottom: var(--space-m); border: 1px dashed var(--color-border); border-radius: var(--radius-m); }
-.order-extras__summary {
-  cursor: pointer; padding: var(--space-s) var(--space-m); min-height: 44px; display: flex; align-items: center;
-  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-primary);
-  list-style: none;
-}
-.order-extras__summary { justify-content: space-between; gap: var(--space-s); }
-.order-extras__summary::after { content: '＋'; font-size: 18px; flex-shrink: 0; }
-.order-extras[open] > .order-extras__summary::after { content: '－'; }
-.order-extras__hint { flex: 1; text-align: end; font-size: var(--font-size-xs); font-weight: normal; color: var(--color-primary-light); }
-.order-extras__summary::-webkit-details-marker { display: none; }
-.order-extras[open] > .order-extras__summary { border-bottom: 1px dashed var(--color-border); }
-.order-extras__body { padding: var(--space-m) var(--space-m) 0; }
-.order-extras__summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-.order-extras[open] .order-extras__hint { display: none; }
+/* خيارات إضافية: مطوية افتراضياً (v3.5.4: صارت createCollapsible بنمط dashed — انظر collapsible في هذا الملف) */
+.order-extras { margin-bottom: var(--space-m); }
 
 /* عمودان يتحوّلان لعمود واحد تلقائياً حين تضيق النافذة (تاريخ + وقت، إلخ) */
 .form-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 var(--space-s); }
