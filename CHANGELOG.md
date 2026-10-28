@@ -5,6 +5,29 @@
 
 ---
 
+## [3.5.5] — 2026-10-29 — تقسيم لوحة التحكم إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+المرحلة 2 من خارطة الطريق (الملف الأول: `dashboard.js`، 858 سطراً ← 204 أسطر + أربع وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+قاعدة التقسيم: الدوال تُنقل **حرفياً** (الكود والتعليقات العربية)، والتواصل بتمرير البيانات والـ callbacks فقط (لا EventBus، لا استيراد دائري).
+
+### 🧩 الملفات
+- **`src/pages/dashboard.js`** (يبقى المدخل): الحالة · `refresh` · الرأس · تنبيه النسخة · بانر التجريبي · الإجراءات السريعة · `dashboardPage` (نفس الواجهة: `render` و`destroy`).
+- **`src/pages/dashboard-kpis.js`** (جديد): `loadKPIs` + الحسابات النقية (`computeSalesLast7Days` · `computeOrdersByStatus` · `computeFinance` · `startOfMonth`). بلا DOM.
+- **`src/pages/dashboard-actions.js`** (جديد): `NEXT_STATUS` · `STATUS_LABEL` · `go` · `createDashActions(refresh)` ← `advanceOrder` · `quickPay` · `markApptDone`. المصنع يستلم `refresh` كوسيط (بدل استيراد الصفحة).
+- **`src/pages/dashboard-sections.js`** (جديد): بناء البطاقات والأقسام (`buildAttention(data, actions)` · `buildDueSoonSection(rows, actions)` · `buildTodayAppointmentsSection(rows, actions)` وغيرها).
+- **`src/pages/dashboard-customize.js`** (جديد): `buildSectionsBar` و`openCustomize(onApply)`؛ إعادة الرسم بعد التخصيص عبر `onApply` تمرّره الصفحة.
+- الـ imports التي تحرسها اختبارات `v3371` (`backupNudge` و`getLastExternalBackupAt`) باقية في `dashboard.js` وما زالت مستعملة فعلاً.
+
+### 🧪 الاختبارات
+- وحدة جديدة `v355-dashboard-split.test.js` (26 اختباراً): الواجهة العامة، حسابات `kpis`، `createDashActions` و`markApptDone`، ربط أزرار الأقسام بالإجراءات الممرَّرة، `onApply` في التخصيص، وحراس المصدر (لا `import()` ولا `innerHTML` ولا استيراد دائري).
+- لم يُعدَّل ولم يُحذف أي اختبار قائم. الإجمالي **2254/2254** (كان 2228).
+- مقارنة DOM حرفية قبل/بعد (9 لقطات: dashboard/orders/customers فارغة ومعبّأة + الأقسام مفتوحة + نافذة التخصيص): متطابقة.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.5، وقائمة precache مولَّدة (214 ملفاً).
+
+---
+
 ## [3.5.4] — 2026-10-28 — دمج تصميم الأكورديون في مكوّن واحد 🪗
 
 بعد 3.5.0 (القائمة الجانبية) و3.5.1 (لوحة التحكم) بقيت ثلاثة أماكن تستعمل `<details>` الأصلي بشكل وسلوك مختلفين.

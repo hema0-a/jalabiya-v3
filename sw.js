@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.4 — الفحص الشامل: دمج الأجهزة والتصدير والبحث والتوقيت الصيفي
+   الإصدار: v3.5.5 — الفحص الشامل: دمج الأجهزة والتصدير والبحث والتوقيت الصيفي
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.4';
+const CACHE_VERSION = 'v3.5.5';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -89,6 +89,10 @@ const PRECACHE_URLS = [
   './src/pages/cloud-sync.js',
   './src/pages/commitments.js',
   './src/pages/customers.js',
+  './src/pages/dashboard-actions.js',
+  './src/pages/dashboard-customize.js',
+  './src/pages/dashboard-kpis.js',
+  './src/pages/dashboard-sections.js',
   './src/pages/dashboard.js',
   './src/pages/data-care.js',
   './src/pages/debts.js',
