@@ -6,7 +6,7 @@
    ========================================================================== */
 
 import { LOAN_TYPES } from '../core/config.js';
-import { normalizeSearch } from '../core/utils.js';
+import { normalizeSearch, phoneMatches } from '../core/utils.js';
 
 export const TYPE_MAP = {};
 LOAN_TYPES.forEach((t) => { TYPE_MAP[t.id] = t; });
@@ -32,7 +32,7 @@ export function applyFilters(state) {
   if (q) {
     list = list.filter((l) =>
       normalizeSearch(l.personName).includes(q) ||
-      StringphoneMatches(l.phone, q)
+      phoneMatches(l.phone, q)
     );
   }
   return list;

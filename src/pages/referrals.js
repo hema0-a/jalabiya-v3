@@ -354,7 +354,7 @@ function applyFilters() {
     list = list.filter((r) =>
       normalizeSearch(r.referrerName).includes(q) ||
       normalizeSearch(r.referredName).includes(q) ||
-      StringphoneMatches(r.referredPhone, q)
+      phoneMatches(r.referredPhone, q)
     );
   }
   return list;

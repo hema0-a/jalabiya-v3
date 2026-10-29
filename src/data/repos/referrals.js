@@ -29,7 +29,7 @@ export const referrals = {
     return all.filter((r) =>
       normalizeSearch(r.referrerName).includes(q) ||
       normalizeSearch(r.referredName).includes(q) ||
-      StringphoneMatches(r.referredPhone, q)
+      phoneMatches(r.referredPhone, q)
     );
   },
 
