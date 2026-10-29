@@ -11,14 +11,6 @@
    - Service Worker مُفعَّل (يمكن تعطيله عبر ?nosw=1).
    ========================================================================== */
 
-/* الخط يُحمَّل بلا حجب للرسم الأول (كان رابطاً في <head> يؤخّر ظهور الشاشة على الشبكات البطيئة) */
-try {
-  const fontLink = document.createElement('link');
-  fontLink.rel = 'stylesheet';
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap';
-  document.head.appendChild(fontLink);
-} catch (_) { /* الخط تحسين فقط */ }
-
 const app = document.getElementById('app');
 if (app) {
   while (app.firstChild) app.removeChild(app.firstChild);
@@ -35,115 +27,36 @@ function showError(title, err) {
   app.appendChild(pre);
 }
 
-let el, toast, createLayout, events;
-let runAutoBackupIfDue, verifyLatestBackupIfDue, registerServiceWorker;
-/* البحث الشامل والجولة التعريفية لا يلزمان قبل أول رسم: تُحمَّلان عند الحاجة فقط (أقل ملفات عند الفتح) */
-const openUniversalSearch = (...args) => import('./ui/universal-search.js').then((m) => m.openUniversalSearch(...args));
+let el, toast, createLayout, events, openUniversalSearch;
+let runAutoBackupIfDue, registerServiceWorker, maybeStartOnboarding;
 let toggleClientMode, isClientMode, applyClientMode;
 let startNotificationCheck;
 let installErrorHandler;
 let mountFab;
 let applyTheme, toggleTheme, getThemeIcon, getThemeLabel;
 let mountOffline;
-let startAutoSync, mountSyncIndicator, requestPersistence;
 let mountNotifications, openNotifications;
-let ensureUnlocked, installAutoLock;
-let createBackup, runRecordMigrations, installBatchMigrationHook;
 let APP_CONFIG;
-let NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite;
 try {
-  /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
-  const [
-    cfg, dom, toastMod, layoutMod, eventsMod, backupMod, pwaMod,
-    clientMod, notifMod, errMod, fabMod, themeMod, offlineMod, autoSyncMod, syncIndMod, notifCenterMod, lockMod, storageMod, schemaMod, navMod,
-  ] = await Promise.all([
-    import('./core/config.js'),
-    import('./core/dom.js'),
-    import('./ui/toast.js'),
-    import('./ui/layout.js'),
-    import('./core/events.js'),
-    import('./services/auto-backup.js'),
-    import('./pwa.js'),
-    import('./ui/client-mode.js'),
-    import('./services/notifications.js'),
-    import('./core/error-handler.js'),
-    import('./ui/fab.js'),
-    import('./ui/theme.js'),
-    import('./ui/offline-indicator.js'),
-    import('./sync/auto-sync.js'),
-    import('./ui/sync-indicator.js'),
-    import('./ui/notifications-center.js'),
-    import('./ui/lock-screen.js'),
-    import('./services/storage-health.js'),
-    import('./data/record-schema.js'),
-    import('./services/nav-groups.js'),
-  ]);
-  ({ APP_CONFIG } = cfg);
-  ({ el } = dom);
-  ({ toast } = toastMod);
-  ({ createLayout } = layoutMod);
-  ({ events } = eventsMod);
-  ({ runAutoBackupIfDue, verifyLatestBackupIfDue, createBackup } = backupMod);
-  ({ registerServiceWorker } = pwaMod);
-  ({ toggleClientMode, isClientMode, applyClientMode } = clientMod);
-  ({ startAutoCheck: startNotificationCheck } = notifMod);
-  ({ install: installErrorHandler } = errMod);
-  ({ mount: mountFab } = fabMod);
-  ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = themeMod);
-  ({ mount: mountOffline } = offlineMod);
-  ({ start: startAutoSync } = autoSyncMod);
-  ({ mount: mountSyncIndicator } = syncIndMod);
-  ({ mount: mountNotifications, open: openNotifications } = notifCenterMod);
-  ({ ensureUnlocked, installAutoLock } = lockMod);
-  ({ requestPersistence } = storageMod);
-  ({ runRecordMigrations, installBatchMigrationHook } = schemaMod);
-  ({ NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite } = navMod);
+  ({ APP_CONFIG } = await import('./core/config.js'));
+  ({ el } = await import('./core/dom.js'));
+  ({ toast } = await import('./ui/toast.js'));
+  ({ createLayout } = await import('./ui/layout.js'));
+  ({ events } = await import('./core/events.js'));
+  ({ openUniversalSearch } = await import('./ui/universal-search.js'));
+  ({ runAutoBackupIfDue } = await import('./services/auto-backup.js'));
+  ({ registerServiceWorker } = await import('./pwa.js'));
+  ({ maybeStartOnboarding } = await import('./ui/onboarding.js'));
+  ({ toggleClientMode, isClientMode, applyClientMode } = await import('./ui/client-mode.js'));
+  ({ startAutoCheck: startNotificationCheck } = await import('./services/notifications.js'));
+  ({ install: installErrorHandler } = await import('./core/error-handler.js'));
+  ({ mount: mountFab } = await import('./ui/fab.js'));
+  ({ applyTheme, toggleTheme, getThemeIcon, getThemeLabel } = await import('./ui/theme.js'));
+  ({ mount: mountOffline } = await import('./ui/offline-indicator.js'));
+  ({ mount: mountNotifications, open: openNotifications } = await import('./ui/notifications-center.js'));
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
-}
-
-/* 🔒 شاشة القفل: لا تُرسم أي بيانات قبل إدخال الرقم السري (إن كان مُعيَّناً) */
-try {
-  await ensureUnlocked();
-  installAutoLock();
-} catch (e) {
-  console.error('[Lock] تعذّر تشغيل شاشة القفل:', e);
-  /* إن كان هناك PIN: لا نفتح البيانات عند الفشل (fail-closed) ولا نترك شاشة بيضاء —
-     نعرض رسالة مع زر إعادة المحاولة. وإن لم يكن هناك PIN نكمل طبيعياً. */
-  let pinSet = false;
-  try { pinSet = !!(localStorage.getItem('jalabiya_v3_pin_hash') && localStorage.getItem('jalabiya_v3_pin_salt')); } catch (_) { /* ignore */ }
-  if (pinSet) {
-    const appEl = document.getElementById('app');
-    if (appEl) {
-      /* تُحمَّل هنا فقط (مسار الفشل) فلا تزيد نقطة فشل في إقلاع التطبيق؛ وإن تعذّر تحميلها نكتب نصاً آمناً */
-      try {
-        const { renderLockFailure } = await import('./ui/lock-failure.js');
-        renderLockFailure(appEl);
-      } catch (renderErr) {
-        console.error('[Lock] تعذّر عرض شاشة الفشل:', renderErr);
-        appEl.removeAttribute('inert');
-        appEl.removeAttribute('aria-hidden');
-        appEl.style.visibility = 'visible';
-        appEl.textContent = '🔒 تعذّر عرض شاشة القفل. لحماية بياناتك لم يُفتح التطبيق. أعد تحميل الصفحة.';
-      }
-    }
-    throw e;
-  }
-}
-
-/* 🧬 ترحيل السجلات القديمة لآخر شكل بيانات — بعد القفل وقبل رسم أي صفحة.
-   لا يفعل شيئاً (ولا يقرأ شيئاً) ما دام سجل الترحيلات فارغاً. فشله لا يمنع فتح التطبيق. */
-try {
-  const mig = await runRecordMigrations({ backup: createBackup });
-  if (mig.migrated > 0) console.log('[RecordSchema] ✅ رُحِّل ' + mig.migrated + ' سجل');
-  if (mig.aborted || mig.failed > 0) {
-    console.warn('[RecordSchema] ⚠️ لم يكتمل الترحيل:', mig.error || (mig.failed + ' سجل فشل'));
-    toast.warning('⚠️ تعذّر تحديث شكل بعض البيانات القديمة — تعمل كما هي، وسيُعاد المحاولة لاحقاً', { duration: 8000 });
-  }
-  installBatchMigrationHook();   /* وبعد كل مزامنة/استعادة/استيراد */
-} catch (e) {
-  console.warn('[RecordSchema] تعذّر تشغيل الترحيل:', e);
 }
 
 async function loadPageModule(pageId) {
@@ -152,14 +65,7 @@ async function loadPageModule(pageId) {
       case 'dashboard':          return await import('./pages/dashboard.js');
       case 'customers':          return await import('./pages/customers.js');
       case 'orders':             return await import('./pages/orders.js');
-      case 'appointments':       return await import('./pages/appointments.js');
       case 'payments':           return await import('./pages/payments.js');
-      case 'debts':              return await import('./pages/debts.js');
-      case 'pickups':            return await import('./pages/pickups.js');
-      case 'messages':           return await import('./pages/messages.js');
-      case 'quotes':             return await import('./pages/quotes.js');
-      case 'season-compare':     return await import('./pages/season-compare.js');
-      case 'data-care':          return await import('./pages/data-care.js');
       case 'inventory':          return await import('./pages/inventory.js');
       case 'workers':            return await import('./pages/workers.js');
       case 'expenses':           return await import('./pages/expenses.js');
@@ -178,7 +84,6 @@ async function loadPageModule(pageId) {
       case 'activity-log':       return await import('./pages/activity-log.js');
       case 'trash':              return await import('./pages/trash.js');
       case 'cloud-sync':         return await import('./pages/cloud-sync.js');
-      case 'wall':               return await import('./pages/wall.js');
       case 'tests':              return await import('./pages/tests.js');
       default:                   return null;
     }
@@ -203,23 +108,56 @@ function buildErrorPanel(title, err) {
   ]);
 }
 
-/* التنقل: 6 مجموعات أكورديون + مفضلة (التعريف في services/nav-groups.js) */
-const SIDEBAR_SECTIONS = NAV_GROUPS;
-const ALL_ITEMS = ALL_NAV_ITEMS;
+const SIDEBAR_SECTIONS = [
+  { title: 'الرئيسية', items: [
+    { id: 'dashboard', icon: '🏠', label: 'لوحة التحكم' },
+  ]},
+  { title: 'العمليات', items: [
+    { id: 'customers', icon: '👥', label: 'العملاء' },
+    { id: 'orders',    icon: '📋', label: 'الطلبات' },
+    { id: 'calendar',  icon: '📅', label: 'تقويم المواعيد' },
+    { id: 'payments',  icon: '💰', label: 'الدفعات' },
+  ]},
+  { title: 'إدارة الورشة', items: [
+    { id: 'inventory',          icon: '📦', label: 'المخزون' },
+    { id: 'workers',            icon: '👷', label: 'العمال' },
+    { id: 'expenses',           icon: '💸', label: 'مصروفات الورشة' },
+    { id: 'pricing-calculator', icon: '🧮', label: 'حاسبة التسعير' },
+  ]},
+  { title: 'التسويق والعرض', items: [
+    { id: 'portfolio', icon: '📸', label: 'معرض الأعمال' },
+    { id: 'referrals', icon: '🤝', label: 'الإحالات' },
+  ]},
+  { title: 'المالية الشخصية', items: [
+    { id: 'commitments',    icon: '💳', label: 'الالتزامات' },
+    { id: 'house-expenses', icon: '🏠', label: 'مصاريف البيت' },
+    { id: 'loans',          icon: '💵', label: 'القروض' },
+  ]},
+  { title: 'المواسم والمناسبات', items: [
+    { id: 'occasions', icon: '🎉', label: 'المواسم والأعياد' },
+  ]},
+  { title: 'النظام', items: [
+    { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },
+    { id: 'trash',        icon: '🗑️', label: 'سلة المحذوفات' },
+  ]},
+  { title: 'التحليل والتقارير', items: [
+    { id: 'financial-center', icon: '💰', label: 'المركز المالي' },
+    { id: 'kpis',             icon: '📊', label: 'مؤشرات الأداء' },
+    { id: 'reports',          icon: '📈', label: 'التقارير' },
+  ]},
+  { title: 'النظام المتقدم', items: [
+    { id: 'cloud-sync', icon: '☁️', label: 'المزامنة السحابية' },
+    { id: 'settings',   icon: '⚙️', label: 'الإعدادات' },
+  ]},
+];
+
+const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items);
 
 const MODULE_EXPORT_MAP = {
   dashboard:            'dashboardPage',
-  wall:                 'wallPage',
   customers:            'customersPage',
   orders:               'ordersPage',
-  appointments:         'appointmentsPage',
   payments:             'paymentsPage',
-  debts:                'debtsPage',
-  pickups:              'pickupsPage',
-  messages:             'messagesPage',
-  quotes:               'quotesPage',
-  'season-compare':     'seasonComparePage',
-  'data-care':          'dataCarePage',
   inventory:            'inventoryPage',
   workers:              'workersPage',
   expenses:             'expensesPage',
@@ -266,7 +204,7 @@ function buildClientModeAction() {
   const active = isClientMode();
   return {
     id: 'client-mode',
-    icon: active ? '👁️' : '👁️🗨️',
+    icon: active ? '👁️' : '👁️‍🗨️',
     label: active ? 'إلغاء وضع العميل' : 'تفعيل وضع العميل',
     onClick: () => {
       const next = toggleClientMode();
@@ -323,8 +261,6 @@ const layout = createLayout({
     subtitle: 'V3 — v' + APP_CONFIG.version,
     logo: '🧵',
     sections: SIDEBAR_SECTIONS,
-    accordion: true,
-    favorites: { get: () => readFavorites(), toggle: (id) => toggleFavorite(id) },
     activeId: 'dashboard',
     footer: '© 2026 — v' + APP_CONFIG.version,
   },
@@ -361,15 +297,6 @@ try {
   console.warn('[Theme] فشل التطبيق:', err);
 }
 
-/* 🎨 تطبيق إعدادات المظهر والعرض المحفوظة (ألوان، خلفية، خط، حجم، تباين، مضغوط) */
-try {
-  const { settings: settingsRepo } = await import('./data/repos/settings.js');
-  const { applyAllSettings } = await import('./ui/display-settings.js');
-  applyAllSettings(await settingsRepo.get());
-} catch (err) {
-  console.warn('[Display] فشل تطبيق إعدادات المظهر:', err);
-}
-
 /* ⚡ FAB — إجراءات سريعة على كل الصفحات عدا #/tests */
 try {
   if (typeof mountFab === 'function') {
@@ -379,22 +306,6 @@ try {
   console.warn('[FAB] فشل التثبيت:', err);
 }
 
-/* ☀️ ملخص الصباح: مرة كل يوم عند أول فتح (لا يظهر في #/tests ولا #/wall) */
-setTimeout(() => {
-  try {
-    const base = String(location.hash || '').replace(/^#\/?/, '').split('/')[0] || 'dashboard';
-    if (base === 'tests' || base === 'wall') return;
-    import('./ui/morning-summary.js').then((m) => m.maybeShowMorningSummary()).catch((e) => console.warn('[Morning] unavailable:', e));
-  } catch (e) { console.warn('[Morning] failed:', e); }
-}, 2500);
-
-/* 📱 شريط التنقّل السفلي (يد واحدة) — جوال فقط، ويُوقَف من الإعدادات */
-try {
-  import('./ui/bottom-nav.js').then((m) => m.mountBottomNav(layout)).catch((e) => console.warn('[BottomNav] unavailable:', e));
-} catch (err) {
-  console.warn('[BottomNav] فشل التثبيت:', err);
-}
-
 /* 🔴 مؤشر "غير متصل" — يستمع لـ online/offline */
 try {
   if (typeof mountOffline === 'function') {
@@ -402,21 +313,6 @@ try {
   }
 } catch (err) {
   console.warn('[OfflineIndicator] فشل التثبيت:', err);
-}
-
-/* 💾 طلب «تخزين دائم» كي لا يحذف المتصفح البيانات المحلية عند امتلاء الجهاز (صامت، لا يُلقي أخطاء) */
-try {
-  if (typeof requestPersistence === 'function') requestPersistence();
-} catch (err) {
-  console.warn('[StorageHealth] تعذّر الطلب:', err);
-}
-
-/* ☁️ الرفع التلقائي الهادئ + تنبيه المزامنة (لا يعمل قبل فتح القفل) */
-try {
-  if (typeof startAutoSync === 'function') startAutoSync();
-  if (typeof mountSyncIndicator === 'function') mountSyncIndicator();
-} catch (err) {
-  console.warn('[AutoSync] فشل التشغيل:', err);
 }
 
 /* 🔔 مركز التنبيهات — عدّاد + قائمة موحّدة */
@@ -535,18 +431,6 @@ window.addEventListener('hashchange', () => {
 /* ⚡ تشغيل أولي */
 renderPage(getHashPage());
 
-/* 👤 ضغطة مطوّلة على اسم عميل ⟵ قائمة (اتصال/واتساب/ملف) */
-import('./ui/customer-menu.js').then((m) => m.installCustomerLongPress()).catch((e) => console.warn('[Main] customer menu unavailable:', e));
-
-/* 📒 الدفتر المالي (وضع المراقبة): الأسطر الافتتاحية بعد الرسم الأول بوقت كافٍ، وبشرط مزامنة نظيفة.
-   فشلها لا يؤثر على التطبيق (العدّادات القديمة هي المرجع). */
-setTimeout(() => {
-  import('./services/ledger-report.js')
-    .then((m) => m.ensureOpening({}))
-    .then((r) => { if (r && r.status === 'written') console.log('[Ledger] كُتب ' + r.written + ' سطر افتتاحي'); })
-    .catch((e) => console.warn('[Ledger] تعذّرت الأسطر الافتتاحية:', e));
-}, 5000);
-
 /* 🗄️ النسخ الاحتياطي التلقائي — بعد ثانيتين */
 setTimeout(() => {
   (async () => {
@@ -561,16 +445,6 @@ setTimeout(() => {
       } else {
         console.log('[AutoBackup] ⚠️ لم يُنشأ:', res && res.reason);
       }
-      /* 🧪 فحص سلامة أحدث نسخة (أسبوعياً أو عند ظهور نسخة جديدة) — قراءة فقط */
-      try {
-        const v = await verifyLatestBackupIfDue();
-        if (v && !v.ok) {
-          console.warn('[BackupVerify] ❌', v.errors);
-          toast.warning('⚠️ آخر نسخة احتياطية فيها مشكلة — افتح «صيانة البيانات» لتفاصيل الفحص', { duration: 9000 });
-        } else if (v) {
-          console.log('[BackupVerify] ✅ النسخة سليمة', v.warnings.length ? '(مع تحذيرات)' : '');
-        }
-      } catch (e) { console.warn('[BackupVerify] فشل الفحص:', e); }
     } catch (err) {
       console.warn('[AutoBackup] ❌ فشل:', err);
     }
@@ -585,11 +459,15 @@ try {
 }
 
 /* ✨ الجولة التعريفية — تظهر عند أول فتح */
-import('./ui/onboarding.js').then((m) => m.maybeStartOnboarding({
-  onFinish: ({ skipped }) => {
-    console.log('[Onboarding]', skipped ? '⏭️ تم التخطّي' : '✅ تم الإكمال');
-  },
-})).catch((err) => console.warn('[Onboarding] فشل التشغيل:', err));
+try {
+  maybeStartOnboarding({
+    onFinish: ({ skipped }) => {
+      console.log('[Onboarding]', skipped ? '⏭️ تم التخطّي' : '✅ تم الإكمال');
+    },
+  });
+} catch (err) {
+  console.warn('[Onboarding] فشل التشغيل:', err);
+}
 
 /* 🔔 الإشعارات — فحص دوري كل 30 دقيقة */
 try {

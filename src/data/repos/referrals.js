@@ -10,7 +10,6 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
-import { normalizeSearch, phoneMatches } from '../../core/utils.js';
 
 const base = createRepository(STORES.REFERRALS);
 
@@ -23,13 +22,13 @@ export const referrals = {
    * @returns {Promise<Array>}
    */
   async searchByQuery(query) {
-    const q = normalizeSearch(query);
+    const q = String(query ?? '').trim().toLowerCase();
     const all = await base.list();
     if (!q) return all;
     return all.filter((r) =>
-      normalizeSearch(r.referrerName).includes(q) ||
-      normalizeSearch(r.referredName).includes(q) ||
-      phoneMatches(r.referredPhone, q)
+      String(r.referrerName || '').toLowerCase().includes(q) ||
+      String(r.referredName || '').toLowerCase().includes(q) ||
+      String(r.referredPhone || '').includes(q)
     );
   },
 

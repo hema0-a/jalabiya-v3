@@ -284,7 +284,6 @@ export function openOnboarding(options = {}) {
   function finish(skipped) {
     if (completed) return;
     completed = true;
-    document.removeEventListener('keydown', escHandler);
 
     markDone();
 

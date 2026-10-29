@@ -9,11 +9,10 @@
 
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
-import { createCollapsible } from '../ui/collapsible.js';
 import { toast } from '../ui/toast.js';
 import { trash } from '../data/repos/trash.js';
 import { LIMITS } from '../core/config.js';
-import { formatDate, relativeTime, normalizeSearch } from '../core/utils.js';
+import { formatDate, relativeTime } from '../core/utils.js';
 
 /* --- ثوابت --- */
 const AUTO_DELETE_DAYS = 7;
@@ -26,7 +25,6 @@ const STORE_MAP = {
   'workers':          { label: 'العمال',           icon: '👷' },
   'expenses':         { label: 'مصروفات الورشة',  icon: '💸' },
   'appointments':     { label: 'المواعيد',         icon: '📅' },
-  'quotes':           { label: 'عروض الأسعار',     icon: '📝' },
   'portfolio':        { label: 'معرض الأعمال',     icon: '📸' },
   'commitments':      { label: 'الالتزامات',       icon: '💳' },
   'house-expenses':   { label: 'مصاريف البيت',    icon: '🏠' },
@@ -72,7 +70,6 @@ function daysLeft(deletedAt) {
  */
 function itemTitle(item) {
   const d = item.data || {};
-  if (item.originalStore === 'quotes') return 'عرض سعر #' + String(d.id || '').slice(-6);
   return String(d.name || d.title || d.personName || d.id || 'بدون اسم');
 }
 
@@ -119,7 +116,7 @@ async function deletePermanent(item) {
   });
   if (!ok) return;
   try {
-    await trash.removeForever(item.id);
+    await trash.remove(item.id);
     toast.success('تم الحذف النهائي');
     await refreshAll();
   } catch (e) { toast.danger('فشل: ' + e.message); }
@@ -139,7 +136,7 @@ async function clearAll() {
   });
   if (!ok2) return;
   try {
-    await trash.clearAllForever();
+    await trash.clear();
     toast.success('تم تفريغ السلة');
     await refreshAll();
   } catch (e) { toast.danger('فشل: ' + e.message); }
@@ -179,19 +176,18 @@ function openDetail(item) {
         },
       }, left + ' يوم'),
     ]),
-    createCollapsible({
-      id: 'trash-data-' + String(item.id || 'x'),
-      variant: 'plain', persist: false,
-      title: '📎 البيانات المحفوظة',
-      content: el('pre', {
+    el('details', { style: { marginTop: '12px' } }, [
+      el('summary', { style: { fontSize: '12px', color: '#2E8B6F', cursor: 'pointer' } },
+        '📎 البيانات المحفوظة'),
+      el('pre', {
         style: {
           fontSize: '11px', color: '#666', background: '#F6F1E6',
-          padding: '8px', borderRadius: '6px', margin: '0',
+          padding: '8px', borderRadius: '6px', marginTop: '6px',
           overflow: 'auto', maxHeight: '250px',
           direction: 'ltr', textAlign: 'left',
         },
       }, JSON.stringify(item.data || {}, null, 2)),
-    }).node,
+    ]),
   ]);
 
   modal.open({
@@ -289,11 +285,11 @@ function applyFilters() {
   if (state.activeFilter !== 'all') {
     list = list.filter((i) => i.originalStore === state.activeFilter);
   }
-  const q = normalizeSearch(state.searchQuery);
+  const q = state.searchQuery.trim().toLowerCase();
   if (q) {
     list = list.filter((i) => {
-      const title = normalizeSearch(itemTitle(i));
-      const info = normalizeSearch(storeInfo(i.originalStore).label);
+      const title = itemTitle(i).toLowerCase();
+      const info = storeInfo(i.originalStore).label.toLowerCase();
       return title.includes(q) || info.includes(q);
     });
   }

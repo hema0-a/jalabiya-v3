@@ -10,10 +10,6 @@
 import { orders as ordersRepo } from '../data/repos/orders.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { DEFAULT_SETTINGS } from '../core/config.js';
-import { settings as settingsRepo } from '../data/repos/settings.js';
-import { filterLowStockForAlerts } from './alert-rules.js';
-import { isPastDue } from './order-timing.js';
-import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
 /* --- مفتاح تتبّع الإشعارات المُرسلة (localStorage) --- */
 const SENT_KEY = 'jalabiya_v3_notif_sent';
@@ -191,7 +187,7 @@ export async function checkAndNotify() {
     const all = await ordersRepo.list();
     const now = Date.now();
     const overdue = all.filter((o) =>
-      isPastDue(o.dueDate, now) &&
+      o.dueDate && o.dueDate < now &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
 
@@ -206,8 +202,10 @@ export async function checkAndNotify() {
     } else if (overdue.length > 0) skipped++;
 
     /* --- 2. تسليم اليوم --- */
-    const todayMs = startOfDay(Date.now());
-    const todayEnd = startOfNextDay(todayMs);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+    const todayEnd = todayMs + 86400000;
 
     const dueToday = all.filter((o) =>
       o.dueDate && o.dueDate >= todayMs && o.dueDate < todayEnd &&
@@ -241,8 +239,7 @@ export async function checkAndNotify() {
 
   /* --- 4. نواقص المخزون --- */
   try {
-    const s = await settingsRepo.get().catch(() => ({}));
-    const low = filterLowStockForAlerts(await inventoryRepo.getLowStock(), s);
+    const low = await inventoryRepo.getLowStock();
     if (low.length > 0 && !wasSentToday('low-stock')) {
       const ok = notify({
         title: '📦 نقص مخزون',

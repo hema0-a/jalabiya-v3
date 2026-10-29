@@ -9,7 +9,7 @@
    ========================================================================== */
 
 import { STORAGE_KEYS, LIMITS, DEFAULT_SETTINGS } from '../core/config.js';
-import { verifyPin, isPinSet, setPin, clearPin, isLegacyHash } from './pin-crypto.js';
+import { verifyPin, isPinSet, setPin, clearPin } from './pin-crypto.js';
 
 /* --- أدوات قراءة/كتابة آمنة --- */
 
@@ -93,12 +93,9 @@ export const auth = {
     const attempts = auth.getAttempts() + 1;
     localStorage.setItem(STORAGE_KEYS.V3_FAILED_ATTEMPTS, String(attempts));
     if (attempts >= LIMITS.maxPinAttempts) {
-      /* مدة القفل تتضاعف مع كل محاولة فاشلة إضافية (30ث، 60ث، 120ث…) بسقف 15 دقيقة */
-      const extra = Math.min(attempts - LIMITS.maxPinAttempts, 5);
-      const seconds = Math.min(LIMITS.pinLockSeconds * Math.pow(2, extra), 15 * 60);
-      const until = Date.now() + seconds * 1000;
+      const until = Date.now() + LIMITS.pinLockSeconds * 1000;
       localStorage.setItem(STORAGE_KEYS.V3_LOCK_UNTIL, String(until));
-      return { attempts, locked: true, seconds };
+      return { attempts, locked: true };
     }
     return { attempts, locked: false };
   },
@@ -145,33 +142,25 @@ export const auth = {
     if (ok) {
       auth._resetAttempts();
       auth.setSession();
-      /* ترقية صامتة: hash قديم (SHA-256) → PBKDF2 بعد نجاح التحقق */
-      if (isLegacyHash(storedHash)) {
-        try { await setPin(pin); } catch (e) { /* الترقية اختيارية */ }
-      }
       return { success: true };
     }
 
-    const { attempts, locked, seconds } = auth._recordFailure();
+    const { attempts, locked } = auth._recordFailure();
     return {
       success: false,
       reason: 'wrong-pin',
       attempts,
       locked,
-      remainingMs: locked ? (seconds || LIMITS.pinLockSeconds) * 1000 : 0,
+      remainingMs: locked ? LIMITS.pinLockSeconds * 1000 : 0,
     };
   },
 
   /**
-   * إنشاء جلسة جديدة.
-   * @param {number} [durationHours] — المدة من إعدادات المستخدم؛ الافتراضي من DEFAULT_SETTINGS.
+   * إنشاء جلسة جديدة مدتها DEFAULT_SETTINGS.security.sessionDurationHours.
    * @returns {{createdAt:number, expiresAt:number}}
    */
-  setSession(durationHours) {
-    const custom = Number(durationHours);
-    const hours = (isFinite(custom) && custom > 0)
-      ? custom
-      : (DEFAULT_SETTINGS.security.sessionDurationHours || 24);
+  setSession() {
+    const hours = DEFAULT_SETTINGS.security.sessionDurationHours || 24;
     const now = Date.now();
     const session = {
       createdAt: now,
@@ -206,16 +195,10 @@ export const auth = {
    * @returns {Promise<boolean>}
    */
   async changePin(oldPin, newPin) {
-    /* نفس حماية unlock: لا تخمين مفتوح للرقم القديم عبر شاشة التغيير */
-    if (auth.isLocked()) return false;
     const storedHash = localStorage.getItem(STORAGE_KEYS.V3_PIN_HASH);
     const storedSalt = localStorage.getItem(STORAGE_KEYS.V3_PIN_SALT);
     const ok = await verifyPin(oldPin, storedHash, storedSalt);
-    if (!ok) {
-      auth._recordFailure();
-      return false;
-    }
-    auth._resetAttempts();
+    if (!ok) return false;
     await setPin(newPin);
     return true;
   },

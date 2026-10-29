@@ -9,9 +9,6 @@
  * ناقل الأحداث — يُدير تسجيل المستمعين وبث الأحداث.
  * يعتمد على Map<string, Set<Function>> لضمان عدم تكرار المستمع.
  */
-/* اسم المستمع العام: يستلم كل الأحداث */
-const WILDCARD = '*';
-
 class EventBus {
   constructor() {
     /** @type {Map<string, Set<Function>>} */
@@ -55,24 +52,21 @@ class EventBus {
    * بث حدث لكل المستمعين المسجّلين.
    * يستخدم نسخة من المجموعة لتفادي مشاكل التعديل أثناء التنفيذ.
    * أي خطأ في مستمع لا يوقف بقية المستمعين.
-   * المستمع يستلم (data, event). والمستمع العام '*' يستلم كل الأحداث بنفس الصيغة.
    * @param {string} event
    * @param {*} [data] - بيانات تُمرَّر للمستمعين
    */
   emit(event, data) {
-    const run = (set) => {
-      if (!set || set.size === 0) return;
-      // نسخة من المجموعة — التعديلات أثناء التنفيذ تُطبَّق على البث التالي
-      [...set].forEach((handler) => {
-        try {
-          handler(data, event);
-        } catch (err) {
-          console.error(`[EventBus] Error in handler for "${event}":`, err);
-        }
-      });
-    };
-    run(this.listeners.get(event));
-    if (event !== WILDCARD) run(this.listeners.get(WILDCARD));
+    const set = this.listeners.get(event);
+    if (!set || set.size === 0) return;
+
+    // نسخة من المجموعة — التعديلات أثناء التنفيذ تُطبَّق على البث التالي
+    [...set].forEach((handler) => {
+      try {
+        handler(data);
+      } catch (err) {
+        console.error(`[EventBus] Error in handler for "${event}":`, err);
+      }
+    });
   }
 
   /**
@@ -82,10 +76,10 @@ class EventBus {
    * @returns {Function} دالة إلغاء التسجيل
    */
   once(event, handler) {
-    const wrapper = (data, name) => {
+    const wrapper = (data) => {
       // نُلغي أولاً لضمان عدم التكرار حتى لو رمى المستمع خطأً
       this.off(event, wrapper);
-      handler(data, name);
+      handler(data);
     };
     return this.on(event, wrapper);
   }

@@ -10,10 +10,9 @@
 
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
-import { createCollapsible } from '../ui/collapsible.js';
 import { toast } from '../ui/toast.js';
 import { activity } from '../data/repos/activity.js';
-import { formatDate, formatTime, relativeTime, normalizeSearch } from '../core/utils.js';
+import { formatDate, formatTime, relativeTime } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -40,8 +39,6 @@ const TYPE_MAP = {
   'inventory:updated': { label: 'تحديث مخزون',     icon: '📦', color: '#1565C0' },
   'settings:updated':  { label: 'تحديث إعدادات',   icon: '⚙️', color: '#666' },
   'trash:restored':    { label: 'استرجاع',         icon: '♻️', color: '#2E7D32' },
-  'auth:login':        { label: 'فتح القفل',       icon: '🔓', color: '#2E7D32' },
-  'auth:failed':       { label: 'محاولة دخول فاشلة', icon: '🔐', color: '#C62828' },
 };
 
 /**
@@ -125,19 +122,17 @@ function openDetail(item) {
       '📅 ' + formatDate(item.timestamp) + ' — 🕐 ' + formatTime(item.timestamp)) : null,
     item.entityId ? el('div', { style: { fontSize: '11px', color: '#999', marginTop: '8px', fontFamily: 'monospace' } },
       'ID: ' + item.entityId) : null,
-    item.metadata ? createCollapsible({
-      id: 'activity-meta-' + String(item.id || 'x'),
-      variant: 'plain', persist: false,
-      title: '📎 التفاصيل التقنية',
-      content: el('pre', {
+    item.metadata ? el('details', { style: { marginTop: '12px' } }, [
+      el('summary', { style: { fontSize: '12px', color: '#2E8B6F', cursor: 'pointer' } }, '📎 التفاصيل التقنية'),
+      el('pre', {
         style: {
           fontSize: '11px', color: '#666', background: '#F6F1E6',
-          padding: '8px', borderRadius: '6px', margin: '0',
+          padding: '8px', borderRadius: '6px', marginTop: '6px',
           overflow: 'auto', maxHeight: '200px',
           direction: 'ltr', textAlign: 'left',
         },
       }, JSON.stringify(item.metadata, null, 2)),
-    }).node : null,
+    ]) : null,
   ]);
 
   modal.open({
@@ -224,10 +219,10 @@ function applyFilters() {
   if (state.activeFilter !== 'all') {
     list = list.filter((a) => a.type === state.activeFilter);
   }
-  const q = normalizeSearch(state.searchQuery);
+  const q = state.searchQuery.trim().toLowerCase();
   if (q) {
     list = list.filter((a) =>
-      normalizeSearch(a.description).includes(q)
+      String(a.description || '').toLowerCase().includes(q)
     );
   }
   return list;

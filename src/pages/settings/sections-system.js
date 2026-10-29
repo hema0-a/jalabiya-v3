@@ -17,22 +17,13 @@ import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
-import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS, APP_CONFIG as APP_INFO } from '../../core/config.js';
-import { formatDate, formatEGP, localDateInput } from '../../core/utils.js';
+import { DEFAULT_SETTINGS, DEFAULT_OCCASIONS, STORAGE_KEYS } from '../../core/config.js';
+import { formatDate, formatEGP } from '../../core/utils.js';
 import * as authSync from '../../sync/auth-sync.js';
-import * as db from '../../data/idb.js';
-import { pushFlow, pullFlow } from '../../sync/sync-flow.js';
-import * as autoSync from '../../sync/auto-sync.js';
-import { seedDemoData, clearDemoData, countDemoData } from '../../services/demo-data.js';
-import { openReportIssue } from '../../ui/report-issue.js';
-import { getRecent as getRecentErrors } from '../../core/error-handler.js';
-import {
-  DEFAULT_TEMPLATES, VARIABLE_DEFS, MAX_TEMPLATE_LENGTH, MAX_CUSTOM_TEMPLATES,
-  variablesFor, interpolate, findUnknownVariables, sampleVars, newCustomId,
-} from '../../services/message-templates.js';
+import * as firestoreSync from '../../sync/firestore-sync.js';
 import {
   createBackup, listBackups, restoreBackup, deleteBackup,
-  clearAllBackups, exportBackupToFile, shareLatestBackup, daysSinceExternalBackup,
+  clearAllBackups, exportBackupToFile,
 } from '../../services/auto-backup.js';
 
 /* ==========================================================================
@@ -228,22 +219,12 @@ function openOccasionForm(occasions, editIdx, saveFn, rebuild) {
    3. الرسائل التلقائية
    ========================================================================== */
 
-/* ⚠️ القوالب من الخدمة (مصدر واحد). كانت هنا نسخة مكرّرة بنصوص مختلفة
-   عمّا يُرسَل فعلاً، فيرى المستخدم نصاً ويُرسَل غيره. */
-
-/** يبني خريطة التخصيصات المحفوظة: يحفظ فقط ما يختلف عن الافتراضي. */
-function buildOverride(tpl, state) {
-  const o = {};
-  if (tpl.toggleable !== false && state.enabled === false) o.enabled = false;
-  const txt = (state.text || '').trim();
-  if (txt && txt !== tpl.text) o.text = txt;
-  return Object.keys(o).length ? o : null;
-}
-
-const MSG_GROUPS = [
-  { title: '📋 رسائل الطلب', hint: 'تظهر في زر 📱 بصفحة الطلبات، وبعد تغيير الحالة', scopes: ['order'] },
-  { title: '🔔 رسائل الصفحات', hint: 'أزرار واتساب في: جاهز للاستلام · المستحقات · عروض الأسعار · لوحة التحكم', scopes: ['pickup', 'debt', 'quote'] },
-  { title: '🎉 العملاء والمناسبات', hint: 'تهاني المناسبات وحملات «📣 رسائل اليوم» + شكر مكافأة الإحالة', scopes: ['customer', 'referral'] },
+const AUTO_MESSAGES = [
+  { id: 'new_order', name: 'طلب جديد', text: 'شكراً لك {customer}، تم استلام طلبك بقيمة {amount} ج.م.' },
+  { id: 'start_work', name: 'بدء التنفيذ', text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك.' },
+  { id: 'ready', name: 'جاهز للتسليم', text: 'طلبك جاهز للتسليم يا {customer}!' },
+  { id: 'thanks', name: 'شكر بعد التسليم', text: 'شكراً لثقتك بنا {customer}!' },
+  { id: 'payment_due', name: 'تذكير بالدفع', text: 'تذكير ودّي: متبقي عليك {amount} ج.م.' },
 ];
 
 const autoMessagesSection = {
@@ -251,340 +232,116 @@ const autoMessagesSection = {
   icon: '💬',
   title: 'الرسائل التلقائية',
   async render(body, currentSettings, saveFn) {
-    const am = currentSettings.autoMessages || {};
+    const am = currentSettings.autoMessages || { enabled: true, templates: {} };
 
-    /* حالة محلية حيّة: كل حفظ يرسل الخريطة كاملة (settings.update يدمج عمقاً مستوى واحداً فقط،
-       فإرسال نسخة قديمة كان يمحو تعديل القالب السابق). */
-    const live = {};
-    DEFAULT_TEMPLATES.forEach((tpl) => {
-      const o = (am.templates || {})[tpl.id] || {};
-      live[tpl.id] = {
-        enabled: tpl.toggleable === false ? true : o.enabled !== false,
-        text: (typeof o.text === 'string' && o.text.trim()) ? o.text : tpl.text,
-      };
+    const mainToggle = createToggle({
+      label: 'تفعيل الرسائل التلقائية',
+      checked: am.enabled !== false,
+      onChange: (v) => {
+        saveFn({ autoMessages: { enabled: v } });
+      },
     });
-    let custom = (Array.isArray(am.custom) ? am.custom : [])
-      .filter((t) => t && t.id && typeof t.text === 'string')
-      .map((t) => ({
-        id: String(t.id), name: String(t.name || 'قالب'), icon: String(t.icon || '💬'),
-        scope: t.scope === 'customer' ? 'customer' : 'order', enabled: t.enabled !== false, text: t.text,
-      }));
-    let masterOn = am.enabled !== false;
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'تفعيل الرسائل التلقائية'),
+      mainToggle,
+    ]));
 
-    function persistTemplates() {
-      const map = {};
-      DEFAULT_TEMPLATES.forEach((tpl) => {
-        const o = buildOverride(tpl, live[tpl.id]);
-        if (o) map[tpl.id] = o;
+    const templates = am.templates || {};
+
+    AUTO_MESSAGES.forEach((tpl) => {
+      const current = templates[tpl.id] || { enabled: true, text: tpl.text };
+
+      const t = createToggle({
+        label: '', checked: current.enabled !== false,
+        onChange: (v) => {
+          saveFn({
+            autoMessages: {
+              templates: {
+                ...templates,
+                [tpl.id]: { ...current, enabled: v },
+              },
+            },
+          });
+        },
       });
-      saveFn({ autoMessages: { templates: map } });
-    }
-    function persistCustom() {
-      saveFn({ autoMessages: { custom: custom.map((t) => ({ ...t })) } });
-    }
 
-    const cards = el('div', {});
-    function applyMasterState() {
-      cards.style.opacity = masterOn ? '1' : '0.5';
-      cards.style.pointerEvents = masterOn ? '' : 'none';
-    }
-
-    /* --- المفاتيح الرئيسية --- */
-    body.appendChild(el('div', { className: 'settings-row' }, [
-      el('div', { style: { flex: '1' } }, [
-        el('div', { className: 'settings-row__label' }, 'تفعيل الرسائل التلقائية'),
-        el('div', { className: 'settings-row__hint' },
-          'تفتح واتساب برسالة جاهزة ولا تُرسَل وحدها — المستخدم يضغط «إرسال»'),
-      ]),
-      createToggle({
-        label: '', checked: masterOn,
-        onChange: (v) => { masterOn = v; applyMasterState(); saveFn({ autoMessages: { enabled: v } }); },
-      }),
-    ]));
-    body.appendChild(el('div', { className: 'settings-row' }, [
-      el('div', { style: { flex: '1' } }, [
-        el('div', { className: 'settings-row__label' }, 'اقتراح إشعار العميل بعد تغيير الحالة'),
-        el('div', { className: 'settings-row__hint' },
-          'زر «📱 إشعار العميل» يظهر في التنبيه بعد: طلب جديد · قيد التنفيذ · جاهز · تسليم'),
-      ]),
-      createToggle({
-        label: '', checked: am.promptOnStatus !== false,
-        onChange: (v) => { saveFn({ autoMessages: { promptOnStatus: v } }); },
-      }),
-    ]));
-    body.appendChild(cards);
-
-    /* --- بطاقة بطاقة قالب أساسي --- */
-    function builtinCard(tpl) {
-      const st = live[tpl.id];
-      const vars = sampleVars(tpl.scope);
-      const previewEl = el('div', {
+      const preview = el('div', {
         style: {
-          fontSize: '12px', color: '#555', padding: '8px', background: '#F6F1E6',
-          borderRadius: '6px', marginTop: '6px', lineHeight: '1.6', whiteSpace: 'pre-wrap',
+          fontSize: '12px', color: '#666', padding: '8px',
+          background: '#F6F1E6', borderRadius: '6px', marginTop: '6px',
+          lineHeight: '1.5', whiteSpace: 'pre-wrap',
         },
-      });
-      const badge = el('span', { className: 'badge badge--info', style: { marginInlineStart: '6px', fontSize: '10px' } }, 'مخصّص');
-      function refresh() {
-        previewEl.textContent = interpolate(st.text, vars);
-        badge.style.display = st.text.trim() !== tpl.text ? '' : 'none';
-        previewEl.style.opacity = st.enabled ? '1' : '0.5';
-      }
-      const controls = [];
-      if (tpl.toggleable !== false) {
-        controls.push(createToggle({
-          label: '', checked: st.enabled,
-          onChange: (v) => { st.enabled = v; refresh(); persistTemplates(); },
-        }));
-      }
-      controls.push(el('button', {
+      }, current.text);
+
+      const editBtn = el('button', {
         className: 'btn btn--sm btn--ghost', type: 'button',
-        onClick: () => openTemplateEditor(tpl, st.text, (newText) => { st.text = newText; refresh(); persistTemplates(); }),
-      }, '✏️ تعديل'));
+        onClick: () => openTemplateEditor(tpl, current, (newText) => {
+          saveFn({
+            autoMessages: {
+              templates: {
+                ...templates,
+                [tpl.id]: { ...current, text: newText },
+              },
+            },
+          });
+          preview.textContent = newText;
+        }),
+      }, '✏️ تعديل');
 
-      const card = el('div', {
-        style: { padding: '12px', background: '#FFF', border: '1px solid #E5DDD0', borderRadius: '8px', marginBottom: '8px' },
+      body.appendChild(el('div', {
+        style: {
+          padding: '12px', background: '#FFF',
+          border: '1px solid #E5DDD0', borderRadius: '8px',
+          marginBottom: '8px',
+        },
       }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' } }, [
-          el('span', { style: { fontWeight: '500', fontSize: '14px' } }, [(tpl.icon || '') + ' ' + tpl.name, badge]),
-          el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, controls),
+        el('div', {
+          style: {
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', marginBottom: '4px',
+          },
+        }, [
+          el('span', { style: { fontWeight: '500', fontSize: '14px' } }, tpl.name),
+          el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [t, editBtn]),
         ]),
-        previewEl,
-      ]);
-      refresh();
-      return card;
-    }
-
-    /* --- المجموعات الأساسية --- */
-    MSG_GROUPS.forEach((g) => {
-      cards.appendChild(el('div', { style: { margin: '14px 0 6px' } }, [
-        el('div', { style: { fontWeight: '600', fontSize: '13px', color: '#123C2F' } }, g.title),
-        el('div', { style: { fontSize: '11px', color: '#888' } }, g.hint),
+        preview,
       ]));
-      DEFAULT_TEMPLATES.filter((t) => g.scopes.includes(t.scope)).forEach((tpl) => cards.appendChild(builtinCard(tpl)));
     });
 
-    /* --- قوالبي المخصّصة --- */
-    cards.appendChild(el('div', { style: { margin: '14px 0 6px' } }, [
-      el('div', { style: { fontWeight: '600', fontSize: '13px', color: '#123C2F' } }, '✨ قوالبي'),
-      el('div', { style: { fontSize: '11px', color: '#888' } },
-        'قوالب تضيفها بنفسك: «رسالة طلب» تظهر في زر 📱 بالطلبات، و«رسالة عملاء» تظهر في الحملات'),
-    ]));
-    const customWrap = el('div', {});
-    cards.appendChild(customWrap);
-
-    function renderCustom() {
-      clear(customWrap);
-      custom.forEach((item) => {
-        const previewEl = el('div', {
-          style: {
-            fontSize: '12px', color: '#555', padding: '8px', background: '#F6F1E6',
-            borderRadius: '6px', marginTop: '6px', lineHeight: '1.6', whiteSpace: 'pre-wrap', opacity: item.enabled ? '1' : '0.5',
-          },
-        }, interpolate(item.text, sampleVars(item.scope)));
-        customWrap.appendChild(el('div', {
-          style: { padding: '12px', background: '#FFF', border: '1px solid #E5DDD0', borderRadius: '8px', marginBottom: '8px' },
-        }, [
-          el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' } }, [
-            el('span', { style: { fontWeight: '500', fontSize: '14px' } }, [
-              item.icon + ' ' + item.name,
-              el('span', { className: 'badge badge--info', style: { marginInlineStart: '6px', fontSize: '10px' } },
-                item.scope === 'customer' ? 'عملاء' : 'طلب'),
-            ]),
-            el('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [
-              createToggle({
-                label: '', checked: item.enabled,
-                onChange: (v) => { item.enabled = v; previewEl.style.opacity = v ? '1' : '0.5'; persistCustom(); },
-              }),
-              el('button', {
-                className: 'btn btn--sm btn--ghost', type: 'button',
-                onClick: () => openCustomEditor(item, (next) => { Object.assign(item, next); renderCustom(); persistCustom(); }),
-              }, '✏️'),
-              el('button', {
-                className: 'btn btn--sm btn--ghost', type: 'button', 'aria-label': 'حذف',
-                onClick: async () => {
-                  const ok = await modal.confirm({
-                    title: 'حذف القالب', message: 'حذف القالب «' + item.name + '»؟',
-                    confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
-                  });
-                  if (!ok) return;
-                  custom = custom.filter((x) => x.id !== item.id);
-                  renderCustom(); persistCustom();
-                },
-              }, '🗑️'),
-            ]),
-          ]),
-          previewEl,
-        ]));
-      });
-      if (!custom.length) {
-        customWrap.appendChild(el('div', { style: { fontSize: '12px', color: '#888', padding: '4px 0 8px' } },
-          'لا توجد قوالب مخصّصة بعد. أمثلة: «موعد الاستلام»، «عرض رمضان»، «اعتذار عن التأخير».'));
-      }
-      customWrap.appendChild(el('button', {
-        className: 'btn btn--secondary', type: 'button', style: { marginTop: '4px' },
-        onClick: () => {
-          if (custom.length >= MAX_CUSTOM_TEMPLATES) return toast.warning('الحد الأقصى ' + MAX_CUSTOM_TEMPLATES + ' قالباً');
-          openCustomEditor(null, (next) => { custom.push({ id: newCustomId(), enabled: true, ...next }); renderCustom(); persistCustom(); });
-        },
-      }, '➕ قالب جديد'));
-    }
-    renderCustom();
-    applyMasterState();
-
-    /* --- دليل المتغيرات --- */
     body.appendChild(el('div', {
-      style: { fontSize: '12px', color: '#2E8B6F', padding: '10px', background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.9', marginTop: '10px' },
-    }, [
-      el('div', { style: { fontWeight: '600', marginBottom: '2px' } }, '💡 المتغيرات'),
-      ...Object.keys(VARIABLE_DEFS).map((k) => el('div', {}, '{' + k + '} — ' + VARIABLE_DEFS[k].label)),
-      el('div', { style: { marginTop: '4px', color: '#666' } },
-        'كل نوع قالب يقبل متغيراته فقط (يظهر في المحرّر). المعاينة ببيانات تجريبية. المبالغ تتضمّن «ج.م» تلقائياً. السطر الذي يحوي متغيراً فارغاً وحده يُحذف.'),
-    ]));
+      style: {
+        fontSize: '12px', color: '#2E8B6F', padding: '10px',
+        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
+      },
+    }, '💡 المتغيرات: {customer} {amount} {phone}'));
   },
 };
 
-/**
- * محرّر نص القالب (مشترك بين القالب الأساسي والمخصّص):
- * عدّاد · تحذير متغير خاطئ · شرائح إدراج المتغير · معاينة حيّة · استعادة الافتراضي.
- */
-function createTextEditor({ scope, text, defaultText }) {
-  let curScope = scope;
+function openTemplateEditor(tpl, current, onSave) {
   const textarea = el('textarea', { className: 'textarea' });
-  textarea.value = text;
+  textarea.value = current.text;
   textarea.style.minHeight = '120px';
-  textarea.maxLength = MAX_TEMPLATE_LENGTH + 200; /* هامش؛ التحقق الفعلي عند الحفظ */
-
-  const counter = el('div', { style: { fontSize: '11px', color: '#888', textAlign: 'left' } });
-  const warn = el('div', { style: { fontSize: '12px', color: '#C62828', marginTop: '4px', display: 'none' } });
-  const preview = el('div', {
-    style: {
-      fontSize: '12px', color: '#555', padding: '8px', background: '#F6F1E6',
-      borderRadius: '6px', lineHeight: '1.6', whiteSpace: 'pre-wrap', marginTop: '6px',
-    },
-  });
-  const chips = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0' } });
-
-  function update() {
-    const txt = textarea.value;
-    counter.textContent = txt.length + ' / ' + MAX_TEMPLATE_LENGTH;
-    counter.style.color = txt.length > MAX_TEMPLATE_LENGTH ? '#C62828' : '#888';
-    preview.textContent = interpolate(txt, sampleVars(curScope));
-    const unknown = findUnknownVariables(txt, curScope);
-    if (unknown.length) {
-      warn.style.display = '';
-      warn.textContent = '⚠️ متغير غير معروف سيُرسَل كما هو: ' + unknown.map((u) => '{' + u + '}').join(' ');
-    } else {
-      warn.style.display = 'none';
-    }
-  }
-  textarea.addEventListener('input', update);
-
-  function insertVar(key) {
-    const token = '{' + key + '}';
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end = textarea.selectionEnd ?? start;
-    textarea.value = textarea.value.slice(0, start) + token + textarea.value.slice(end);
-    const pos = start + token.length;
-    textarea.focus();
-    try { textarea.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
-    update();
-  }
-  function drawChips() {
-    clear(chips);
-    variablesFor(curScope).forEach((v) => chips.appendChild(el('button', {
-      type: 'button', className: 'btn btn--sm btn--ghost', title: '{' + v.key + '}', onClick: () => insertVar(v.key),
-    }, v.label)));
-  }
-
-  const node = el('div', {}, [
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'نص القالب'), textarea, counter, warn]),
-    el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, 'اضغط لإدراج متغير:'),
-    chips,
-    el('div', { style: { fontSize: '12px', color: '#2E8B6F' } }, 'معاينة:'),
-    preview,
-    defaultText
-      ? el('div', { style: { marginTop: '8px' } }, [el('button', {
-        type: 'button', className: 'btn btn--sm btn--ghost',
-        onClick: () => { textarea.value = defaultText; update(); },
-      }, '↺ استعادة النص الافتراضي')])
-      : null,
-  ]);
-  drawChips();
-  update();
-
-  return {
-    node,
-    setScope(next) { curScope = next; drawChips(); update(); },
-    /** يرجع {ok, text} أو يعرض تنبيهاً ويرجع ok=false. */
-    validate() {
-      const txt = textarea.value.trim();
-      if (!txt) { toast.warning('النص مطلوب'); return { ok: false }; }
-      if (txt.length > MAX_TEMPLATE_LENGTH) { toast.warning('النص أطول من ' + MAX_TEMPLATE_LENGTH + ' حرفاً'); return { ok: false }; }
-      const unknown = findUnknownVariables(txt, curScope);
-      if (unknown.length) { toast.warning('متغير غير معروف: ' + unknown.map((u) => '{' + u + '}').join(' ')); return { ok: false }; }
-      return { ok: true, text: txt };
-    },
-  };
-}
-
-function openTemplateEditor(tpl, currentText, onSave) {
-  const editor = createTextEditor({ scope: tpl.scope, text: currentText, defaultText: tpl.text });
-  const handle = modal.open({
-    title: 'تعديل: ' + tpl.name,
-    body: editor.node,
-    actions: [
-      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
-      {
-        text: 'حفظ', variant: 'primary', action: 'save',
-        onClick: () => {
-          const v = editor.validate();
-          if (!v.ok) return;
-          onSave(v.text);
-          handle.close();
-        },
-      },
-    ],
-  });
-}
-
-/** محرّر قالب مخصّص (جديد أو موجود): الاسم + الأيقونة + النوع + النص. */
-function openCustomEditor(existing, onSave) {
-  const scopeSel = el('select', { className: 'select', 'aria-label': 'النوع' });
-  [['order', 'رسالة طلب — تظهر في زر 📱 بالطلبات'], ['customer', 'رسالة عملاء — تظهر في الحملات']].forEach(([v, l]) => {
-    const o = el('option', { value: v }, l);
-    if ((existing ? existing.scope : 'order') === v) o.selected = true;
-    scopeSel.appendChild(o);
-  });
-  const nameIn = el('input', { className: 'input', type: 'text', maxlength: '40', placeholder: 'اسم القالب' });
-  nameIn.value = existing ? existing.name : '';
-  const iconIn = el('input', { className: 'input', type: 'text', maxlength: '4', placeholder: '💬', style: { width: '70px' } });
-  iconIn.value = existing ? existing.icon : '💬';
-
-  const editor = createTextEditor({ scope: existing ? existing.scope : 'order', text: existing ? existing.text : '', defaultText: '' });
-  scopeSel.addEventListener('change', () => editor.setScope(scopeSel.value));
 
   const body = el('div', {}, [
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم والأيقونة'),
-      el('div', { style: { display: 'flex', gap: '8px' } }, [iconIn, nameIn])]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'النوع'), scopeSel]),
-    editor.node,
+    el('div', { className: 'field' }, [
+      el('label', { className: 'field__label' }, 'نص القالب'),
+      textarea,
+    ]),
   ]);
 
   const handle = modal.open({
-    title: existing ? 'تعديل: ' + existing.name : 'قالب جديد',
+    title: 'تعديل: ' + tpl.name,
     body,
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
       {
         text: 'حفظ', variant: 'primary', action: 'save',
         onClick: () => {
-          const name = nameIn.value.trim();
-          if (!name) return toast.warning('الاسم مطلوب');
-          const v = editor.validate();
-          if (!v.ok) return;
-          onSave({ name, icon: iconIn.value.trim() || '💬', scope: scopeSel.value, text: v.text });
+          const txt = textarea.value.trim();
+          if (!txt) return toast.warning('النص مطلوب');
+          onSave(txt);
           handle.close();
+          toast.success('تم الحفظ');
         },
       },
     ],
@@ -661,30 +418,6 @@ const backupSection = {
     }, '💾 إنشاء نسخة الآن');
     body.appendChild(createBtn);
 
-    /* نسخة خارج الجهاز: النسخ المحلية تضيع مع الجهاز نفسه */
-    const extStatus = el('div', { style: { fontSize: '12px', marginTop: '6px', textAlign: 'center' } });
-    const refreshExt = () => {
-      const d = daysSinceExternalBackup();
-      extStatus.textContent = d === null ? '⚠️ لم تحفظ نسخة خارج هذا الجهاز بعد'
-        : d === 0 ? '✅ حفظت نسخة خارج الجهاز اليوم' : 'آخر نسخة خارج الجهاز: منذ ' + d + ' يوماً';
-      extStatus.style.color = (d === null || d >= 7) ? '#B3261E' : '#2E8B6F';
-    };
-    refreshExt();
-    const shareBtn = el('button', {
-      className: 'btn btn--secondary btn--block', type: 'button', style: { marginTop: '8px' },
-      onClick: async () => {
-        shareBtn.disabled = true;
-        try {
-          const res = await shareLatestBackup();
-          if (res.ok) toast.success(res.method === 'share' ? 'تمت المشاركة' : 'تم تنزيل النسخة — احفظها خارج الجهاز');
-          else if (!res.cancelled) toast.danger('فشل: ' + (res.error || 'خطأ'));
-          await renderBackupsList();
-        } finally { shareBtn.disabled = false; refreshExt(); }
-      },
-    }, '📤 مشاركة نسخة خارج الجهاز (واتساب / تيليجرام / درايف)');
-    body.appendChild(shareBtn);
-    body.appendChild(extStatus);
-
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
     }, '📋 النسخ المحفوظة'));
@@ -736,7 +469,7 @@ const backupSection = {
           onClick: async () => {
             const ok = await modal.confirm({
               title: 'استرجاع نسخة احتياطية',
-              message: '⚠️ سيتم استبدال البيانات الحالية ببيانات هذه النسخة. لا يمكن التراجع!\n(الدفتر المالي لا يُمسح: تُدمج حركاته مع حركات النسخة، وتُحسب الأرصدة منه.)',
+              message: '⚠️ سيتم استبدال كل البيانات الحالية ببيانات هذه النسخة. لا يمكن التراجع!',
               confirmText: 'استرجاع', cancelText: 'إلغاء', danger: true,
             });
             if (!ok) return;
@@ -819,25 +552,23 @@ const backupSection = {
 
 async function exportAllData() {
   try {
+    const db = await import('../../data/idb.js');
     const stores = [
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
     ];
-    const data = { version: 10, exportedAt: Date.now(), stores: {} };
+    const data = { version: 9, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jalabiya-backup-' + localDateInput() + '.json';
-    /* الرابط يجب أن يكون في الـ DOM ولا يُلغى فوراً وإلا يفشل التنزيل في Safari/بعض متصفحات الجوال */
-    document.body.appendChild(a);
+    a.download = 'jalabiya-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    URL.revokeObjectURL(url);
     toast.success('تم تنزيل النسخة');
   } catch (err) {
     toast.danger('فشل: ' + err.message);
@@ -855,13 +586,14 @@ async function importAllData(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!data || !data.stores || typeof data.stores !== 'object') throw new Error('ملف غير صالح');
+    const db = await import('../../data/idb.js');
 
     /* مخازن مسموحة فقط (نفس قائمة التصدير) — لا نكتب في backups/trash ولا في اسم عشوائي */
     const ALLOWED = [
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
     ];
     const plan = {};
     let skipped = 0;
@@ -1008,11 +740,13 @@ const cloudSyncSection = {
         onClick: async () => {
           pushBtn.disabled = true;
           pushBtn.textContent = '⏳ جارٍ الرفع...';
-          /* المسار الآمن: يحمي السحابة من الاستبدال ويعرض خيار الدمج عند التعارض */
-          const res = await pushFlow(currentUser.uid);
+          const res = await firestoreSync.push(currentUser.uid);
           if (res.ok) {
+            localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
+            toast.success('تم رفع البيانات');
             draw();
           } else {
+            toast.danger(res.error || 'فشل الرفع');
             pushBtn.disabled = false;
             pushBtn.textContent = '⬆️ رفع إلى السحابة';
           }
@@ -1023,13 +757,42 @@ const cloudSyncSection = {
         className: 'btn btn--secondary btn--block', type: 'button',
         style: { marginBottom: '8px' },
         onClick: async () => {
+          const ok = await modal.confirm({
+            title: 'تنزيل من السحابة',
+            message: 'سيتم استبدال البيانات المحلية بالبيانات السحابية. متابعة؟',
+            confirmText: 'تنزيل', cancelText: 'إلغاء', danger: true,
+          });
+          if (!ok) return;
           pullBtn.disabled = true;
           pullBtn.textContent = '⏳ جارٍ التنزيل...';
-          /* المسار الآمن: دمج أو استبدال بقرارك + نسخة أمان قبل أي تغيير */
-          const res = await pullFlow(currentUser.uid);
-          if (res.ok) {
+          const res = await firestoreSync.pull(currentUser.uid);
+          if (!res.ok) {
+            toast.danger(res.error || 'فشل التنزيل');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          if (!res.data) {
+            toast.warning('لا توجد بيانات سحابية بعد');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          /* نسخة أمان قبل استبدال البيانات المحلية */
+          const safety = await createBackup({ label: 'قبل التنزيل من السحابة' });
+          if (!safety.ok) {
+            toast.danger('تعذّر إنشاء نسخة أمان — لم تتغير بياناتك');
+            pullBtn.disabled = false;
+            pullBtn.textContent = '⬇️ تنزيل من السحابة';
+            return;
+          }
+          const applyRes = await firestoreSync.apply(res.data);
+          if (applyRes.ok) {
+            localStorage.setItem(STORAGE_KEYS.V3_LAST_SYNC, String(Date.now()));
+            toast.success('تم التنزيل — جارٍ إعادة التحميل...');
             setTimeout(() => location.reload(), 1500);
           } else {
+            toast.danger(applyRes.error || 'فشل التطبيق');
             pullBtn.disabled = false;
             pullBtn.textContent = '⬇️ تنزيل من السحابة';
           }
@@ -1056,7 +819,6 @@ const cloudSyncSection = {
 
     /* --- استماع تلقائي لحالة المصادقة (v3.3.2) --- */
     unsubAuth = authSync.onAuthChange((user) => {
-      autoSync.setUser(user);
       if (destroyed) return;
       currentUser = user || null;
       draw();
@@ -1141,111 +903,7 @@ const imageCompressionSection = {
   },
 };
 
-/* ==========================================================================
-   7. بيانات تجريبية (v3.3.40) — للتجربة السريعة بلا المساس ببياناتك
-   ========================================================================== */
-
-const DEMO_LABELS = {
-  customers: 'عميل', orders: 'طلب', payments: 'دفعة', expenses: 'مصروف',
-  inventory: 'صنف مخزون', workers: 'عامل', appointments: 'موعد', quotes: 'عرض سعر',
-};
-
-const demoDataSection = {
-  id: 'demo-data',
-  icon: '🧪',
-  title: 'بيانات تجريبية',
-  async render(body) {
-    async function draw() {
-      clear(body);
-      const info = await countDemoData();
-
-      body.appendChild(el('p', { style: { fontSize: '13px', color: '#123C2F', lineHeight: '1.7', margin: '0 0 12px 0' } },
-        'تملأ التطبيق بعملاء وطلبات (بكل الحالات) ودفعات ومخزون ناقص ومواعيد وعروض أسعار وهمية، لتجرّب الشاشات والأزرار بسرعة. ' +
-        'كل سجل تجريبي مُعلَّم ولا يختلط ببياناتك: زر الحذف هنا يمسح التجريبي فقط ولا يلمس بياناتك الحقيقية.'));
-
-      const syncSt = autoSync.getStatus();
-      if (syncSt.loggedIn && syncSt.auto) {
-        body.appendChild(el('div', {
-          style: { fontSize: '12px', color: '#B8863B', background: '#FFF8E7', padding: '8px 10px', borderRadius: '8px', marginBottom: '12px', lineHeight: '1.6' },
-        }, '⚠️ المزامنة السحابية التلقائية مفعّلة: قد تُرفع السجلات التجريبية إلى حسابك. الأسلم أن تحذفها بعد التجربة.'));
-      }
-
-      const status = el('div', {
-        style: { fontSize: '13px', padding: '10px 12px', borderRadius: '8px', marginBottom: '12px',
-          background: info.total ? '#FFF3E0' : '#F6F1E6', color: '#123C2F', lineHeight: '1.7' },
-        role: 'status',
-      });
-      if (info.total) {
-        status.appendChild(el('div', { style: { fontWeight: '600' } }, '🧪 توجد ' + info.total + ' سجلاً تجريبياً حالياً'));
-        status.appendChild(el('div', { style: { fontSize: '12px' } },
-          Object.entries(info.byStore).map(([k, n]) => n + ' ' + (DEMO_LABELS[k] || k)).join(' · ')));
-      } else {
-        status.textContent = 'لا توجد بيانات تجريبية الآن.';
-      }
-      body.appendChild(status);
-
-      body.appendChild(el('button', {
-        className: 'btn btn--primary btn--block', type: 'button', style: { marginBottom: '8px' },
-        onClick: async (e) => {
-          const ok = await modal.confirm({
-            title: 'تحميل بيانات تجريبية',
-            message: 'ستُضاف سجلات وهمية مُعلَّمة 🧪 بجانب بياناتك الحالية (لا يُغيَّر شيء من بياناتك). يمكنك حذفها كلها لاحقاً بضغطة من هذه الصفحة.',
-            confirmText: 'حمّل', cancelText: 'إلغاء',
-          });
-          if (!ok) return;
-          e.target.disabled = true;
-          try {
-            const res = await seedDemoData();
-            toast.success('تم تحميل ' + res.total + ' سجلاً تجريبياً');
-          } catch (err) { toast.danger('تعذّر التحميل: ' + err.message); }
-          await draw();
-        },
-      }, info.total ? '🔄 إعادة تحميل البيانات التجريبية' : '🧪 تحميل بيانات تجريبية'));
-
-      const delBtn = el('button', {
-        className: 'btn btn--danger btn--block', type: 'button',
-        onClick: async (e) => {
-          const ok = await modal.confirm({
-            title: 'حذف البيانات التجريبية',
-            message: 'سيُحذف ' + info.total + ' سجلاً تجريبياً فقط. بياناتك الحقيقية لن تُمسّ.',
-            confirmText: 'احذف التجريبي', cancelText: 'إلغاء', danger: true,
-          });
-          if (!ok) return;
-          e.target.disabled = true;
-          try {
-            const n = await clearDemoData();
-            toast.success('تم حذف ' + n + ' سجلاً تجريبياً');
-          } catch (err) { toast.danger('تعذّر الحذف: ' + err.message); }
-          await draw();
-        },
-      }, '🗑️ حذف البيانات التجريبية فقط');
-      delBtn.disabled = !info.total;   /* بالخاصية لا بالسمة: disabled:false في el() يترك السمة فيبقى الزر معطّلاً */
-      body.appendChild(delBtn);
-    }
-    await draw();
-  },
-};
-
 /* --- تصدير --- */
-/** 🛟 الدعم: تقرير مشكلة جاهز للإرسال (إصدار + جهاز + آخر الأخطاء + أعداد السجلات). */
-const supportSection = {
-  id: 'support',
-  icon: '🛟',
-  title: 'الدعم وحل المشاكل',
-  async render(body) {
-    const errCount = getRecentErrors(15).length;
-    body.appendChild(el('p', { style: { fontSize: '13px', color: '#123C2F', lineHeight: '1.7', margin: '0 0 10px 0' } },
-      'لو حدث عطل أو سلوك غريب: اضغط الزر لتجهيز رسالة فيها رقم الإصدار ونوع الجهاز وآخر الأخطاء وأعداد السجلات، وأرسلها بدل وصف العطل أو تصوير الشاشة. ' +
-      'لا تحتوي أسماء عملاء ولا أرقام هواتف ولا مبالغ، وتراها كاملة قبل الإرسال.'));
-    body.appendChild(el('div', { style: { fontSize: '12px', color: '#666', marginBottom: '10px' } },
-      'الإصدار الحالي: v' + APP_INFO.version + ' · أخطاء مسجّلة في هذه الجلسة: ' + errCount));
-    body.appendChild(el('button', {
-      className: 'btn btn--primary btn--block', type: 'button', id: 'btn-report-issue',
-      onClick: () => { openReportIssue(); },
-    }, '🛟 أبلغ عن مشكلة'));
-  },
-};
-
 export const SYSTEM_SECTIONS = [
   notificationsSection,
   occasionsSection,
@@ -1253,6 +911,4 @@ export const SYSTEM_SECTIONS = [
   backupSection,
   cloudSyncSection,
   imageCompressionSection,
-  demoDataSection,
-  supportSection,
 ];

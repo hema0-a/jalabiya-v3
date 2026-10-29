@@ -3,24 +3,24 @@
    ==========================================================================
    - زر ثابت أسفل يسار الشاشة (.fab من components.css).
    - عند الضغط → bottom-sheet بـ 4 إجراءات سريعة.
-   - كل إجراء → يفتح نموذج «جديد» مباشرة (#/orders/new …) عبر core/deeplink.js.
+   - كل إجراء → تنقّل + Toast إرشادي.
    - لا يظهر في #/tests (أداة تطوير).
    - static imports فقط (القاعدة 14).
    ========================================================================== */
 
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
+import { toast } from './toast.js';
 
 /* ==========================================================================
    1. الإجراءات السريعة
    ========================================================================== */
 
 const ACTIONS = [
-  { id: 'order',       icon: '📋', label: 'طلب جديد',    hash: '#/orders/new' },
-  { id: 'customer',    icon: '👤', label: 'عميل جديد',   hash: '#/customers/new' },
-  { id: 'payment',     icon: '💰', label: 'دفعة جديدة',  hash: '#/payments/new' },
-  { id: 'appointment', icon: '📅', label: 'موعد جديد',   hash: '#/appointments/new' },
-  { id: 'expense',     icon: '💸', label: 'مصروف جديد',  hash: '#/expenses/new' },
+  { id: 'order',    icon: '📋', label: 'طلب جديد',    hash: '#/orders',    hint: 'اضغط ➕ إضافة طلب' },
+  { id: 'customer', icon: '👤', label: 'عميل جديد',   hash: '#/customers', hint: 'اضغط ➕ إضافة عميل' },
+  { id: 'payment',  icon: '💰', label: 'دفعة جديدة',  hash: '#/payments',  hint: 'اضغط ➕ إضافة دفعة' },
+  { id: 'expense',  icon: '💸', label: 'مصروف جديد',  hash: '#/expenses',  hint: 'اضغط ➕ إضافة مصروف' },
 ];
 
 /* ==========================================================================
@@ -134,12 +134,16 @@ function handleAction(action) {
   } catch (e) {
     console.warn('[FAB] navigation failed:', e);
   }
+
+  try {
+    setTimeout(() => toast.info('💡 ' + action.hint), 250);
+  } catch { /* ignore */ }
 }
 
 /**
  * فتح قائمة الإجراءات السريعة.
  */
-export function openQuickActions() {
+function openQuickActions() {
   try {
     modal.open({
       title: '⚡ إجراءات سريعة',

@@ -11,7 +11,7 @@
 
 import { settings } from '../data/repos/settings.js';
 import { payments as paymentsRepo } from '../data/repos/payments.js';
-import { withDepositPayments, orderPaidBreakdown } from './payments-view.js';
+import { withDepositPayments } from './payments-view.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 
 /* ==========================================================
@@ -30,16 +30,13 @@ function esc(s) {
 }
 
 /** حالات الطلب. */
-export const STATUS_LABELS = {
+const STATUS_LABELS = {
   pending:     { label: 'قيد الانتظار', cls: 'pending' },
   in_progress: { label: 'قيد التنفيذ', cls: 'in_progress' },
   ready:       { label: 'جاهز للتسليم', cls: 'ready' },
   delivered:   { label: 'تم التسليم', cls: 'delivered' },
   cancelled:   { label: 'ملغي', cls: 'cancelled' },
 };
-
-/** طرق الدفع (للكشف المطبوع وللصورة). */
-export const PAYMENT_METHOD_LABELS = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى', deposit: 'مقدم الطلب' };
 
 /** خرائط الرسوم الإضافية. */
 const FEE_TYPE_LABELS = {
@@ -272,19 +269,8 @@ function buildWorkshopHeader(workshop, docTitle, docNumber, docDate) {
  * @param {Object} workshop
  * @returns {string}
  */
-function buildFooter(workshop, withTerms = false) {
-  /* شروط الورشة (v3.3.51): سطر لكل بند، تظهر على الفاتورة فقط */
-  const termLines = withTerms
-    ? String((workshop && workshop.terms) || '').split('\n').map((l) => l.trim()).filter(Boolean)
-    : [];
-  const termsHtml = termLines.length > 0
-    ? '<div class="terms" style="text-align:right;font-size:11px;color:#555;line-height:1.8;' +
-      'border-top:1px dashed #ccc;margin-top:14px;padding-top:8px;">' +
-      '<div style="font-weight:700;margin-bottom:2px;">شروط الورشة:</div>' +
-      termLines.map((l) => '<div>• ' + esc(l) + '</div>').join('') + '</div>'
-    : '';
+function buildFooter(workshop) {
   return (
-    termsHtml +
     '<div class="footer">' +
       '<div class="thanks">شكراً لتعاملكم معنا 🌹</div>' +
       (workshop.phone    ? '<div>📞 ' + esc(workshop.phone) + '</div>' : '') +
@@ -299,14 +285,15 @@ function buildFooter(workshop, withTerms = false) {
    ========================================================== */
 
 /**
- * نموذج بيانات فاتورة الطلب (المجاميع والمدفوع والمتبقي) — مصدر واحد للطباعة وللصورة،
- * فلا يختلف رقم في الصورة المرسلة للعميل عن الفاتورة المطبوعة.
- * @param {Object} order
- * @returns {Promise<{workshop:Object, items:Array, subtotal:number, discountAmount:number,
- *   extraFeesTotal:number, total:number, deposit:number, paidLabel:string, remaining:number,
- *   statusInfo:{label:string,cls:string}}>}
+ * طباعة فاتورة A4 لطلب واحد.
+ * يدعم البنود المتعددة + الخصم + الرسوم الإضافية + المقدم.
+ * @param {Object} order — سجل الطلب
+ * @param {Object} [customer] — سجل العميل (اختياري)
+ * @returns {Promise<void>}
  */
-export async function buildOrderInvoiceModel(order) {
+export async function printOrderInvoice(order, customer) {
+  if (!order) return;
+
   const workshop = await getWorkshop();
 
   /* البنود (توافق خلفي) */
@@ -318,32 +305,18 @@ export async function buildOrderInvoiceModel(order) {
   const discountAmount = Number(order.discountAmount) || 0;
   const extraFeesTotal = Number(order.extraFeesTotal) || 0;
   const total = Number(order.amount) || 0;
-  /* المدفوع = الدفعات المسجّلة + المقدم غير المسجّل كدفعة (نفس قاعدة بقية التطبيق) */
-  let recordedList = [];
-  try { recordedList = await paymentsRepo.findByOrder(order.id); }
-  catch (e) { /* نكمل بالمقدم */ }
-  const breakdown = orderPaidBreakdown(order, recordedList);
-  const hasRecorded = breakdown.recorded > 0;
-  const deposit = breakdown.paid;
+  /* المدفوع: الدفعات المسجّلة للطلب إن وُجدت، وإلا المقدم (نفس قاعدة بقية التطبيق) */
+  let recordedPaid = 0;
+  try {
+    const recorded = await paymentsRepo.findByOrder(order.id);
+    recordedPaid = recorded.reduce((sum, pm) => sum + (Number(pm.amount) || 0), 0);
+  } catch (e) { /* نكمل بالمقدم */ }
+  const hasRecorded = recordedPaid > 0;
+  const deposit = hasRecorded ? recordedPaid : (Number(order.deposit) || 0);
   const paidLabel = hasRecorded ? 'المدفوع' : 'المقدم';
   const remaining = Math.max(0, total - deposit);
 
   const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
-  return { workshop, items, subtotal, discountAmount, extraFeesTotal, total, deposit, paidLabel, remaining, statusInfo };
-}
-
-/**
- * طباعة فاتورة A4 لطلب واحد.
- * يدعم البنود المتعددة + الخصم + الرسوم الإضافية + المقدم.
- * @param {Object} order — سجل الطلب
- * @param {Object} [customer] — سجل العميل (اختياري)
- * @returns {Promise<void>}
- */
-export async function printOrderInvoice(order, customer) {
-  if (!order) return;
-
-  const { workshop, items, subtotal, discountAmount, extraFeesTotal, total, deposit, paidLabel, remaining, statusInfo } =
-    await buildOrderInvoiceModel(order);
 
   /* صفوف البنود */
   let itemsRows = '';
@@ -488,7 +461,7 @@ export async function printOrderInvoice(order, customer) {
           '</div>'
         : '') +
 
-      buildFooter(workshop, true) +
+      buildFooter(workshop) +
     '</div>';
 
   openPrintWindow('فاتورة #' + String(order.id).slice(-6), html);
@@ -497,26 +470,6 @@ export async function printOrderInvoice(order, customer) {
 /* ==========================================================
    6. printCustomerStatement — كشف حساب عميل
    ========================================================== */
-
-/**
- * نموذج بيانات كشف حساب العميل (الإجماليات + الدفعات بعد دمج المقدم) — مصدر واحد للطباعة وللصورة.
- * @param {Object} customer
- * @param {Array} orders
- * @param {Array} payments
- * @returns {Promise<{workshop:Object, orders:Array, payments:Array, totalOrders:number, totalPaid:number, remaining:number}>}
- */
-export async function buildCustomerStatementModel(customer, orders, payments) {
-  const workshop = await getWorkshop();
-
-  /* نفس قواعد بقية التطبيق: لا تُحسب الطلبات الملغاة، ويُحسب المقدم للطلب بلا دفعات */
-  payments = withDepositPayments(payments || [], orders || []);
-  const totalOrders = (orders || [])
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
-  const totalPaid = (payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const remaining = Math.max(0, totalOrders - totalPaid);
-  return { workshop, orders: orders || [], payments: payments || [], totalOrders, totalPaid, remaining };
-}
 
 /**
  * طباعة كشف حساب شامل لعميل (طلبات + دفعات + إجماليات).
@@ -528,9 +481,15 @@ export async function buildCustomerStatementModel(customer, orders, payments) {
 export async function printCustomerStatement(customer, orders, payments) {
   if (!customer) return;
 
-  const model = await buildCustomerStatementModel(customer, orders, payments);
-  const { workshop, totalOrders, totalPaid, remaining } = model;
-  payments = model.payments;
+  const workshop = await getWorkshop();
+
+  /* نفس قواعد بقية التطبيق: لا تُحسب الطلبات الملغاة، ويُحسب المقدم للطلب بلا دفعات */
+  payments = withDepositPayments(payments || [], orders || []);
+  const totalOrders = (orders || [])
+    .filter((o) => o.status !== 'cancelled')
+    .reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  const totalPaid = (payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const remaining = Math.max(0, totalOrders - totalPaid);
 
   /* صفوف الطلبات */
   let ordersRows = '';
@@ -555,7 +514,7 @@ export async function printCustomerStatement(customer, orders, payments) {
   if (!payments || payments.length === 0) {
     paymentsRows = '<tr><td colspan="3" style="text-align:center;color:#999;padding:20px">لا توجد دفعات</td></tr>';
   } else {
-    const methods = PAYMENT_METHOD_LABELS;
+    const methods = { cash: 'نقدي', instapay: 'InstaPay', vodafone: 'Vodafone', other: 'أخرى', deposit: 'مقدم الطلب' };
     const sorted = [...payments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     sorted.forEach((p) => {
       paymentsRows +=

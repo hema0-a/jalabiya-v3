@@ -5,7 +5,6 @@
    - إحصائيات شاملة (ليّ vs عليّ).
    - صافي الرصيد.
    - لا Cache داخلي — الحساب سريع.
-   - فحص مبلغ الدفعة مقابل المتبقي (v3.3.71): validateLoanPayment / getLoanRemaining.
    ========================================================================== */
 
 import { personalLoans } from '../data/repos/personal-loans.js';
@@ -18,50 +17,6 @@ import { loanPayments } from '../data/repos/loan-payments.js';
  */
 function sumAmounts(list) {
   return list.reduce((s, x) => s + (Number(x.amount) || 0), 0);
-}
-
-/** تقريب لمليمين (يتفادى خطأ الفاصلة العائمة مثل 0.1 + 0.2). */
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-
-/**
- * فحص مبلغ دفعة مقابل المتبقي على القرض (المقارنة بالمليم).
- * @param {number} amount — المبلغ المُدخل
- * @param {number} remaining — المتبقي الحالي
- * @returns {{ok:boolean, code:'ok'|'invalid'|'settled'|'exceeds', remaining:number}}
- */
-export function validateLoanPayment(amount, remaining) {
-  const rem = round2(Math.max(0, Number(remaining) || 0));
-  const amt = Number(amount);
-  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, code: 'invalid', remaining: rem };
-  if (rem <= 0) return { ok: false, code: 'settled', remaining: rem };
-  if (Math.round(amt * 100) > Math.round(rem * 100)) return { ok: false, code: 'exceeds', remaining: rem };
-  return { ok: true, code: 'ok', remaining: rem };
-}
-
-/**
- * القيمة الافتراضية لحقل الدفعة: المتبقي بمليمين (بلا تقريب لأقرب جنيه)،
- * وفارغة إن سُدِّد القرض (كان يرجع لمبلغ القرض كاملاً).
- * @param {{remaining?:number, amount?:number}} loan — قرض مع تفاصيله
- * @returns {string}
- */
-export function defaultPaymentValue(loan) {
-  const hasRemaining = loan && loan.remaining !== undefined && loan.remaining !== null && Number.isFinite(Number(loan.remaining));
-  const rem = round2(hasRemaining ? loan.remaining : (loan && loan.amount));
-  return rem > 0 ? String(rem) : '';
-}
-
-/**
- * المتبقي الحالي على قرض من قاعدة البيانات لحظة الاستدعاء
- * (المبلغ والدفعات يُعاد قراءتهما، فلا يعتمد على بطاقة قديمة).
- * @param {{id:string, amount?:number}} loan
- * @returns {Promise<number>}
- */
-export async function getLoanRemaining(loan) {
-  let fresh = null;
-  try { fresh = await personalLoans.find(loan.id); } catch (e) { /* نكتفي بالبطاقة */ }
-  const amount = Number((fresh || loan).amount) || 0;
-  const paid = await loanPayments.sumByLoan(loan.id);
-  return round2(Math.max(0, amount - paid));
 }
 
 /**

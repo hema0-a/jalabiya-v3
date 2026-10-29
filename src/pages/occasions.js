@@ -9,7 +9,6 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { saveFailMessage } from '../core/save-error.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { settings } from '../data/repos/settings.js';
@@ -75,7 +74,7 @@ async function saveOccasions() {
   try {
     await settings.update({ occasions: state.occasions });
   } catch (e) {
-    toast.danger(saveFailMessage(e));
+    toast.danger('فشل الحفظ: ' + e.message);
   }
 }
 

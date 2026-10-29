@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { formatEGP, formatDate, localDateInput, toCSV } from '../core/utils.js';
+import { formatEGP, formatDate } from '../core/utils.js';
 import { HOUSE_EXPENSE_CATEGORIES } from '../core/config.js';
 
 const CAT_MAP = {};
@@ -17,6 +17,22 @@ HOUSE_EXPENSE_CATEGORIES.forEach((c) => { CAT_MAP[c.id] = c; });
    1. CSV
    ========================================================================== */
 
+/**
+ * تحويل صفوف إلى نص CSV.
+ * @param {Array<Array>} rows
+ * @returns {string}
+ */
+function toCSV(rows) {
+  return rows.map((row) =>
+    row.map((cell) => {
+      const s = String(cell ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',')
+  ).join('\r\n');
+}
 
 /**
  * تصدير مصاريف البيت كـ CSV.
@@ -50,7 +66,7 @@ export function exportCSV(period, list, total) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'house-expenses-' + localDateInput() + '.csv';
+  a.download = 'house-expenses-' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

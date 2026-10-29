@@ -9,12 +9,12 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { inventory, isLowStockItem } from '../data/repos/inventory.js';
+import { inventory } from '../data/repos/inventory.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { previewInventory } from '../ui/quick-preview.js';
-import { formatEGP, toNonNegative, normalizeSearch } from '../core/utils.js';
+import { formatEGP } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -41,7 +41,6 @@ let state = {
   searchQuery: '',
   container: null,
   stats: null,
-  globalThreshold: 5,
 };
 
 /* ==========================================================================
@@ -64,12 +63,10 @@ export function filterInventory(list, category) {
    ========================================================================== */
 
 async function loadData() {
-  const [list, stats, globalThreshold] = await Promise.all([
+  const [list, stats] = await Promise.all([
     inventory.list(),
     inventory.getStats(),
-    inventory.getGlobalThreshold(),
   ]);
-  state.globalThreshold = globalThreshold;
   list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
   state.items = list;
   state.stats = stats;
@@ -145,9 +142,9 @@ function openItemForm(existing = null) {
           const data = {
             name,
             category: categorySelect.value,
-            quantity: toNonNegative(qtyInput.value),
-            minQuantity: toNonNegative(minQtyInput.value),
-            price: toNonNegative(priceInput.value),
+            quantity: Number(qtyInput.value) || 0,
+            minQuantity: Number(minQtyInput.value) || 0,
+            price: Number(priceInput.value) || 0,
             unit: unitInput.value.trim(),
             notes: notesInput.value.trim(),
           };
@@ -192,9 +189,9 @@ function openItemForm(existing = null) {
           const payload = {
             name: nameInput.value,
             category: categorySelect.value,
-            quantity: toNonNegative(qtyInput.value),
-            minQuantity: toNonNegative(minQtyInput.value),
-            price: toNonNegative(priceInput.value),
+            quantity: Number(qtyInput.value) || 0,
+            minQuantity: Number(minQtyInput.value) || 0,
+            price: Number(priceInput.value) || 0,
             unit: unitInput.value,
             notes: notesInput.value,
           };
@@ -254,7 +251,8 @@ async function adjustStock(item, delta) {
 
 function buildItemCard(item) {
   const cat = CATEGORY_MAP[item.category] || CATEGORY_MAP.other;
-  const isLow = isLowStockItem(item, state.globalThreshold);
+  const threshold = Number(item.minQuantity) > 0 ? Number(item.minQuantity) : 5;
+  const isLow = Number(item.quantity) < threshold;
 
   const card = el('div', {
     className: 'card',
@@ -397,11 +395,11 @@ function applyFilters() {
   if (state.activeCategory !== 'all') {
     list = list.filter((i) => (i.category || 'other') === state.activeCategory);
   }
-  const q = normalizeSearch(state.searchQuery);
+  const q = state.searchQuery.trim().toLowerCase();
   if (q) {
     list = list.filter((i) =>
-      normalizeSearch(i.name).includes(q) ||
-      normalizeSearch(i.notes).includes(q)
+      String(i.name || '').toLowerCase().includes(q) ||
+      String(i.notes || '').toLowerCase().includes(q)
     );
   }
   return list;
@@ -483,7 +481,7 @@ export const inventoryPage = {
   destroy() {
     state = {
       items: [], activeCategory: 'all', searchQuery: '',
-      container: null, stats: null, globalThreshold: 5,
+      container: null, stats: null,
     };
   },
 };

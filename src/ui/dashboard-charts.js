@@ -21,15 +21,13 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * إنشاء عنصر SVG.
  * @param {string} tag
  * @param {Object} [attrs]
- * @param {string|number} [text] نص العنصر (لعناصر <text>) — يُضبط عبر textContent فلا خطر حقن HTML
  * @returns {SVGElement}
  */
-function svgEl(tag, attrs = {}, text) {
+function svgEl(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   Object.entries(attrs).forEach(([k, v]) => {
     if (v !== null && v !== undefined) node.setAttribute(k, String(v));
   });
-  if (text !== null && text !== undefined) node.textContent = String(text);
   return node;
 }
 
@@ -41,10 +39,6 @@ function svgEl(tag, attrs = {}, text) {
  * @returns {HTMLElement}
  */
 function chartCard(title, content, opts = {}) {
-  /* bare: داخل قسم أكورديون يحمل العنوان بنفسه — لا بطاقة ولا عنوان مكرر */
-  if (opts.bare) {
-    return el('div', { className: 'dash-chart' }, [content]);
-  }
   const card = el('div', {
     className: 'card',
     style: { marginBottom: '16px', padding: '12px' },
@@ -70,7 +64,7 @@ function chartCard(title, content, opts = {}) {
  * @param {Array<{label:string, value:number}>} days
  * @returns {HTMLElement}
  */
-export function createSalesBarChart(days, opts = {}) {
+export function createSalesBarChart(days) {
   const list = Array.isArray(days) ? days : [];
   const W = 320;
   const H = 140;
@@ -168,7 +162,7 @@ export function createSalesBarChart(days, opts = {}) {
     }, 'لا توجد مبيعات في آخر 7 أيام'));
   }
 
-  return chartCard('📊 مبيعات آخر 7 أيام', svg, opts);
+  return chartCard('📊 مبيعات آخر 7 أيام', svg);
 }
 
 /* ==========================================================================
@@ -180,7 +174,7 @@ export function createSalesBarChart(days, opts = {}) {
  * @param {Object} stats — { pending, in_progress, ready, delivered, cancelled }
  * @returns {HTMLElement}
  */
-export function createOrdersDonutChart(stats, opts = {}) {
+export function createOrdersDonutChart(stats) {
   const s = stats || {};
   const items = [
     { key: 'pending',     label: 'قيد الانتظار', color: '#F57C00', value: Number(s.pending) || 0 },
@@ -292,7 +286,7 @@ export function createOrdersDonutChart(stats, opts = {}) {
   const wrap = el('div', {}, [svg]);
   if (items.length > 0) wrap.appendChild(legend);
 
-  return chartCard('🥧 توزيع الطلبات', wrap, opts);
+  return chartCard('🥧 توزيع الطلبات', wrap);
 }
 
 /* ==========================================================================
@@ -304,7 +298,7 @@ export function createOrdersDonutChart(stats, opts = {}) {
  * @param {Object} finance — { revenue, expenses, profit }
  * @returns {HTMLElement}
  */
-export function createFinanceChart(finance, opts = {}) {
+export function createFinanceChart(finance) {
   const f = finance || { revenue: 0, expenses: 0, profit: 0 };
   const items = [
     { label: 'إيرادات', value: Number(f.revenue) || 0, color: '#2E7D32' },
@@ -372,7 +366,7 @@ export function createFinanceChart(finance, opts = {}) {
     }, it.label));
   });
 
-  return chartCard('💰 الملخص المالي (آخر 30 يوماً)', svg, opts);
+  return chartCard('💰 الملخص المالي (آخر 30 يوماً)', svg);
 }
 
 /* --- تصدير داخلي للاختبار --- */

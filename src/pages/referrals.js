@@ -5,22 +5,13 @@
    - بحث + فلترة بالحالة.
    - CRUD كامل.
    - زر واتساب للمُرشَّح.
-   - [v3.3.45] مكافآت تلقائية: عند تسليم أول طلب للعميل المُحال تظهر الإحالة «🎁 جاهزة
-     للمكافأة» وزر «شكر + مكافأة» يفتح واتساب برسالة للمُرشِّح (قالب قابل للتخصيص).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { referrals } from '../data/repos/referrals.js';
-import { customers } from '../data/repos/customers.js';
-import { orders } from '../data/repos/orders.js';
-import { settings } from '../data/repos/settings.js';
-import { computeReferralRewards, referralVars } from '../services/referral-rewards.js';
-import { renderTemplate, KIND } from '../services/message-templates.js';
-import { sendLogged } from '../services/auto-messages.js';
-import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative, normalizeSearch, phoneMatches } from '../core/utils.js';
+import { formatEGP, formatDate, normalizePhone } from '../core/utils.js';
 
 /* --- الحالة --- */
 let state = {
@@ -29,8 +20,6 @@ let state = {
   stats: null,
   activeFilter: 'all',
   searchQuery: '',
-  rewards: new Map(),
-  settings: null,
 };
 
 /* ==========================================================================
@@ -38,33 +27,13 @@ let state = {
    ========================================================================== */
 
 async function loadData() {
-  const [items, stats, custs, ords, st] = await Promise.all([
+  const [items, stats] = await Promise.all([
     referrals.list(),
     referrals.getStats(),
-    customers.list().catch(() => []),
-    orders.list().catch(() => []),
-    settings.get().catch(() => ({})),
   ]);
   items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   state.items = items;
   state.stats = stats;
-  state.settings = st || {};
-  /* ربط الإحالات بالعملاء وأول طلب مُسلَّم: referralId → {state, referrer, referred, ...} */
-  state.rewards = new Map(computeReferralRewards(items, custs, ords).map((x) => [x.referral.id, x]));
-}
-
-/** عدد الإحالات الجاهزة للمكافأة. */
-const dueCount = () => [...state.rewards.values()].filter((x) => x.state === 'due').length;
-
-function sendReward(item, reward) {
-  const text = renderTemplate(KIND.REFERRAL, referralVars(reward, (state.settings && state.settings.workshop) || {}),
-    (state.settings && state.settings.autoMessages) || null);
-  const phone = reward.referrer && reward.referrer.phone;
-  if (!sendLogged(phone, text, { kind: KIND.REFERRAL, ref: item.id, customerId: reward.referrer ? reward.referrer.id : null })) {
-    toast.warning('رقم هاتف المُرشِّح غير صالح');
-    return;
-  }
-  renderList();   /* لتحديث «آخر إرسال» */
 }
 
 /* ==========================================================================
@@ -96,8 +65,8 @@ function openReferralForm(existing = null) {
 
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
-    ? localDateInput(existing.date)
-    : localDateInput();
+    ? new Date(existing.date).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
 
   const paidCheckbox = el('input', { type: 'checkbox', className: 'toggle__input' });
   paidCheckbox.checked = isEdit ? (existing.status === 'paid') : false;
@@ -114,7 +83,7 @@ function openReferralForm(existing = null) {
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المُرشِّح *'), referrerInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المُرشَّح *'), referredInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'هاتف المُرشَّح (يربط الإحالة بالعميل تلقائياً)'), phoneInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'هاتف المُرشَّح'), phoneInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المكافأة (ج.م)'), rewardInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التاريخ'), dateInput]),
     el('div', { className: 'field' }, [paidToggle]),
@@ -138,8 +107,8 @@ function openReferralForm(existing = null) {
             referrerName,
             referredName,
             referredPhone: phoneInput.value.trim(),
-            reward: toNonNegative(rewardInput.value),
-            date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
+            reward: Number(rewardInput.value) || 0,
+            date: dateInput.value ? new Date(dateInput.value).getTime() : Date.now(),
             status: paidCheckbox.checked ? 'paid' : 'pending',
             note: noteInput.value.trim(),
           };
@@ -234,20 +203,6 @@ function buildReferralCard(item) {
     }, item.note));
   }
 
-  /* حالة المكافأة التلقائية (للمعلّقة فقط) */
-  const rw = isPaid ? null : state.rewards.get(item.id);
-  if (rw) {
-    const sentAt = lastSentIn(loadLog(), { kinds: [KIND.REFERRAL], ref: item.id });
-    const info = {
-      due: ['🎁 جاهزة للمكافأة — ' + (item.referredName || 'العميل') + ' أتمّ أول طلب مُسلَّم', '#2E7D32', '#E8F5E9'],
-      waiting: ['⏳ بانتظار أول طلب مُسلَّم للعميل المُحال', '#6D4C41', '#F5F0EA'],
-      unlinked: ['🔗 المُرشَّح غير مربوط بعميل — أضف هاتفه أو اسماً مطابقاً لعميل موجود', '#757575', '#F5F5F5'],
-    }[rw.state];
-    card.appendChild(el('div', {
-      style: { fontSize: '12px', color: info[1], background: info[2], borderRadius: '6px', padding: '6px 8px', marginBottom: '8px', lineHeight: '1.5' },
-    }, info[0] + (sentAt && rw.state === 'due' ? ' · ✔ فُتح الشكر ' + sinceText(sentAt) : '')));
-  }
-
   /* الأزرار */
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
@@ -256,12 +211,6 @@ function buildReferralCard(item) {
       className: 'btn btn--sm ' + (isPaid ? 'btn--ghost' : 'btn--primary'), type: 'button',
       onClick: () => togglePaid(item),
     }, isPaid ? '↩️ معلقة' : '✅ دفع'),
-    (rw && rw.state === 'due') ? el('button', {
-      className: 'btn btn--sm btn--primary', type: 'button',
-      disabled: (rw.referrer && rw.referrer.phone) ? null : 'disabled',
-      title: (rw.referrer && rw.referrer.phone) ? '' : 'المُرشِّح غير مربوط بعميل له هاتف',
-      onClick: () => sendReward(item, rw),
-    }, '💬 شكر + مكافأة') : null,
     item.referredPhone ? el('button', {
       className: 'btn btn--sm btn--ghost', type: 'button',
       onClick: () => {
@@ -321,7 +270,6 @@ function renderFilters() {
 
   const items = [
     { id: 'all',     label: '🎯 الكل',    count: state.stats.total },
-    { id: 'due',     label: '🎁 جاهزة',   count: dueCount() },
     { id: 'pending', label: '⏳ معلقة',   count: state.stats.pending.count },
     { id: 'paid',    label: '✅ مدفوعة', count: state.stats.paid.count },
   ];
@@ -344,17 +292,15 @@ function renderFilters() {
 
 function applyFilters() {
   let list = state.items;
-  if (state.activeFilter === 'due') {
-    list = list.filter((r) => { const x = state.rewards.get(r.id); return !!x && x.state === 'due'; });
-  } else if (state.activeFilter !== 'all') {
+  if (state.activeFilter !== 'all') {
     list = list.filter((r) => (r.status || 'pending') === state.activeFilter);
   }
-  const q = normalizeSearch(state.searchQuery);
+  const q = state.searchQuery.trim().toLowerCase();
   if (q) {
     list = list.filter((r) =>
-      normalizeSearch(r.referrerName).includes(q) ||
-      normalizeSearch(r.referredName).includes(q) ||
-      phoneMatches(r.referredPhone, q)
+      String(r.referrerName || '').toLowerCase().includes(q) ||
+      String(r.referredName || '').toLowerCase().includes(q) ||
+      String(r.referredPhone || '').includes(q)
     );
   }
   return list;
@@ -460,8 +406,6 @@ export const referralsPage = {
       stats: null,
       activeFilter: 'all',
       searchQuery: '',
-      rewards: new Map(),
-      settings: null,
     };
   },
 };

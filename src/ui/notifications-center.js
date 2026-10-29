@@ -17,13 +17,7 @@ import { appointments } from '../data/repos/appointments.js';
 import { inventory } from '../data/repos/inventory.js';
 import { commitments } from '../data/repos/commitments.js';
 import { settings } from '../data/repos/settings.js';
-import { isPastDue } from '../services/order-timing.js';
-import { assessOrderRisks } from '../services/order-risk.js';
-import { daysSinceExternalBackup } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
-import { alertToggles, filterLowStockForAlerts } from '../services/alert-rules.js';
-import { payments } from '../data/repos/payments.js';
-import { computeReceivables } from '../services/receivables.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -55,22 +49,17 @@ export async function getNotifications() {
   const out = [];
 
   try {
-    /* إعدادات التنبيهات (v3.3.32: كانت تُحفظ ولا تُقرأ) */
-    const s = await settings.get().catch(() => ({}));
-    const tg = alertToggles(s);
-
     /* --- 1. الطلبات --- */
     const allOrders = await orders.list().catch(() => []);
     const now = Date.now();
-    const soonDays = Math.max(DUE_SOON_DAYS, tg.leadDays);
-    const soonMs = now + soonDays * DAY_MS;
+    const soonMs = now + DUE_SOON_DAYS * DAY_MS;
 
     const overdue = allOrders.filter((o) =>
-      isPastDue(o.dueDate, now) &&
+      o.dueDate && o.dueDate < now &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
     const dueSoon = allOrders.filter((o) =>
-      o.dueDate && !isPastDue(o.dueDate, now) && o.dueDate <= soonMs &&
+      o.dueDate && o.dueDate >= now && o.dueDate <= soonMs &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
     const ready = allOrders.filter((o) => o.status === 'ready');
@@ -99,28 +88,9 @@ export async function getNotifications() {
         type: 'warning',
         icon: '⏰',
         title: dueSoon.length + ' طلب مستحق قريباً',
-        subtitle: 'التسليم خلال ' + soonDays + ' أيام',
+        subtitle: 'التسليم خلال ' + DUE_SOON_DAYS + ' أيام',
         route: '#/orders',
         count: dueSoon.length,
-      });
-    }
-
-    /* طلبات في موعدها لكن مؤشراتها تقول إنها ستتأخر (v3.3.47) */
-    const risks = assessOrderRisks(allOrders, {
-      dailyOrderLimit: Number(s && s.dailyLimit && s.dailyLimit.dailyOrderLimit) || 0,
-      dayOffWeekday: Number((s && s.dailyLimit && s.dailyLimit.dayOffWeekday) ?? 0),
-    }, now);
-    if (risks.length > 0) {
-      out.push({
-        type: risks.some((r) => r.level === 'danger') ? 'danger' : 'warning',
-        icon: '⚠️',
-        title: risks.length + ' طلب معرَّض للتأخر',
-        subtitle: risks.slice(0, 2).map((r) => {
-          const c = custMap[r.order.customerId];
-          return (c ? c.name : 'عميل') + ' · ' + r.reasons[0].text;
-        }).join(' — '),
-        route: '#/orders',
-        count: risks.length,
       });
     }
 
@@ -135,21 +105,8 @@ export async function getNotifications() {
       });
     }
 
-    /* --- نسخة خارج الجهاز: النسخ المحلية تضيع مع الجهاز (v3.3.47) --- */
-    const extDays = daysSinceExternalBackup(now);
-    if (allOrders.length >= 3 && (extDays === null || extDays >= 7)) {
-      out.push({
-        type: 'warning',
-        icon: '💾',
-        title: extDays === null ? 'لم تحفظ نسخة احتياطية خارج هذا الجهاز' : 'آخر نسخة خارج الجهاز منذ ' + extDays + ' يوماً',
-        subtitle: 'شاركها لواتساب أو تيليجرام أو درايف من الإعدادات',
-        route: '#/settings',
-        count: 1,
-      });
-    }
-
     /* --- 2. مواعيد اليوم --- */
-    const todayAppts = tg.appointments ? await appointments.getToday().catch(() => []) : [];
+    const todayAppts = await appointments.getToday().catch(() => []);
     if (todayAppts.length > 0) {
       out.push({
         type: 'info',
@@ -164,7 +121,7 @@ export async function getNotifications() {
     }
 
     /* --- 3. نقص المخزون --- */
-    const lowStock = filterLowStockForAlerts(await inventory.getLowStock().catch(() => []), s);
+    const lowStock = await inventory.getLowStock().catch(() => []);
     if (lowStock.length > 0) {
       out.push({
         type: 'warning',
@@ -202,7 +159,8 @@ export async function getNotifications() {
     }
 
     /* --- 5. المناسبات القريبة --- */
-    const occasions = tg.seasons && Array.isArray(s.occasions) ? s.occasions : [];
+    const s = await settings.get().catch(() => ({}));
+    const occasions = Array.isArray(s.occasions) ? s.occasions : [];
     const upcomingOccasions = occasions.filter((o) => {
       if (o.enabled === false) return false;
       const y = today.getFullYear();
@@ -226,22 +184,6 @@ export async function getNotifications() {
         route: '#/occasions',
         count: upcomingOccasions.length,
       });
-    }
-
-    /* --- 6. مديونيات متأخرة (مفتاح «تنبيهات المديونيات») --- */
-    if (tg.debts) {
-      const pays = await payments.list().catch(() => []);
-      const rec = computeReceivables(allOrders, pays, custList, now);
-      if (rec.totals.customersOverdue > 0) {
-        out.push({
-          type: 'warning',
-          icon: '🧾',
-          title: rec.totals.customersOverdue + ' عميل عليه مستحقات متأخرة',
-          subtitle: 'الإجمالي ' + formatEGP(rec.totals.overdue),
-          route: '#/debts',
-          count: rec.totals.customersOverdue,
-        });
-      }
     }
   } catch (e) {
     console.warn('[NotificationsCenter] getNotifications failed:', e);
@@ -355,9 +297,8 @@ export function mount(options = {}) {
   isMounted = true;
   badgeCallback = typeof options.onBadgeChange === 'function' ? options.onBadgeChange : null;
 
-  /* أول حساب للعدّاد يُؤجَّل لوقت الفراغ: كان يقرأ الطلبات والعملاء والدفعات والمواعيد بالتوازي مع رسم الصفحة الأولى فيبطّئها */
-  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => refreshBadge(), { timeout: 1500 });
-  else setTimeout(refreshBadge, 300);
+  /* تحديث فوري */
+  refreshBadge();
 
   /* تحديث دوري كل 60 ثانية */
   refreshTimer = setInterval(refreshBadge, REFRESH_INTERVAL_MS);

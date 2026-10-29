@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sections-data.js — أقسام البيانات (7)
+   sections-data.js — أقسام البيانات (6)
    ==========================================================================
    ⚠️ إصلاح حرج (v3.3.1):
    - لا spread للمفاتيح القديمة (`...inv`, `...dl`, `...gr`, `...pc`).
@@ -10,8 +10,6 @@
 import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
-import { shareCatalog } from '../../ui/quick-preview.js';
-import { portfolio as portfolioRepo } from '../../data/repos/portfolio.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
@@ -211,7 +209,7 @@ const jalabiyaTypesSection = {
         }, [
           el('div', { style: { flex: '1' } }, [
             el('div', { style: { fontSize: '14px', fontWeight: '500' } }, t.name),
-            t.price ? el('div', { style: { fontSize: '11px', color: '#B8863B' } }, t.price + ' ج.م' + (t.portfolioId ? ' · 🖼️' : '')) : null,
+            t.price ? el('div', { style: { fontSize: '11px', color: '#B8863B' } }, t.price + ' ج.م') : null,
           ]),
           el('button', {
             className: 'btn btn--sm btn--ghost', type: 'button',
@@ -235,11 +233,6 @@ const jalabiyaTypesSection = {
       style: { marginTop: '8px' },
       onClick: () => openTypeForm(types, -1, saveFn, rebuild),
     }, '➕ إضافة نوع جديد'));
-    body.appendChild(el('button', {
-      className: 'btn btn--secondary btn--block', type: 'button',
-      style: { marginTop: '6px' },
-      onClick: () => shareCatalog({ types }),
-    }, '📤 مشاركة كتالوج الأسعار'));
     rebuild();
   },
 };
@@ -259,68 +252,9 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   notesInput.value = existing.notes || '';
 
-  /* --- صورة من معرض الأعمال (v3.3.51): تُربط بالنوع وتظهر في كتالوج الأسعار --- */
-  let portfolioId = existing.portfolioId || null;
-  const picPreview = el('div', {
-    style: { width: '96px', height: '96px', borderRadius: '10px', background: '#F6F1E6',
-      border: '2px dashed #E5DDD0', overflow: 'hidden', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: '#999' },
-  }, 'بدون صورة');
-  async function refreshPic() {
-    clear(picPreview);
-    let item = null;
-    if (portfolioId) { try { item = await portfolioRepo.find(portfolioId); } catch { item = null; } }
-    if (item && (item.thumbnail || item.image)) {
-      picPreview.appendChild(el('img', { src: item.thumbnail || item.image, alt: item.title || '',
-        style: { width: '100%', height: '100%', objectFit: 'cover' } }));
-    } else {
-      if (portfolioId) portfolioId = null;   /* الصورة اتحذفت من المعرض */
-      picPreview.textContent = 'بدون صورة';
-    }
-  }
-  async function openPicker() {
-    let items = [];
-    try { items = await portfolioRepo.list(); } catch { items = []; }
-    items = items.filter((x) => x && (x.thumbnail || x.image));
-    const grid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' } });
-    if (items.length === 0) {
-      grid.appendChild(el('div', { style: { gridColumn: '1 / -1', fontSize: '13px', color: '#666', textAlign: 'center', padding: '12px' } },
-        'معرض الأعمال فاضي. أضف صوراً من صفحة معرض الأعمال أولاً.'));
-    }
-    items.forEach((it) => {
-      grid.appendChild(el('button', {
-        type: 'button',
-        style: { border: it.id === portfolioId ? '3px solid #1F6D57' : '1px solid #E5DDD0',
-          borderRadius: '10px', padding: '0', overflow: 'hidden', background: '#fff', cursor: 'pointer' },
-        onClick: () => { portfolioId = it.id; pickerHandle.close(); refreshPic(); },
-      }, [
-        el('img', { src: it.thumbnail || it.image, alt: it.title || '',
-          style: { width: '100%', height: '90px', objectFit: 'cover', display: 'block' } }),
-        el('div', { style: { fontSize: '11px', padding: '3px 4px', color: '#123C2F' } }, it.title || ''),
-      ]));
-    });
-    const pickerHandle = modal.open({
-      title: '🖼️ اختر صورة من المعرض', body: grid, closable: true, variant: 'sheet',
-      actions: [{ text: 'إغلاق', variant: 'ghost', onClick: () => pickerHandle.close() }],
-    });
-  }
-  const picField = el('div', { className: 'field' }, [
-    el('label', { className: 'field__label' }, '🖼️ صورة النوع (من معرض الأعمال)'),
-    el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
-      picPreview,
-      el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, [
-        el('button', { type: 'button', className: 'btn btn--sm btn--secondary', onClick: openPicker }, 'اختيار من المعرض'),
-        el('button', { type: 'button', className: 'btn btn--sm btn--ghost',
-          onClick: () => { portfolioId = null; refreshPic(); } }, 'إزالة الصورة'),
-      ]),
-    ]),
-  ]);
-  refreshPic();
-
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الاسم *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'السعر (ج.م)'), priceInput]),
-    picField,
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
 
@@ -338,7 +272,6 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
             name,
             price: Number(priceInput.value) || 0,
             notes: notesInput.value.trim(),
-            portfolioId: portfolioId || null,
           };
           if (isEdit) {
             types[editIdx] = { ...types[editIdx], ...data };
@@ -641,55 +574,12 @@ const pricingCalculatorSection = {
   },
 };
 
-/* ==========================================================================
-   4ب. سياسة العربون (v3.3.45)
-   ========================================================================== */
-
-const depositPolicySection = {
-  id: 'deposit-policy',
-  icon: '💵',
-  title: 'سياسة العربون',
-  async render(body, currentSettings, saveFn) {
-    const dp = currentSettings.depositPolicy || DEFAULT_SETTINGS.depositPolicy;
-
-    body.appendChild(el('div', { className: 'settings-row' }, [
-      el('div', { style: { flex: '1' } }, [
-        el('div', { className: 'settings-row__label' }, 'تحذير العربون قبل بدء التنفيذ'),
-        el('div', { className: 'settings-row__hint' },
-          'عند تحويل طلب إلى «قيد التنفيذ» والمدفوع (مقدم + دفعات) أقل من النسبة: تظهر نافذة تحذير. لا تمنع شيئاً — «ابدأ على أي حال» متاحة'),
-      ]),
-      createToggle({
-        label: '', checked: dp.enabled !== false,
-        onChange: (v) => { saveFn({ depositPolicy: { enabled: v } }); },
-      }),
-    ]));
-
-    body.appendChild(numberField({
-      label: 'الحد الأدنى للعربون (% من إجمالي الطلب)',
-      hint: 'مثال: 30 ⇒ طلب بـ 1000 ج.م يحتاج 300 ج.م على الأقل',
-      value: dp.minPercent || 30,
-      path: 'depositPolicy',
-      field: 'minPercent',
-      saveFn,
-      attrs: { min: 1, max: 100 },
-    }));
-
-    body.appendChild(el('div', {
-      style: {
-        fontSize: '12px', color: '#2E8B6F', padding: '10px',
-        background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6', marginTop: '8px',
-      },
-    }, '💡 النافذة تعرض زر «📱 اطلب العربون» برسالة جاهزة (قالب «طلب عربون» في الرسائل التلقائية). قيمة خارج 1–100 تُعاد تلقائياً إلى 30.'));
-  },
-};
-
 /* --- تصدير --- */
 export const DATA_SECTIONS = [
   measurementFieldsSection,
   jalabiyaTypesSection,
   inventoryLimitsSection,
   dailyLimitSection,
-  depositPolicySection,
   groupingSection,
   pricingCalculatorSection,
 ];

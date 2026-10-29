@@ -18,7 +18,6 @@ import { savingsGoals as goalsRepo } from './repos/savings-goals.js';
 import { personalLoans as loansRepo } from './repos/personal-loans.js';
 import { referrals as referralsRepo } from './repos/referrals.js';
 import { portfolio as portfolioRepo } from './repos/portfolio.js';
-import { normalizeSearch, phoneMatches } from '../core/utils.js';
 
 /**
  * وصف حالة الطلب (نص + لون).
@@ -46,7 +45,7 @@ function getOrderStatusInfo(status) {
  * }>}
  */
 export async function searchAll(query) {
-  const q = normalizeSearch(query);
+  const q = String(query || '').trim().toLowerCase();
 
   const empty = {
     customers: [], orders: [], payments: [], inventory: [],
@@ -83,7 +82,7 @@ export async function searchAll(query) {
 
   /* 1. العملاء */
   customers.forEach((c) => {
-    if (normalizeSearch(c.name).includes(q) || phoneMatches(c.phone, q)) {
+    if ((c.name || '').toLowerCase().includes(q) || (c.phone || '').includes(q)) {
       results.customers.push({
         id: c.id, type: 'customer', icon: '👤',
         title: c.name || 'بدون اسم',
@@ -98,10 +97,7 @@ export async function searchAll(query) {
     const c = custMap[o.customerId];
     const custName = c ? c.name : '';
     const notes = o.notes || '';
-    /* v3.5.3: يُبحث أيضاً في أسماء بنود الطلب وهاتف العميل (كان لا يجد الطلب إلا باسم العميل أو ملاحظاته) */
-    const itemsText = Array.isArray(o.items) ? o.items.map((it) => (it && it.name) || '').join(' ') : '';
-    if (normalizeSearch(custName).includes(q) || normalizeSearch(notes).includes(q) ||
-        normalizeSearch(itemsText).includes(q) || phoneMatches(c && c.phone, q)) {
+    if (custName.toLowerCase().includes(q) || notes.toLowerCase().includes(q)) {
       results.orders.push({
         id: o.id, type: 'order', icon: '📋',
         title: custName || 'عميل محذوف',
@@ -116,9 +112,9 @@ export async function searchAll(query) {
     const c = custMap[p.customerId];
     const custName = c ? c.name : '';
     if (
-      normalizeSearch(custName).includes(q) ||
-      normalizeSearch(p.amount).includes(q) ||
-      normalizeSearch(p.notes).includes(q)
+      custName.toLowerCase().includes(q) ||
+      String(p.amount || '').includes(q) ||
+      (p.notes || '').toLowerCase().includes(q)
     ) {
       results.payments.push({
         id: p.id, type: 'payment', icon: '💰',
@@ -130,7 +126,7 @@ export async function searchAll(query) {
 
   /* 4. المخزون */
   inventory.forEach((i) => {
-    if (normalizeSearch(i.name).includes(q)) {
+    if ((i.name || '').toLowerCase().includes(q)) {
       results.inventory.push({
         id: i.id, type: 'inventory', icon: '📦',
         title: i.name,
@@ -141,7 +137,7 @@ export async function searchAll(query) {
 
   /* 5. العمال */
   workers.forEach((w) => {
-    if (normalizeSearch(w.name).includes(q) || phoneMatches(w.phone, q)) {
+    if ((w.name || '').toLowerCase().includes(q) || (w.phone || '').includes(q)) {
       results.workers.push({
         id: w.id, type: 'worker', icon: '👷',
         title: w.name || 'عامل',
@@ -153,7 +149,7 @@ export async function searchAll(query) {
   /* 6. المصروفات */
   expenses.forEach((e) => {
     const note = e.notes || e.note || '';
-    if (normalizeSearch(note).includes(q)) {
+    if (note.toLowerCase().includes(q)) {
       results.expenses.push({
         id: e.id, type: 'expense', icon: '💸',
         title: (e.amount || 0) + ' ج.م',
@@ -164,7 +160,7 @@ export async function searchAll(query) {
 
   /* 7. الالتزامات */
   commitments.forEach((c) => {
-    if (normalizeSearch(c.name).includes(q)) {
+    if ((c.name || '').toLowerCase().includes(q)) {
       results.commitments.push({
         id: c.id, type: 'commitment', icon: '💳',
         title: c.name,
@@ -175,7 +171,7 @@ export async function searchAll(query) {
 
   /* 8. أهداف الادخار */
   goals.forEach((g) => {
-    if (normalizeSearch(g.name).includes(q)) {
+    if ((g.name || '').toLowerCase().includes(q)) {
       results.goals.push({
         id: g.id, type: 'goal', icon: '🏦',
         title: g.name,
@@ -186,7 +182,7 @@ export async function searchAll(query) {
 
   /* 9. القروض */
   loans.forEach((l) => {
-    if (normalizeSearch(l.personName).includes(q) || phoneMatches(l.phone, q)) {
+    if ((l.personName || '').toLowerCase().includes(q) || (l.phone || '').includes(q)) {
       results.loans.push({
         id: l.id, type: 'loan', icon: '💵',
         title: l.personName || 'قرض',
@@ -198,9 +194,9 @@ export async function searchAll(query) {
   /* 10. الإحالات */
   referrals.forEach((r) => {
     if (
-      normalizeSearch(r.referrerName).includes(q) ||
-      normalizeSearch(r.referredName).includes(q) ||
-      phoneMatches(r.referredPhone, q)
+      (r.referrerName || '').toLowerCase().includes(q) ||
+      (r.referredName || '').toLowerCase().includes(q) ||
+      (r.referredPhone || '').includes(q)
     ) {
       results.referrals.push({
         id: r.id, type: 'referral', icon: '🤝',
@@ -212,7 +208,7 @@ export async function searchAll(query) {
 
   /* 11. معرض الأعمال */
   portfolio.forEach((p) => {
-    if (normalizeSearch(p.title).includes(q)) {
+    if ((p.title || '').toLowerCase().includes(q)) {
       results.portfolio.push({
         id: p.id, type: 'portfolio', icon: '📸',
         title: p.title,

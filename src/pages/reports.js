@@ -8,7 +8,7 @@ import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { customers } from '../data/repos/customers.js';
 import { formatEGP } from '../core/utils.js';
-import { revenuePayments, withWorkerExpenses } from '../services/payments-view.js';
+import { withDepositPayments, withWorkerExpenses } from '../services/payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
 
 let state = { container: null, activePeriod: 'month' };
@@ -35,7 +35,7 @@ export async function computeReport(period) {
     workerPayments.list().catch(() => []),
   ]);
   const expList = withWorkerExpenses(rawExpList, workerPaysList);
-  const payList = revenuePayments(rawPayList, ordList);
+  const payList = withDepositPayments(rawPayList, ordList);
   const revenue = payList
     .filter((p) => (p.createdAt || 0) >= start)
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -73,14 +73,14 @@ function buildKpiRow(report) {
 /**
  * رسم شريط بياني بسيط.
  */
-function buildBar(label, value, maxValue, color, valueText) {
+function buildBar(label, value, maxValue, color) {
   const width = maxValue > 0 ? Math.max(2, Math.round((value / maxValue) * 100)) : 2;
   return el('div', { style: { marginBottom: '10px' } }, [
     el('div', {
       style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#123C2F', marginBottom: '4px' },
     }, [
       el('span', {}, label),
-      el('span', { style: { fontWeight: '600' } }, valueText != null ? valueText : formatEGP(value)),
+      el('span', { style: { fontWeight: '600' } }, formatEGP(value)),
     ]),
     el('div', {
       style: { background: '#E5DDD0', height: '8px', borderRadius: '4px', overflow: 'hidden' },
@@ -114,13 +114,13 @@ async function buildOrdersByStatus() {
     el('h3', { className: 'card__title' }, '📦 توزيع الطلبات'),
   ]));
   Object.entries(map).forEach(([k, v]) => {
-    card.appendChild(buildBar(labels[k], v, max, 'linear-gradient(90deg, #4FC3F7, #1565C0)', v + ' طلب'));
+    card.appendChild(buildBar(labels[k] + ' (' + v + ')', v, max, 'linear-gradient(90deg, #4FC3F7, #1565C0)'));
   });
   return card;
 }
 
 async function buildTopCustomers() {
-  const allPayments = revenuePayments(await payments.list(), await orders.list());
+  const allPayments = withDepositPayments(await payments.list(), await orders.list());
   const totals = {};
   allPayments.forEach((p) => {
     totals[p.customerId] = (totals[p.customerId] || 0) + (Number(p.amount) || 0);

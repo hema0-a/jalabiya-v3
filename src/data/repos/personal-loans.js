@@ -10,7 +10,6 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
-import { normalizeSearch } from '../../core/utils.js';
 
 const base = createRepository(STORES.PERSONAL_LOANS);
 
@@ -23,11 +22,11 @@ export const personalLoans = {
    * @returns {Promise<Array>}
    */
   async searchByName(query) {
-    const q = normalizeSearch(query);
+    const q = String(query ?? '').trim().toLowerCase();
     const all = await base.list();
     if (!q) return all;
     return all.filter((l) =>
-      normalizeSearch(l.personName).includes(q)
+      String(l.personName || '').toLowerCase().includes(q)
     );
   },
 

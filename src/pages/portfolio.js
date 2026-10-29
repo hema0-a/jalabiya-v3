@@ -11,11 +11,10 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { portfolio } from '../data/repos/portfolio.js';
-import { trash } from '../data/repos/trash.js';
 import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
-import { formatEGP, formatDate, toNonNegative, normalizeSearch } from '../core/utils.js';
+import { formatEGP, formatDate } from '../core/utils.js';
 import { previewPortfolio } from '../ui/quick-preview.js';
 
 /* --- الحالة --- */
@@ -47,11 +46,11 @@ export function filterPortfolio(list, category, query) {
   if (category && category !== 'all') {
     result = result.filter((p) => (p.category || 'other') === category);
   }
-  const q = normalizeSearch(query);
+  const q = String(query ?? '').trim().toLowerCase();
   if (q) {
     result = result.filter((p) =>
-      normalizeSearch(p.title).includes(q) ||
-      normalizeSearch(p.note).includes(q)
+      String(p.title || '').toLowerCase().includes(q) ||
+      String(p.note || '').toLowerCase().includes(q)
     );
   }
   return result;
@@ -186,7 +185,7 @@ function openAddForm() {
               title,
               category: categorySelect.value,
               customerId: customerSelect.value || null,
-              price: toNonNegative(priceInput.value),
+              price: Number(priceInput.value) || 0,
               note: noteInput.value.trim(),
               image: compressedData,
               thumbnail: thumbnailData,
@@ -263,12 +262,11 @@ function openDetail(item) {
       onClick: async () => {
         const ok = await modal.confirm({
           title: 'حذف صورة',
-          message: 'حذف "' + item.title + '"؟ يمكنك استرجاعه من سلة المحذوفات.',
+          message: 'حذف "' + item.title + '" نهائياً؟',
           confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
         });
         if (!ok) return;
         try {
-          await trash.addToTrash('portfolio', item);
           await portfolio.remove(item.id);
           toast.success('تم الحذف');
           handle.close();
@@ -332,7 +330,7 @@ function openEditForm(item) {
               title,
               category: categorySelect.value,
               customerId: customerSelect.value || null,
-              price: toNonNegative(priceInput.value),
+              price: Number(priceInput.value) || 0,
               note: noteInput.value.trim(),
             });
             toast.success('تم الحفظ');
@@ -395,7 +393,7 @@ function buildCard(item) {
     className: 'card',
     style: { padding: '0', overflow: 'hidden', cursor: 'pointer', marginBottom: '0' },
     'data-id': item.id,
-    onClick: () => previewPortfolio(item, () => openEditForm(item), () => openDetail(item)),
+    onClick: () => previewPortfolio(item, () => openEditForm(item)),
   });
 
   card.appendChild(el('img', {

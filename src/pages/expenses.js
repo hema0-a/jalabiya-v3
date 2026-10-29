@@ -6,13 +6,11 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { consumeNew } from '../core/deeplink.js';
 import { expenses } from '../data/repos/expenses.js';
 import { trash } from '../data/repos/trash.js';
-import { checkAmount } from '../services/amount-guard.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, formatDate } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
 
 /* --- مفتاح المسودة --- */
@@ -55,8 +53,8 @@ function openExpenseForm(existing = null) {
   if (isEdit && existing.amount != null) amountInput.value = String(existing.amount);
 
   const dateInput = el('input', { className: 'input', type: 'date' });
-  if (isEdit && existing.date) dateInput.value = localDateInput(existing.date);
-  else dateInput.value = localDateInput();
+  if (isEdit && existing.date) dateInput.value = new Date(existing.date).toISOString().slice(0, 10);
+  else dateInput.value = new Date().toISOString().slice(0, 10);
 
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
@@ -78,18 +76,12 @@ function openExpenseForm(existing = null) {
         variant: 'primary',
         action: 'save',
         onClick: async () => {
-          const chk = checkAmount(amountInput.value);
-          if (chk.level === 'invalid') return toast.warning('أدخل مبلغاً صحيحاً');
-          if (chk.level === 'huge') return toast.warning('المبلغ كبير جداً — تأكد من عدد الأصفار');
-          if (chk.level === 'confirm' && !(await modal.confirm({
-            title: 'مبلغ كبير', message: 'المبلغ ' + formatEGP(chk.amount) + ' كبير جداً. هل الرقم صحيح؟',
-            confirmText: 'نعم، احفظ', cancelText: 'تعديل',
-          }))) return;
-          const amount = chk.amount;
+          const amount = Number(amountInput.value);
+          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
           const data = {
             category: categorySelect.value,
             amount,
-            date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
+            date: dateInput.value ? new Date(dateInput.value).getTime() : Date.now(),
             notes: notesInput.value.trim(),
           };
           try {
@@ -255,7 +247,7 @@ async function refreshAll() {
 }
 
 export const expensesPage = {
-  async render(container, sub) {
+  async render(container) {
     clear(container);
     state.container = container;
     state.activePeriod = 'month';
@@ -274,7 +266,6 @@ export const expensesPage = {
     }));
     container.appendChild(el('div', { id: 'expenses-list' }));
     await refreshAll();
-    consumeNew(sub, 'expenses', () => openExpenseForm());
   },
   destroy() { state = { expenses: [], activePeriod: 'month', container: null }; },
 };

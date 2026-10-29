@@ -6,7 +6,6 @@
 
 import { createRepository } from '../repository.js';
 import { STORES } from '../../core/config.js';
-import { startOfDay, startOfNextDay } from '../../core/day-math.js';
 
 const base = createRepository(STORES.APPOINTMENTS);
 
@@ -65,8 +64,10 @@ export const appointments = {
    * @returns {Promise<Array>}
    */
   async getToday() {
-    const startMs = startOfDay(Date.now());
-    const endMs = startOfNextDay(startMs); /* لا «+24 ساعة»: يوم التوقيت الصيفي 23 أو 25 ساعة */
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    const endMs = startMs + 24 * 60 * 60 * 1000;
     const all = await base.list();
     return all
       .filter((a) => a.date && a.date >= startMs && a.date < endMs)

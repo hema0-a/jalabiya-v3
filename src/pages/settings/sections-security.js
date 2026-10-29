@@ -15,9 +15,6 @@ import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS } from '../../core/config.js';
 import { auth } from '../../security/auth.js';
-import { toLatinDigits } from '../../core/utils.js';
-import * as biometric from '../../security/biometric.js';
-import * as db from '../../data/idb.js';
 
 /* ==========================================================================
    1. الأمان
@@ -41,27 +38,6 @@ const securitySection = {
         className: 'btn btn--primary btn--block', type: 'button',
         onClick: () => openSetPinModal(),
       }, '🔑 تعيين PIN'));
-    }
-
-    /* --- فتح بالبصمة (v3.3.30) — يظهر فقط إن كان الجهاز يدعمها ويوجد PIN --- */
-    if (auth.hasPin() && await biometric.isSupported()) {
-      const bioRow = el('div', { className: 'settings-row' });
-      const drawBio = () => {
-        bioRow.replaceChildren(
-          el('div', { className: 'settings-row__label' }, '🔐 فتح بالبصمة (الرقم السري يبقى احتياطاً)'),
-          el('button', {
-            className: 'btn btn--' + (biometric.isEnabled() ? 'secondary' : 'primary'), type: 'button',
-            onClick: async () => {
-              if (biometric.isEnabled()) { biometric.disable(); toast.success('تم إيقاف البصمة'); drawBio(); return; }
-              try { await biometric.enable(); toast.success('تم تفعيل البصمة'); }
-              catch (err) { toast.error('تعذّر التفعيل: ' + (err && err.name === 'NotAllowedError' ? 'أُلغي الطلب' : (err && err.message || err))); }
-              drawBio();
-            },
-          }, biometric.isEnabled() ? 'إيقاف' : 'تفعيل'),
-        );
-      };
-      drawBio();
-      body.appendChild(bioRow);
     }
 
     /* --- القفل التلقائي --- */
@@ -161,7 +137,7 @@ function openSetPinModal() {
       {
         text: 'تعيين', variant: 'primary', action: 'save',
         onClick: async () => {
-          const pin = toLatinDigits(pinInput.value).trim();
+          const pin = pinInput.value.trim();
           if (!/^\d{4}$/.test(pin)) return toast.warning('PIN يجب أن يكون 4 أرقام');
           try {
             await auth.setPinAndSave(pin);
@@ -207,8 +183,8 @@ function openChangePinModal() {
       {
         text: 'تغيير', variant: 'primary', action: 'save',
         onClick: async () => {
-          const oldPin = toLatinDigits(oldInput.value).trim();
-          const newPin = toLatinDigits(newInput.value).trim();
+          const oldPin = oldInput.value.trim();
+          const newPin = newInput.value.trim();
           if (!/^\d{4}$/.test(oldPin) || !/^\d{4}$/.test(newPin)) {
             return toast.warning('كلا الحقلين يجب أن يكونا 4 أرقام');
           }
@@ -376,6 +352,7 @@ const dangerZoneSection = {
         if (!ok2) return;
 
         try {
+          const db = await import('../../data/idb.js');
           const stores = [
             'customers', 'orders', 'payments', 'inventory', 'workers',
             'expenses', 'appointments', 'trash', 'activity',
@@ -401,6 +378,7 @@ const dangerZoneSection = {
         if (!ok) return;
 
         try {
+          const db = await import('../../data/idb.js');
           await db.remove('settings', 'main');
           toast.success('تمت إعادة التعيين — أعد تحميل الصفحة');
           setTimeout(() => location.reload(), 1500);

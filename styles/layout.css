@@ -2,7 +2,7 @@
    layout.css — هيكل التطبيق (App Shell + Sidebar + Topbar)
    ==========================================================================
    يستخدم متغيرات من base.css.
-   يُحمَّل من index.html بعد components.css.
+   يُستورَد من main.css بعد components.css.
    ========================================================================== */
 
 /* ==========================================================================
@@ -137,57 +137,6 @@
   user-select: none;
 }
 
-/* --- أكورديون القائمة الجانبية + المفضلة (v3.5.0) ---
-   نعيد استعمال مكوّن .collapsible لكن بمظهر قائمة مسطّحة (بلا بطاقة/ظل) داخل السايدبار فقط. */
-.sidebar .collapsible {
-  background: transparent;
-  box-shadow: none;
-  border-radius: var(--radius-m);
-  margin-bottom: 2px;
-  overflow: visible;
-  scroll-margin-top: 0;
-}
-.sidebar .collapsible__header {
-  min-height: 44px;
-  padding: 8px var(--space-m);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-}
-.sidebar .collapsible__header:focus-visible { border-radius: var(--radius-m); }
-.sidebar .collapsible--open > .collapsible__header { background: rgba(31, 109, 87, 0.07); }
-.sidebar .collapsible--open > .collapsible__content { border-top: 0; }
-.sidebar .collapsible__body,
-.sidebar .collapsible--open > .collapsible__content > .collapsible__body { padding: 2px 0 4px; }
-.sidebar__group-items .sidebar__item { padding-inline-start: var(--space-l, 24px); }
-
-.sidebar__row { display: flex; align-items: center; gap: 2px; }
-.sidebar__row .sidebar__item { flex: 1; min-width: 0; }
-.sidebar__star {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: none;
-  border-radius: var(--radius-m);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--color-primary-light);
-  opacity: 0.55;
-  -webkit-tap-highlight-color: transparent;
-}
-.sidebar__star:hover { opacity: 1; background: rgba(31, 109, 87, 0.08); }
-.sidebar__star[aria-pressed="true"] { opacity: 1; color: var(--color-accent); }
-.sidebar__star:focus-visible { outline: 2px solid var(--color-primary-light); outline-offset: -2px; opacity: 1; }
-.sidebar__fav-hint {
-  padding: 4px 12px 8px;
-  font-size: var(--font-size-xs);
-  color: var(--color-primary-light);
-  opacity: 0.85;
-}
-.sidebar__fav-hint[hidden] { display: none; }
-
 .sidebar__footer {
   padding: var(--space-s);
   border-top: 1px solid var(--color-border);
@@ -289,24 +238,4 @@
     margin: 0 auto;
     width: 100%;
   }
-}
-
-/* ==========================================================================
-   5. تحسينات الجوال (v3.3.35)
-   - 100vh أطول من الشاشة المرئية في متصفحات الجوال (شريط العنوان) فيختفي آخر عنصر
-     في القائمة الجانبية؛ dvh يتبع المساحة المرئية فعلاً (والمتصفحات القديمة تبقى على vh).
-   - وضع التطبيق المثبّت: منع «اسحب للتحديث» العرضي الذي يعيد تحميل التطبيق أثناء الكتابة.
-   ========================================================================== */
-@supports (height: 100dvh) {
-  body, .app-shell { min-height: 100dvh; }
-  @media (max-width: 767px) {
-    .sidebar { height: 100dvh; }
-  }
-  @media (min-width: 768px) {
-    .sidebar { height: 100dvh; }
-  }
-}
-.sidebar__nav { padding-bottom: calc(var(--space-m, 16px) + env(safe-area-inset-bottom, 0px)); }
-@media (display-mode: standalone) {
-  html, body { overscroll-behavior-y: none; }
 }

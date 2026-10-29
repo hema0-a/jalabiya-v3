@@ -9,13 +9,12 @@
 import { payments } from '../data/repos/payments.js';
 import { expenses } from '../data/repos/expenses.js';
 import { orders } from '../data/repos/orders.js';
-import { inventory, isLowStockItem } from '../data/repos/inventory.js';
+import { inventory } from '../data/repos/inventory.js';
 import { MONTH_NAMES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { getWriteVersion } from '../data/idb.js';
-import { revenuePayments, withWorkerExpenses } from './payments-view.js';
+import { withDepositPayments, withWorkerExpenses } from './payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
-import { isPastDue } from './order-timing.js';
 
 /* ==========================================================================
    1. Cache
@@ -217,15 +216,14 @@ async function computeFinancials(period) {
   ]);
   const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
 
-  const paymentsList = revenuePayments(rawPayments, ordersList);
+  const paymentsList = withDepositPayments(rawPayments, ordersList);
 
   const { startMs, endMs } = getPeriodRange(period);
   const inRange = (ts) => ts >= startMs && ts < endMs;
 
   const fPayments = paymentsList.filter((p) => inRange(p.createdAt || 0));
   const fExpenses = expensesList.filter((e) => inRange(e.date || 0));
-  /* الطلبات الملغاة لا تدخل في العدد ولا المتوسط */
-  const fOrders   = ordersList.filter((o) => o.status !== 'cancelled' && inRange(o.createdAt || 0));
+  const fOrders   = ordersList.filter((o) => inRange(o.createdAt || 0));
 
   const totalRevenue = sum(fPayments.map((p) => p.amount));
   const totalExpenses = sum(fExpenses.map((e) => e.amount));
@@ -234,9 +232,7 @@ async function computeFinancials(period) {
 
   const totalExpected = ordersList.filter((o) => o.status !== 'cancelled')
     .reduce((s, o) => s + (Number(o.amount) || 0), 0);
-  /* دفعات الطلبات الملغاة لا تُحتسب مقابل المتوقع (وإلا يرتفع معدل التحصيل زيفاً) */
-  const cancelledIds = new Set(ordersList.filter((o) => o.status === 'cancelled').map((o) => o.id));
-  const totalReceived = sum(paymentsList.filter((p) => !cancelledIds.has(p.orderId)).map((p) => p.amount));
+  const totalReceived = sum(paymentsList.map((p) => p.amount));
   const pendingPayments = Math.max(0, totalExpected - totalReceived);
   const collectionRate = safeDiv(totalReceived * 100, totalExpected, 0);
 
@@ -307,18 +303,15 @@ async function computeFinancials(period) {
   const forecast = [];
   for (let i = 1; i <= 3; i++) {
     const d = new Date(y, m + i, 1);
-    /* سقف للاتجاه: وإلا ينفجر التوقع حين يكون نصف الفترة الأول قريباً من الصفر */
-    const cappedTrend = Math.max(-50, Math.min(100, trend));
-    forecast.push({ month: MONTH_NAMES[d.getMonth()], predicted: Math.max(0, avgRevenue * (1 + (cappedTrend / 100) * i)) });
+    forecast.push({ month: MONTH_NAMES[d.getMonth()], predicted: Math.max(0, avgRevenue * (1 + (trend / 100) * i)) });
   }
 
   const nowMs = Date.now();
   const overdueOrdersCount = ordersList.filter((o) =>
-    isPastDue(o.dueDate, nowMs) && o.status !== 'delivered' && o.status !== 'cancelled'
+    o.dueDate && o.dueDate < nowMs && o.status !== 'delivered' && o.status !== 'cancelled'
   ).length;
 
-  const globalLowThreshold = await inventory.getGlobalThreshold().catch(() => 5);
-  const lowStockCount = inventoryList.filter((i) => isLowStockItem(i, globalLowThreshold)).length;
+  const lowStockCount = inventoryList.filter((i) => Number(i.quantity) < 5).length;
 
   const data = {
     summary: { totalRevenue, totalExpenses, netProfit, profitMargin },
@@ -364,8 +357,7 @@ async function computeFinancials(period) {
  * @returns {Promise<Object>}
  */
 export async function getFinancialData(period = 'month') {
-  /* التاريخ جزء من المفتاح: وإلا تبقى أرقام "هذا الشهر" قديمة بعد منتصف الليل/تغيّر الشهر */
-  const key = period + '_' + new Date().toDateString() + '_' + _dataHash + '_' + getWriteVersion();
+  const key = period + '_' + _dataHash + '_' + getWriteVersion();
   if (_cache.has(key)) return _cache.get(key);
   const result = await computeFinancials(period);
   _cache.set(key, result);
