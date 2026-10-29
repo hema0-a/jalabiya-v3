@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.6 — تقسيم لوحة التحكم والطلبات
+   الإصدار: v3.5.7 — تقسيم المعاينات السريعة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.6';
+const CACHE_VERSION = 'v3.5.7';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -252,6 +252,11 @@ const PRECACHE_URLS = [
   './src/ui/onboarding.js',
   './src/ui/order-image-picker.js',
   './src/ui/progressive-list.js',
+  './src/ui/quick-preview-catalog.js',
+  './src/ui/quick-preview-customer.js',
+  './src/ui/quick-preview-entities.js',
+  './src/ui/quick-preview-helpers.js',
+  './src/ui/quick-preview-order.js',
   './src/ui/quick-preview.js',
   './src/ui/report-issue.js',
   './src/ui/sidebar.js',

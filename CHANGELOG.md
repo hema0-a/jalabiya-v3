@@ -5,6 +5,32 @@
 
 ---
 
+## [3.5.7] — 2026-10-29 — تقسيم المعاينات السريعة إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+تقسيم `quick-preview.js` (1150 سطراً ← مدخل + خمس وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+قاعدة التقسيم: الدوال تُنقل **حرفياً** (الكود والتعليقات العربية)، بلا `ctx` وبلا حالة مشتركة.
+
+### 🧩 الملفات
+- **`src/ui/quick-preview.js`** (يبقى المدخل): إعادة تصدير فقط للواجهة العامة (9 دوال).
+- **`quick-preview-helpers.js`** (جديد، 196 سطراً): `_row` · `_stat` · `_listItem` · `_section` · `_acc` · `_progress` · `_whatsapp` · `_closeAction` · `_orderItems` · `_askNumber`.
+- **`quick-preview-catalog.js`** (جديد، 145): `shareCatalog`.
+- **`quick-preview-customer.js`** (جديد، 292): `previewCustomer` + «التفاصيل الكاملة» (مقاسات، عيلة، رصيد ونقاط، طلبات).
+- **`quick-preview-order.js`** (جديد، 243): `previewOrder` + `_orderMeasurementRows`.
+- **`quick-preview-entities.js`** (جديد، 330، ملف واحد): `previewPayment` · `previewCommitment` · `previewGoal` · `previewPortfolio` · `previewInventory` · `previewWorker`.
+
+### 🛡️ قرارات التصميم
+- الاستيراد أحادي الاتجاه: helpers ← catalog ← customer · helpers ← order · helpers ← entities (لا استيراد دائري؛ الوحدات لا تستورد المدخل).
+- `_askNumber` و`_orderItems` في helpers لأن customer وorder كلتيهما تستخدمهما؛ و`_orderMeasurementRows` في order لأنها تُستخدم هناك فقط.
+- تعليق الترويسة القديم عن «dynamic imports» حُذف لأنه لم يكن صحيحاً (كل الاستيرادات static).
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة أسطر الوحدات بالأصل (1023 سطراً غير فارغ): لا فرق سوى كلمة `export` على عشر دوال مساعدة.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.7، وقائمة precache مولَّدة.
+
+---
+
 ## [3.5.6] — 2026-10-29 — تقسيم صفحة الطلبات إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
 المرحلة 2 من خارطة الطريق (الملف الثاني: `orders.js`، 2300 سطر ← 196 سطراً + ثماني وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
