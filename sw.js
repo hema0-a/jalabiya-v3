@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.10 — تقسيم صفحة العمال
+   الإصدار: v3.5.11 — تقسيم صفحة القروض
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.10';
+const CACHE_VERSION = 'v3.5.11';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -87,12 +87,13 @@ const PRECACHE_URLS = [
   './src/pages/appointments.js',
   './src/pages/calendar.js',
   './src/pages/cloud-sync.js',
-  './src/pages/commitments-actions.js',
   './src/pages/commitments-cards.js',
+  './src/pages/commitments-detail.js',
   './src/pages/commitments-forms.js',
-  './src/pages/commitments-load.js',
+  './src/pages/commitments-goals.js',
   './src/pages/commitments-logic.js',
-  './src/pages/commitments-views.js',
+  './src/pages/commitments-overview.js',
+  './src/pages/commitments-page.js',
   './src/pages/commitments.js',
   './src/pages/customers-actions.js',
   './src/pages/customers-cards.js',
@@ -114,6 +115,11 @@ const PRECACHE_URLS = [
   './src/pages/house-expenses.js',
   './src/pages/inventory.js',
   './src/pages/kpis.js',
+  './src/pages/loans-cards.js',
+  './src/pages/loans-detail.js',
+  './src/pages/loans-forms.js',
+  './src/pages/loans-logic.js',
+  './src/pages/loans-views.js',
   './src/pages/loans.js',
   './src/pages/messages.js',
   './src/pages/occasions.js',

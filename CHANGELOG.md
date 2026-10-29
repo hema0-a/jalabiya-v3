@@ -5,32 +5,60 @@
 
 ---
 
-## [3.5.10] — 2026-10-29 — تقسيم صفحة الالتزامات إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+## [3.5.11] — 2026-10-29 — تقسيم صفحة القروض الشخصية إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
-تقسيم `commitments.js` (909 أسطر ← مدخل + 6 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
-القاعدة نفسها كـ v3.5.9: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openCommitmentForm, openGoalForm }`.
+تقسيم `loans.js` (629 سطراً ← مدخل + 5 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+القاعدة نفسها كـ v3.5.8–3.5.10: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
 
 ### 🧩 الملفات
-- **`src/pages/commitments.js`** (يبقى المدخل، 88 سطراً): الحالة + `ctx` + `resetCommitmentsState` + `refreshAll` + `commitmentsPage`.
-- **`commitments-logic.js`** (جديد، 49): `statusColor` · `filterCommitments(items, category, q)` · `filterGoals(items, q)`.
-- **`commitments-load.js`** (جديد، 24): `loadData(state)`.
-- **`commitments-forms.js`** (جديد، 269): `openCommitmentForm(ctx, existing)` · `openPaymentForm(ctx, commitment)` · `openGoalForm(ctx, existing)` · `openGoalDeposit(ctx, goal)`.
-- **`commitments-actions.js`** (جديد، 157): `deleteCommitment(ctx, item)` · `deleteGoal(ctx, goal)` · `openCommitmentPreview` · `openGoalPreview` · `openCommitmentDetail(item)`.
-- **`commitments-cards.js`** (جديد، 157): `buildCommitmentCard(ctx, item)` · `buildGoalCard(ctx, goal)`.
-- **`commitments-views.js`** (جديد، 334): `renderTabs` · `renderStats` · `renderHealth` · `renderAlerts` · `renderSearchBox` · `renderCategoryFilters` · `renderCommitmentsList` · `renderGoalsList` · `renderPage`.
+- **`src/pages/loans.js`** (يبقى المدخل، 138 سطراً): الحالة + `ctx` + `loadData` + `refreshAll` + `loansPage`.
+- **`loans-logic.js`** (جديد، 39): `TYPE_MAP` · `typeColor` · `typeBg` · `applyFilters(state)`.
+- **`loans-forms.js`** (جديد، 175): `openLoanForm(ctx, existing)` · `openPaymentForm(ctx, loan)`.
+- **`loans-detail.js`** (جديد، 129): `openLoanDetail(ctx, loan)`.
+- **`loans-cards.js`** (جديد، 113): `buildLoanCard(ctx, loan)`.
+- **`loans-views.js`** (جديد، 109): `renderStats` · `renderFilters` · `renderList`.
 
 ### 🛡️ قرارات التصميم
-- الاستيراد أحادي الاتجاه: logic ← forms ← actions/cards ← views ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
-- `state` صار `const` يُصفَّر في مكانه عند `destroy` (كان يُعاد إسناده، وهذا كان سيُبقي مرجعاً قديماً داخل `ctx`).
-- معالجا الحذف (التزام/هدف) نُقلا حرفياً من `onClick` داخل البطاقة إلى `deleteCommitment` و`deleteGoal`؛ والفلترة المضمّنة في دالتَي رسم القائمة صارت `filterCommitments` و`filterGoals` بالمنطق نفسه.
-- `statusColor` غير مستخدمة في الأصل (كود ميت)؛ أُبقيت ولم تُحذف (قرار الحذف لإصدار منفصل).
+- الاستيراد أحادي الاتجاه: logic ← forms ← detail ← cards ← views ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
+- `state` صار `const` يُصفَّر في مكانه عند `destroy`؛ `applyFilters` تستلم `state` صراحةً.
+- **ملاحظة (كود ميت):** `typeBg` غير مستدعاة من أي مكان في الأصل؛ أُبقيت حرفياً ولم تُحذف.
+- **ملاحظة (خطأ موروث غير مُصلَح هنا عمداً):** `applyFilters` تستدعي `StringphoneMatches` (اسم غير معرَّف) بدل `phoneMatches`، فالبحث بالهاتف في القروض يرمي ReferenceError. نُقل حرفياً كما هو؛ الإصلاح في إصدار منفصل (نفس الخطأ في `pages/referrals.js` و`data/repos/referrals.js`).
+- الواجهة العامة كما كانت: `loansPage`.
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار (`v3371-loan-payment.test.js` يستورد `loansPage` من نفس المسار). مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.11، وقائمة precache مولَّدة (+5 ملفات).
+
+---
+
+## [3.5.10] — 2026-10-29 — تقسيم صفحة المالية الشخصية (الالتزامات) إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+تقسيم `commitments.js` (909 أسطر ← مدخل + 7 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+القاعدة نفسها كـ v3.5.8/3.5.9: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
+
+### 🧩 الملفات
+- **`src/pages/commitments.js`** (يبقى المدخل، 103 سطراً): الحالة + `ctx` + `loadData` + `refreshAll` + `commitmentsPage`.
+- **`commitments-logic.js`** (جديد، 16): `statusColor`.
+- **`commitments-forms.js`** (جديد، 164): `openCommitmentForm(ctx, existing)` · `openPaymentForm(ctx, commitment)`.
+- **`commitments-detail.js`** (جديد، 80): `openCommitmentDetail(item)`.
+- **`commitments-cards.js`** (جديد، 134): `buildCommitmentCard(ctx, item)` · `renderCommitmentsList(ctx)`.
+- **`commitments-goals.js`** (جديد، 217): `openGoalForm` · `openGoalDeposit` · `buildGoalCard` · `renderGoalsList`.
+- **`commitments-overview.js`** (جديد، 204): `renderTabs` · `renderStats` · `renderHealth` · `renderAlerts` · `renderSearchBox` · `renderCategoryFilters`.
+- **`commitments-page.js`** (جديد، 92): `renderPage(ctx)`.
+
+### 🛡️ قرارات التصميم
+- الاستيراد أحادي الاتجاه: forms/detail/logic ← cards/goals ← overview ← page ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
+- `state` صار `const` يُصفَّر في مكانه عند `destroy`.
+- **ملاحظة:** `statusColor` غير مستدعاة من أي مكان في الأصل (كود ميت قبل التقسيم)؛ أُبقيت حرفياً ومُصدَّرة ولم تُحذف (قرار الحذف لإصدار منفصل).
 - الواجهة العامة كما كانت: `commitmentsPage`.
 
 ### 🧪 الاختبارات
-- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات واستدعاءات `refreshAll` ← `ctx.refresh`.
+- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات.
 
 ### 📦 الإصدار
-- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.10، وقائمة precache مولَّدة (+6 ملفات).
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.10، وقائمة precache مولَّدة (+7 ملفات).
 
 ---
 
