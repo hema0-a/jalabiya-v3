@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.8 — تقسيم صفحة العملاء
+   الإصدار: v3.5.9 — تقسيم صفحة العمال
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.8';
+const CACHE_VERSION = 'v3.5.9';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -131,6 +131,12 @@ const PRECACHE_URLS = [
   './src/pages/tests.js',
   './src/pages/trash.js',
   './src/pages/wall.js',
+  './src/pages/workers-actions.js',
+  './src/pages/workers-cards.js',
+  './src/pages/workers-detail.js',
+  './src/pages/workers-forms.js',
+  './src/pages/workers-logic.js',
+  './src/pages/workers-views.js',
   './src/pages/workers.js',
 
   /* --- src/pages/settings --- */

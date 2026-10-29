@@ -5,6 +5,35 @@
 
 ---
 
+## [3.5.9] — 2026-10-29 — تقسيم صفحة العمال إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+تقسيم `workers.js` (794 سطراً ← مدخل + 6 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+القاعدة نفسها كـ v3.5.8: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
+
+### 🧩 الملفات
+- **`src/pages/workers.js`** (يبقى المدخل، 150 سطراً): الحالة + `ctx` + `loadData` + `refreshAll` + `workersPage` + إعادة تصدير `filterWorkers`.
+- **`workers-logic.js`** (جديد، 52): `SPECIALTIES` · `SALARY_TYPES` · `SALARY_TYPE_MAP` · `filterWorkers` · `getPaidThisMonth(state, workerId)`.
+- **`workers-forms.js`** (جديد، 191): `openWorkerForm(ctx, existing)` · `openPaymentForm(ctx, worker)`.
+- **`workers-detail.js`** (جديد، 107): `openWorkerDetail(ctx, worker)`.
+- **`workers-actions.js`** (جديد، 55): `deleteWorker` · `toggleActive` · `deletePayment`.
+- **`workers-cards.js`** (جديد، 150): `buildWorkerCard(ctx, w)` · `buildPaymentRow(ctx, payment)`.
+- **`workers-views.js`** (جديد، 184): `renderStats` · `renderTabs` · `renderFilters` · `renderList` · `renderPage`.
+
+### 🛡️ قرارات التصميم
+- الاستيراد أحادي الاتجاه: logic ← forms ← detail/cards ← views ← المدخل (actions مستقلة). لا استيراد دائري، والوحدات لا تستورد المدخل.
+- `state` صار `const` يُصفَّر في مكانه عند `destroy`.
+- `getPaidThisMonth` و`applySearch` تستلمان `state` صراحةً (كانتا تقرآن المتغير العام للوحدة).
+- **ملاحظة:** `openWorkerDetail` غير مستدعاة من أي مكان في الأصل (كود ميت قبل التقسيم)؛ أُبقيت حرفياً ومُصدَّرة ولم تُحذف (قرار الحذف لإصدار منفصل).
+- الواجهة العامة كما كانت: `workersPage` · `filterWorkers`.
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.9، وقائمة precache مولَّدة (+6 ملفات).
+
+---
+
 ## [3.5.8] — 2026-10-29 — تقسيم صفحة العملاء إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
 تقسيم `customers.js` (1050 سطراً ← مدخل + 7 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**

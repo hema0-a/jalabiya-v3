@@ -1,6 +1,6 @@
 {
   "name": "jalabiya-v3",
-  "version": "3.5.8",
+  "version": "3.5.9",
   "private": true,
   "description": "ورشة تفصيل الجلابيب V3 — PWA بلا اعتماديات تشغيل",
   "type": "module",
