@@ -53,30 +53,20 @@
 
 ## [3.5.10] — 2026-10-29 — تقسيم صفحة المالية الشخصية (الالتزامات) إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
-تقسيم `commitments.js` (909 أسطر ← مدخل + 7 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
-القاعدة نفسها كـ v3.5.8/3.5.9: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
+تقسيم `commitments.js` (909 أسطر ← مدخل + 6 وحدات). التواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
 
-### 🧩 الملفات
-- **`src/pages/commitments.js`** (يبقى المدخل، 103 سطراً): الحالة + `ctx` + `loadData` + `refreshAll` + `commitmentsPage`.
-- **`commitments-logic.js`** (جديد، 16): `statusColor`.
-- **`commitments-forms.js`** (جديد، 164): `openCommitmentForm(ctx, existing)` · `openPaymentForm(ctx, commitment)`.
-- **`commitments-detail.js`** (جديد، 80): `openCommitmentDetail(item)`.
-- **`commitments-cards.js`** (جديد، 134): `buildCommitmentCard(ctx, item)` · `renderCommitmentsList(ctx)`.
-- **`commitments-goals.js`** (جديد، 217): `openGoalForm` · `openGoalDeposit` · `buildGoalCard` · `renderGoalsList`.
-- **`commitments-overview.js`** (جديد، 204): `renderTabs` · `renderStats` · `renderHealth` · `renderAlerts` · `renderSearchBox` · `renderCategoryFilters`.
-- **`commitments-page.js`** (جديد، 92): `renderPage(ctx)`.
+### 🧩 الملفات (حسب الشجرة الفعلية، commit 3bf58c4)
+- **`src/pages/commitments.js`** (المدخل، 88 سطراً): الحالة + `ctx` + `commitmentsPage`.
+- **`commitments-logic.js`** (49): `statusColor` · `filterCommitments` · `filterGoals`.
+- **`commitments-load.js`** (24): `loadData(state)`.
+- **`commitments-forms.js`** (269): `openCommitmentForm` · `openPaymentForm` · `openGoalForm` · `openGoalDeposit`.
+- **`commitments-cards.js`** (157): `buildCommitmentCard` · `buildGoalCard`.
+- **`commitments-actions.js`** (157): `deleteCommitment` · `deleteGoal` · `openCommitmentPreview` · `openGoalPreview` · `openCommitmentDetail`.
+- **`commitments-views.js`** (334): `renderTabs` · `renderStats` · `renderHealth` · `renderAlerts` · `renderSearchBox` · `renderCategoryFilters` · `renderCommitmentsList` · `renderGoalsList` · `renderPage`.
 
-### 🛡️ قرارات التصميم
-- الاستيراد أحادي الاتجاه: forms/detail/logic ← cards/goals ← overview ← page ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
-- `state` صار `const` يُصفَّر في مكانه عند `destroy`.
-- **ملاحظة:** `statusColor` غير مستدعاة من أي مكان في الأصل (كود ميت قبل التقسيم)؛ أُبقيت حرفياً ومُصدَّرة ولم تُحذف (قرار الحذف لإصدار منفصل).
+### 📝 تصحيح توثيقي (أُجري بعد v3.5.12)
+- كان هذا القسم يصف تقسيماً بديلاً (7 وحدات) لم يُطبَّق في المستودع؛ صُحّح ليطابق الملفات الفعلية أعلاه.
 - الواجهة العامة كما كانت: `commitmentsPage`.
-
-### 🧪 الاختبارات
-- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات.
-
-### 📦 الإصدار
-- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.10، وقائمة precache مولَّدة (+7 ملفات).
 
 ---
 
