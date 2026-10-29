@@ -5,6 +5,35 @@
 
 ---
 
+## [3.5.8] — 2026-10-29 — تقسيم صفحة العملاء إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+تقسيم `customers.js` (1050 سطراً ← مدخل + 7 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+القاعدة نفسها كـ v3.5.6: الدوال تُنقل **حرفياً** (الكود والتعليقات العربية)، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }`.
+
+### 🧩 الملفات
+- **`src/pages/customers.js`** (يبقى المدخل، 142 سطراً): الحالة + `ctx` + `refreshAll` + `customersPage` + إعادة تصدير `filterCustomers`.
+- **`customers-logic.js`** (جديد، 66): `FILTERS` · `SORTS` · `filterCustomers` · `applyFiltersAndSort(list, state)` · `hasMeasurements`.
+- **`customers-load.js`** (جديد، 70): `loadCustomers(state)` (يشمل ترقية VIP التلقائية) · `loadMeasurementFields(state)`.
+- **`customers-measure.js`** (جديد، 141): `buildMeasurementsSection(ctx, existing)` · `openMeasureStepper`.
+- **`customers-form.js`** (جديد، 257): `openCustomerForm(ctx, existing)`.
+- **`customers-actions.js`** (جديد، 175): `deleteCustomer` · `toggleVIP` · `printStatement` · `shareStatementImage` · `showCustomerImage` · `openContactsExport`.
+- **`customers-cards.js`** (جديد، 165): `buildCustomerCard(ctx, c)`.
+- **`customers-views.js`** (جديد، 132): `renderStats` · `renderFilterBar` · `renderSortBar` · `renderList` (+ بناء الأشرطة وحالة الفراغ).
+
+### 🛡️ قرارات التصميم
+- الاستيراد أحادي الاتجاه: logic/load/measure/actions بلا استيراد محلي ← form (measure) · cards (logic + actions) ← views (logic + cards) ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
+- `state` صار `const` يُصفَّر في مكانه عند `destroy` (بدل إعادة الإسناد) كي لا يبقى مرجع قديم في الوحدات.
+- التغيير الوحيد في الأجسام: تمرير `ctx` (وسطر `const { state } = ctx;`) و`refreshAll()` ← `ctx.refresh()` و`openCustomerForm(c)` ← `ctx.openForm(c)`.
+- الواجهة العامة كما كانت: `customersPage` · `filterCustomers`.
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.8، وقائمة precache مولَّدة (+7 ملفات).
+
+---
+
 ## [3.5.7] — 2026-10-29 — تقسيم المعاينات السريعة إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
 تقسيم `quick-preview.js` (1150 سطراً ← مدخل + خمس وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**

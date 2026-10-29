@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.7 — تقسيم المعاينات السريعة
+   الإصدار: v3.5.8 — تقسيم صفحة العملاء
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.7';
+const CACHE_VERSION = 'v3.5.8';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -88,6 +88,13 @@ const PRECACHE_URLS = [
   './src/pages/calendar.js',
   './src/pages/cloud-sync.js',
   './src/pages/commitments.js',
+  './src/pages/customers-actions.js',
+  './src/pages/customers-cards.js',
+  './src/pages/customers-form.js',
+  './src/pages/customers-load.js',
+  './src/pages/customers-logic.js',
+  './src/pages/customers-measure.js',
+  './src/pages/customers-views.js',
   './src/pages/customers.js',
   './src/pages/dashboard-actions.js',
   './src/pages/dashboard-customize.js',
