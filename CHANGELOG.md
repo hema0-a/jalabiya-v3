@@ -5,6 +5,37 @@
 
 ---
 
+## [3.5.6] — 2026-10-29 — تقسيم صفحة الطلبات إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+المرحلة 2 من خارطة الطريق (الملف الثاني: `orders.js`، 2300 سطر ← 196 سطراً + ثماني وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+قاعدة التقسيم: الدوال تُنقل **حرفياً** (الكود والتعليقات العربية)، والتواصل عبر `ctx` صريح `{ state, refresh, openForm }` (لا EventBus، لا استيراد دائري).
+
+### 🧩 الملفات
+- **`src/pages/orders.js`** (يبقى المدخل): الحالة و`ctx` · `loadData` · `refreshAll` · المؤقت الحيّ · `ordersPage` (`render` و`destroy`) · إعادة تصدير الواجهة العامة + غلافان رفيعان لـ `deliverWithSignature(order)` و`openPartialDelivery(order)` بتوقيعهما القديم.
+- **`orders-logic.js`** (جديد): `STATUS_MAP` · `STATUS_ORDER` · `EXTRA_FEE_TYPES` · `filterOrders` · `computeTotals` · `discountPercentOf` · `isDiscountExcessive` · `groupOrders` · `kanbanSorted` · `sessionsOf`. نقي بلا DOM.
+- **`orders-item-rows.js`** (جديد): `buildItemRow` · `buildFeeRow` · `syncTypesDatalist(types)` (صارت تستلم الأنواع معاملاً بدل قراءة الحالة).
+- **`orders-form.js`** (جديد): `openOrderForm(ctx, existing)` منقولة حرفياً (656 سطراً) بلا أي تقسيم داخلي + وضع الإدخال السريع + المسودة التلقائية.
+- **`orders-delivery.js`** (جديد): `deliverWithSignature(ctx, order)` · `openPartialDelivery(ctx, order)` · نافذة تأكيد التسليم.
+- **`orders-actions.js`** (جديد): حذف · تقدّم الحالة · طباعة · مشاركة الفاتورة · الرسائل · المؤقت · عارضا الصورة المرجعية والتوقيع.
+- **`orders-cards.js`** (جديد): البطاقة الكاملة والمصغّرة وصف/بطاقة التجميع.
+- **`orders-summary.js`** (جديد): شريط الحد اليومي · التنبيهات العاجلة · الإحصاءات · البانرات العلوية.
+- **`orders-views.js`** (جديد): القائمة التدريجية · الكانبان · التجميع · مبدّل العروض · الفلاتر (و`disposeOrdersList`).
+
+### 🛡️ قرارات التصميم
+- `state` كائن ثابت طوال عمر الوحدة؛ `destroy()` يصفّره **في مكانه** (`resetOrdersState`) بدل إعادة إسناده، فلا تبقى مراجع قديمة في الوحدات. شكل الحالة بعد `destroy` مطابق لما كان (بلا `riskMap`).
+- `ctx` يُنشأ عند تحميل الوحدة (قبل أي `render`) فتعمل `openPartialDelivery` و`deliverWithSignature` عند استدعائهما قبل فتح الصفحة كما كانت.
+- الوحدات لا تستورد `orders.js`؛ الاستيراد أحادي الاتجاه (logic ← item-rows/summary/actions ← cards ← views، و form ← item-rows).
+- سطر `import { createCollapsible }` باقٍ في `orders.js` بتعليق «يُستخدم من اختبار v354 — لا تحذفه» (الاختبار يقرأ نص الملف).
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار. الإجمالي **2254/2254**؛ و`test:scripts` و30 صفحة و320/360px سليمة.
+- مقارنة DOM حرفية قبل/بعد (18 لقطة: القائمة والفلتر والكانبان والتجميع ونموذج الإضافة بأوضاعه الأربعة والتعديل والتسليم الجزئي والرسائل والمعاينة وتأكيد التسليم والمؤقت وتقدّم الحالة و`destroy` مع إعادة الرسم وتأكيد الحذف): متطابقة.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.6، وقائمة precache مولَّدة.
+
+---
+
 ## [3.5.5] — 2026-10-29 — تقسيم لوحة التحكم إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
 المرحلة 2 من خارطة الطريق (الملف الأول: `dashboard.js`، 858 سطراً ← 204 أسطر + أربع وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
