@@ -1,14 +1,71 @@
 /* ==========================================================================
    payments-view.js — عرض موحّد للمدفوعات الفعلية (مع المقدم)
    ==========================================================================
-   القاعدة (نفس قاعدة المعاينة السريعة quick-preview):
-   - الطلب الذي له دفعات مسجّلة → تُحسب دفعاته فقط.
-   - الطلب بلا أي دفعة وله مقدم (deposit) → يُحسب المقدم كمبلغ مقبوض
-     بتاريخ إنشاء الطلب، حتى لا يظهر المقدم في الفاتورة ويغيب عن الحسابات.
-   - الطلبات الملغاة لا يُضاف مقدمها.
-   لا يكتب شيئاً في قاعدة البيانات — حساب عرض فقط، فلا يوجد تكرار عند
-   تسجيل المقدم لاحقاً كدفعة عادية.
+   القاعدة الموحّدة (الحسابات + المعاينة السريعة + الفاتورة):
+   - المقدم (deposit) حقل في الطلب لا يُنشئ سجل دفعة، فهو مبلغ مقبوض فعلاً.
+   - يُحسب المقدم فوق الدفعات المسجّلة، إلا إذا عُلِّمت دفعة بـ isDeposit=true (من نموذج الدفعة)
+     فلا يُعدّ مرتين. الدفعات القديمة بلا هذا الحقل تُطابَق بالمبلغ (توافق رجعي فقط).
+   - (قبل v3.3.12 كان المقدم يُتجاهل بمجرد وجود أي دفعة على الطلب، فيظهر المدفوع
+     أقل من الحقيقي والمتبقي أكبر.)
+   - الطلبات الملغاة لا يُضاف مقدمها في الحسابات الإجمالية.
+   لا يكتب شيئاً في قاعدة البيانات — حساب عرض فقط.
    ========================================================================== */
+
+const AMOUNT_EPS = 0.009;
+
+/**
+ * المقدم الذي لم يُسجَّل كدفعة (يُضاف للمدفوع).
+ * @param {number|string} deposit — مقدم الطلب
+ * @param {Array} orderPayments — الدفعات المسجّلة لهذا الطلب فقط
+ * @returns {number} المبلغ الواجب إضافته (0 إن لا مقدم أو سُجّل كدفعة)
+ */
+export function unrecordedDeposit(deposit, orderPayments) {
+  const d = Number(deposit) || 0;
+  if (d <= 0) return 0;
+  const list = Array.isArray(orderPayments) ? orderPayments : [];
+  /* 1) علامة صريحة: دفعات عُلِّمت من النموذج بأنها المقدم نفسه.
+        تُخصم قيمتها من المقدم، والباقي (إن رُفع المقدم لاحقاً في الطلب) يبقى غير مسجّل فلا يضيع.
+        (كان وجود أي دفعة معلَّمة يُصفّر المقدم كله: مقدم 500 ودفعة معلَّمة 200 ← يُحسب المدفوع 200 فقط) */
+  const flagged = list.filter((p) => p && p.isDeposit === true);
+  if (flagged.length > 0) {
+    const flaggedSum = flagged.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const rest = Math.round((d - flaggedSum) * 100) / 100;
+    return rest > AMOUNT_EPS ? rest : 0;
+  }
+  /* 2) توافق مع البيانات القديمة فقط (دفعات بلا حقل isDeposit): مطابقة المبلغ.
+        الدفعات الجديدة تحمل isDeposit=false فلا تُطابَق، فلا يضيع المقدم
+        إن دفع العميل لاحقاً دفعة بمبلغ المقدم نفسه. */
+  const recordedAsPayment = list.some((p) => p && p.isDeposit == null &&
+    Math.abs((Number(p.amount) || 0) - d) <= AMOUNT_EPS);
+  return recordedAsPayment ? 0 : d;
+}
+
+/**
+ * إجمالي المدفوع لطلب واحد = الدفعات المسجّلة + المقدم غير المسجّل.
+ * @param {Object} order
+ * @param {Array} orderPayments — دفعات هذا الطلب فقط
+ * @returns {{recorded:number, deposit:number, paid:number}}
+ */
+export function orderPaidBreakdown(order, orderPayments) {
+  const list = Array.isArray(orderPayments) ? orderPayments : [];
+  const recorded = list.reduce((s, p) => s + (Number(p && p.amount) || 0), 0);
+  const deposit = unrecordedDeposit(order && order.deposit, list);
+  return { recorded, deposit, paid: recorded + deposit };
+}
+
+/**
+ * مقدار ما يتجاوزه المدفوع من إجمالي الطلب (0 إن لم يتجاوز).
+ * يُستعمل لتنبيه المستخدم قبل حفظ دفعة أو تخفيض إجمالي طلب عليه مدفوعات.
+ * @param {{amount?:number, deposit?:number}} order — الطلب (بالإجمالي/المقدم المراد فحصهما)
+ * @param {Array} orderPayments — دفعات هذا الطلب فقط
+ * @returns {number} الفائض (بدقة قرشين)
+ */
+export function overpaidBy(order, orderPayments) {
+  const total = Number(order && order.amount) || 0;
+  const paid = orderPaidBreakdown(order, orderPayments).paid;
+  const over = Math.round((paid - total) * 100) / 100;
+  return over > AMOUNT_EPS ? over : 0;
+}
 
 /**
  * @param {Array} paymentsList — الدفعات المسجّلة
@@ -18,18 +75,23 @@
 export function withDepositPayments(paymentsList, ordersList) {
   const payments = Array.isArray(paymentsList) ? paymentsList : [];
   const orders = Array.isArray(ordersList) ? ordersList : [];
-  const paidOrderIds = new Set(payments.map((p) => p && p.orderId).filter(Boolean));
+  const byOrder = new Map();
+  for (const p of payments) {
+    if (!p || !p.orderId) continue;
+    if (!byOrder.has(p.orderId)) byOrder.set(p.orderId, []);
+    byOrder.get(p.orderId).push(p);
+  }
   const extra = [];
 
   for (const o of orders) {
     if (!o || o.status === 'cancelled') continue;
-    const deposit = Number(o.deposit) || 0;
-    if (deposit <= 0 || paidOrderIds.has(o.id)) continue;
+    const amount = unrecordedDeposit(o.deposit, byOrder.get(o.id));
+    if (amount <= 0) continue;
     extra.push({
       id: 'deposit-' + o.id,
       customerId: o.customerId,
       orderId: o.id,
-      amount: deposit,
+      amount,
       method: 'deposit',
       createdAt: o.createdAt || o.receivedDate || 0,
       synthetic: true,
@@ -88,4 +150,47 @@ export function withWorkerExpenses(expensesList, workerPaymentsList) {
     });
   }
   return extra.length > 0 ? expenses.concat(extra) : expenses;
+}
+
+/**
+ * دفعات «الإيراد الفعلي»: كل الدفعات (مع مقدمات الطلبات الافتراضية) **بعد استبعاد دفعات الطلبات الملغاة**.
+ * الطلب الملغى لا إيراد منه: ما دُفع عليه ملك للعميل ويجب ردّه (انظر computeRefundsDue).
+ * (كانت الإيرادات تحسب دفعات الملغى فتتضخم، بينما مقدمه الافتراضي وحده كان يُستبعد.)
+ * ⚠️ لكشف حساب العميل استعمل withDepositPayments (دفعاته على ملغى حقٌّ له ويجب أن يظهر).
+ * @param {Array} paymentsList
+ * @param {Array} ordersList
+ * @returns {Array}
+ */
+export function revenuePayments(paymentsList, ordersList) {
+  const cancelled = new Set((Array.isArray(ordersList) ? ordersList : [])
+    .filter((o) => o && o.status === 'cancelled').map((o) => o.id));
+  return withDepositPayments(paymentsList, ordersList)
+    .filter((p) => !(p && p.orderId && cancelled.has(p.orderId)));
+}
+
+/**
+ * المبالغ المستحقة الردّ للعملاء عن طلبات ملغاة (لم يُسجَّل ردّها بعد).
+ * creditPart: ما دُفع من رصيد العميل (يُعاد لمحفظته)، cashPart: الباقي يُردّ نقداً.
+ * @param {Array} ordersList
+ * @param {Array} paymentsList — الدفعات المسجّلة (بلا الافتراضية)
+ * @returns {{list:Array<{orderId:string, customerId:string, amount:number, creditPart:number, cashPart:number}>, total:number}}
+ */
+export function computeRefundsDue(ordersList, paymentsList) {
+  const byOrder = new Map();
+  for (const p of (Array.isArray(paymentsList) ? paymentsList : [])) {
+    if (!p || p.synthetic || !p.orderId) continue;
+    if (!byOrder.has(p.orderId)) byOrder.set(p.orderId, []);
+    byOrder.get(p.orderId).push(p);
+  }
+  const list = [];
+  for (const o of (Array.isArray(ordersList) ? ordersList : [])) {
+    if (!o || o.status !== 'cancelled' || o.refundedAt) continue;
+    const pays = byOrder.get(o.id) || [];
+    const paid = orderPaidBreakdown(o, pays).paid;
+    if (!(paid > AMOUNT_EPS)) continue;
+    const credit = Math.min(paid, Math.round(pays.filter((p) => p.fromCredit)
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0) * 100) / 100);
+    list.push({ orderId: o.id, customerId: o.customerId, amount: paid, creditPart: credit, cashPart: Math.round((paid - credit) * 100) / 100 });
+  }
+  return { list, total: Math.round(list.reduce((s, r) => s + r.amount, 0) * 100) / 100 };
 }

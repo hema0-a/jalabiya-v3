@@ -1,18 +1,14 @@
 # TODO — مؤجَّلات V3.1
 
-## 🚀 Performance
-- [ ] إعادة النظر في `@import` في CSS (تحويلها إلى `<link>` متعددة أو Concatenation عند البناء).
-
 ## 🔒 Security
-- [ ] إضافة `frame-ancestors` عبر Cloudflare (GitHub Pages لا يدعمها عبر `<meta>`).
+- [ ] إضافة `frame-ancestors` عبر Cloudflare (GitHub Pages لا يدعمها عبر `<meta>`). يحتاج إعداداً خارج الكود.
 
-## 🏗️ Architecture
-- [ ] نقل `DEFAULT_DB` من `schema.js` (تأكيد المكان الصحيح).
-- [ ] مراجعة قيم `SYNC_CONFIG` بعد تصميم `firebase-init.js`.
-
-## 🎯 EventBus
-- [ ] تمرير اسم الحدث في `emit` → `handler(data, event)` لدعم مستمع عام `'*'`.
+## 📒 Ledger (مؤجَّل بقرار)
+- [ ] واجهة مقارنة سطرين لتعارض `id_conflict` — عند ظهور أول تعارض حقيقي.
+- [ ] المرحلة 4: المخزون مرجعاً من الدفتر — قرار المالك (الآن ظلّي عمداً).
+- [ ] تأكد أن `firestore.rules` المنشورة في Firebase Console = ملف المشروع (حارس الإصدار 3003087).
+- [ ] ترحيل الوسائط القديمة المضمَّنة في الطلبات إلى `orderMedia` (مؤجَّل، بلا إصدار محدد).
 
 ## 📌 Notes
-- كل بند يُنفَّذ يُحذف من هنا ويُسجَّل في CHANGELOG (سيُنشأ لاحقاً).
+- كل بند يُنفَّذ يُحذف من هنا ويُسجَّل في CHANGELOG.md (في جذر المشروع).
 - مراجعة القائمة قبل بدء V3.1.

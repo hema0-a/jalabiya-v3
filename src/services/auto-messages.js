@@ -1,91 +1,61 @@
 /* ==========================================================================
-   auto-messages.js — الرسائل التلقائية (WhatsApp)
+   auto-messages.js — الرسائل التلقائية (WhatsApp)  [v3.3.44]
    ==========================================================================
-   - 5 قوالب افتراضية: طلب جديد، بدء تنفيذ، جاهز، شكر، تذكير دفع.
-   - المتغيرات: {customer}, {amount}, {phone}, {orderId}, {date}, {workshop}
-   - يقرأ التخصيصات من settings.autoMessages.templates (تتجاوز الافتراضية).
+   - القوالب ومحرّكها في message-templates.js (نقي)؛ هذا الملف يضيف:
+     قراءة الإعدادات (async)، فتح واتساب، وتسجيل ما أُرسل (message-log.js).
+   - يُعاد تصدير واجهة المحرّك لتبقى الاستيرادات القديمة تعمل.
+   - يقرأ التخصيصات والقوالب المخصّصة من settings.autoMessages.
+   - الرسائل تفتح واتساب برسالة جاهزة؛ المستخدم هو من يضغط «إرسال».
    - Static imports فقط.
    ========================================================================== */
 
 import { settings } from '../data/repos/settings.js';
-import { normalizePhone, formatEGP, formatDate } from '../core/utils.js';
+import { normalizePhone } from '../core/utils.js';
+import {
+  listTemplates, getTemplateSync, isEnabledCfg, interpolate, buildVars,
+} from './message-templates.js';
+import { logMessage, lastSent } from './message-log.js';
 
-/* --- القوالب الافتراضية (5) --- */
-export const DEFAULT_TEMPLATES = [
-  {
-    id: 'new_order',
-    name: 'طلب جديد',
-    icon: '📥',
-    enabled: true,
-    text: 'شكراً لك {customer}، تم استلام طلبك رقم {orderId} بقيمة {amount} ج.م. سنبدأ التنفيذ فوراً 🌹',
-  },
-  {
-    id: 'start_work',
-    name: 'بدء التنفيذ',
-    icon: '🧵',
-    enabled: true,
-    text: 'عميلنا العزيز {customer}، بدأنا في تنفيذ طلبك رقم {orderId}. سنوافيك بكل جديد 🌟',
-  },
-  {
-    id: 'ready',
-    name: 'جاهز للتسليم',
-    icon: '✅',
-    enabled: true,
-    text: 'خبر سعيد يا {customer}! طلبك رقم {orderId} جاهز للتسليم. نتشرف بزيارتك في {workshop} 🎉',
-  },
-  {
-    id: 'thanks',
-    name: 'شكر بعد التسليم',
-    icon: '🌹',
-    enabled: true,
-    text: 'شكراً لثقتك بنا {customer}! نتمنى أن ينال طلبك رضاك. في انتظارك دائماً 🌹',
-  },
-  {
-    id: 'payment_due',
-    name: 'تذكير بالدفع',
-    icon: '💰',
-    enabled: true,
-    text: 'تذكير ودّي يا {customer}: متبقي على طلبك رقم {orderId} مبلغ {amount} ج.م. نتشرف بالسداد في أي وقت 🌸',
-  },
-];
+export {
+  DEFAULT_TEMPLATES, VARIABLES, MAX_TEMPLATE_LENGTH, buildVars, interpolate,
+  findUnknownVariables, sampleVars, variablesFor, listTemplates, getTemplateSync, renderTemplate,
+} from './message-templates.js';
 
 /* ==========================================================================
    1. جلب القوالب
    ========================================================================== */
 
-/**
- * جلب القوالب (المخصصة + الافتراضية).
- * التخصيصات من الإعدادات تتجاوز النص، لكن الـ id يبقى الأساس.
- * @returns {Promise<Array>}
- */
-export async function getTemplates() {
+async function readCfg() {
   try {
     const s = await settings.get();
-    const custom = (s.autoMessages && s.autoMessages.templates) || {};
+    return (s && s.autoMessages) || {};
+  } catch { return {}; }
+}
 
-    return DEFAULT_TEMPLATES.map((tpl) => {
-      const override = custom[tpl.id] || {};
-      return {
-        ...tpl,
-        enabled: override.enabled !== false && tpl.enabled !== false,
-        text: (typeof override.text === 'string' && override.text.trim())
-          ? override.text
-          : tpl.text,
-      };
-    });
-  } catch {
-    return [...DEFAULT_TEMPLATES];
-  }
+/** نسبة العربون المطلوبة (للمتغير {depositDue}). */
+async function readDepositPercent() {
+  try {
+    const s = await settings.get();
+    const p = Number(s && s.depositPolicy && s.depositPolicy.minPercent);
+    return p > 0 ? p : 30;
+  } catch { return 30; }
 }
 
 /**
- * جلب قالب واحد بمعرّفه.
+ * كل القوالب (الافتراضية بعد تخصيصها + المخصّصة).
+ * @returns {Promise<Array>}
+ */
+export async function getTemplates() {
+  return listTemplates(await readCfg());
+}
+
+/**
+ * قالب واحد بمعرّفه.
  * @param {string} id
  * @returns {Promise<Object|null>}
  */
 export async function getTemplate(id) {
-  const all = await getTemplates();
-  return all.find((t) => t.id === id) || null;
+  return getTemplateSync(id, await readCfg());
 }
 
 /**
@@ -93,53 +63,11 @@ export async function getTemplate(id) {
  * @returns {Promise<boolean>}
  */
 export async function isEnabled() {
-  try {
-    const s = await settings.get();
-    return !(s.autoMessages && s.autoMessages.enabled === false);
-  } catch {
-    return true;
-  }
+  try { return isEnabledCfg(await readCfg()); } catch { return true; }
 }
 
 /* ==========================================================================
-   2. المتغيرات
-   ========================================================================== */
-
-/**
- * بناء متغيرات القالب من طلب + عميل.
- * @param {Object} order
- * @param {Object} customer
- * @param {Object} [workshop]
- * @returns {Object}
- */
-export function buildVars(order, customer, workshop = {}) {
-  return {
-    customer: (customer && customer.name) || 'عميلنا',
-    phone: (customer && customer.phone) || '',
-    amount: formatEGP(order ? (order.amount || 0) : 0),
-    orderId: order ? '#' + String(order.id).slice(-6) : '',
-    date: order && order.dueDate ? formatDate(order.dueDate) : formatDate(Date.now()),
-    workshop: workshop.name || 'ورشة الجلابيب',
-  };
-}
-
-/**
- * استبدال المتغيرات في نص القالب.
- * @param {string} text
- * @param {Object} vars
- * @returns {string}
- */
-export function interpolate(text, vars) {
-  let out = String(text || '');
-  Object.keys(vars || {}).forEach((k) => {
-    const re = new RegExp('\\{' + k + '\\}', 'g');
-    out = out.replace(re, String(vars[k] ?? ''));
-  });
-  return out;
-}
-
-/* ==========================================================================
-   3. إرسال WhatsApp
+   2. إرسال WhatsApp
    ========================================================================== */
 
 /**
@@ -151,48 +79,69 @@ export function interpolate(text, vars) {
 export function sendWhatsApp(phone, text) {
   if (!phone) return false;
   const normalized = normalizePhone(phone);
-  const clean = String(normalized).replace(/\D/g, '');
+  let clean = String(normalized).replace(/\D/g, '');
+  if (clean.startsWith('00')) clean = clean.slice(2);   /* 00 = بادئة دولية (wa.me لا يقبلها) */
   if (!clean) return false;
   const url = 'https://wa.me/' + clean + '?text=' + encodeURIComponent(text || '');
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
 
-/* ==========================================================================
-   4. واجهات جاهزة للاستخدام
-   ========================================================================== */
-
 /**
- * بناء قائمة خيارات الرسائل لطلب معيّن.
- * @param {Object} order
- * @param {Object} customer
- * @param {Object} [workshop]
- * @returns {Promise<Array<{id:string, name:string, icon:string, text:string, send:Function}>>}
+ * فتح واتساب + تسجيل الرسالة في السجل (لعرض «آخر إرسال» ومنع التكرار).
+ * @param {string} phone
+ * @param {string} text
+ * @param {{kind:string, ref?:string|null, customerId?:string|null}} [meta]
+ * @returns {boolean}
  */
-export async function getOrderMessageOptions(order, customer, workshop = {}) {
-  if (!order) return [];
-
-  const enabled = await isEnabled();
-  if (!enabled) return [];
-
-  const templates = await getTemplates();
-  const vars = buildVars(order, customer, workshop);
-  const phone = (customer && customer.phone) || '';
-
-  return templates
-    .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      icon: t.icon,
-      text: interpolate(t.text, vars),
-      send: () => sendWhatsApp(phone, interpolate(t.text, vars)),
-      hasPhone: !!phone,
-    }));
+export function sendLogged(phone, text, meta) {
+  const ok = sendWhatsApp(phone, text);
+  if (ok && meta && meta.kind) {
+    try { logMessage(meta); } catch (e) { /* السجل لا يُفشل الإرسال */ }
+  }
+  return ok;
 }
 
 /* ==========================================================================
-   5. تصدير للاختبار
+   3. واجهات جاهزة للاستخدام
    ========================================================================== */
 
-export const _internal = { DEFAULT_TEMPLATES };
+/**
+ * بناء قائمة خيارات الرسائل لطلب معيّن (القوالب المفعَّلة من نوع الطلب،
+ * الافتراضية والمخصّصة معاً).
+ * @param {Object} order
+ * @param {Object} customer
+ * @param {Object|string} [workshop] — كائن settings.workshop
+ * @param {{paid?:number}} [extra]
+ * @returns {Promise<Array<{id:string, name:string, icon:string, text:string, send:Function, hasPhone:boolean, lastSentAt:number|null}>>}
+ */
+export async function getOrderMessageOptions(order, customer, workshop = {}, extra = {}) {
+  if (!order) return [];
+
+  const cfg = await readCfg();
+  if (!isEnabledCfg(cfg)) return [];
+
+  const templates = listTemplates(cfg).filter((t) => t.scope === 'order' && t.enabled);
+  const vars = buildVars(order, customer, workshop, { depositPercent: await readDepositPercent(), ...extra });
+  const phone = (customer && customer.phone) || '';
+  const customerId = (customer && customer.id) || order.customerId || null;
+
+  return templates.map((t) => {
+    const text = interpolate(t.text, vars);
+    return {
+      id: t.id,
+      name: t.name,
+      icon: t.icon,
+      text,
+      send: () => sendLogged(phone, text, { kind: t.id, ref: order.id, customerId }),
+      hasPhone: !!phone,
+      lastSentAt: lastSent({ kinds: [t.id], ref: order.id }),
+    };
+  });
+}
+
+/* ==========================================================================
+   4. تصدير للاختبار
+   ========================================================================== */
+
+export const _internal = { readCfg };

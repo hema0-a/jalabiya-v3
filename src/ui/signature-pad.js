@@ -2,13 +2,17 @@
    signature-pad.js — لوحة التوقيع بالإصبع/الماوس
    ==========================================================================
    - Canvas يستقبل الرسم بالماوس + اللمس.
-   - زر "مسح" + زر "حفظ".
-   - يُرجع Promise<string|null> (base64 PNG أو null عند الإلغاء).
+   - زر "مسح" + زر "حفظ" (+ «تخطي التوقيع» اختيارياً: allowSkip).
+   - يُرجع Promise<string|null|SIGNATURE_SKIPPED> (base64 PNG، أو null عند الإلغاء،
+     أو SIGNATURE_SKIPPED إن اختار المستخدم المتابعة بلا توقيع).
    - متوافق مع modal.js الحالي (variant: 'sheet').
    ========================================================================== */
 
 import { el } from '../core/dom.js';
 import { modal } from './modal.js';
+
+/** قيمة تُرجَع عند «تخطي التوقيع» (تختلف عن null = إلغاء العملية كلها). */
+export const SIGNATURE_SKIPPED = Symbol.for('jalabiya.signature.skipped');
 
 /* --- الأبعاد الداخلية للـ canvas (resolution مستقل) --- */
 const CANVAS_W = 800;
@@ -21,12 +25,14 @@ const LINE_COLOR = '#123C2F';
  * @param {Object} [options]
  * @param {string} [options.title='توقيع التسليم'] — عنوان النافذة
  * @param {string} [options.hint=''] — نص مساعد يظهر أسفل اللوحة
- * @returns {Promise<string|null>} — base64 PNG أو null إن ألغى المستخدم
+ * @param {boolean} [options.allowSkip=false] — يُظهر زر «تخطي التوقيع»
+ * @returns {Promise<string|null|symbol>} — base64 PNG، أو null إن ألغى المستخدم، أو SIGNATURE_SKIPPED
  */
 export function openSignaturePad(options = {}) {
   const {
     title = 'توقيع التسليم',
     hint = 'وقّع بإصبعك أو بالماوس في المساحة أدناه',
+    allowSkip = false,
   } = options;
 
   return new Promise((resolve) => {
@@ -180,6 +186,11 @@ export function openSignaturePad(options = {}) {
           variant: 'ghost',
           onClick: () => { finish(null); handle.close(); },
         },
+        ...(allowSkip ? [{
+          text: '⏭️ تخطي التوقيع',
+          variant: 'secondary',
+          onClick: () => { finish(SIGNATURE_SKIPPED); handle.close(); },
+        }] : []),
         {
           text: '✅ حفظ التوقيع',
           variant: 'primary',

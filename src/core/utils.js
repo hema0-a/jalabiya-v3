@@ -10,13 +10,25 @@
    ========================================================================== */
 
 /**
+ * تحويل الأرقام العربية-الهندية (٠-٩) والفارسية (۰-۹) إلى لاتينية.
+ * لوحات المفاتيح العربية تُدخل هذه الأرقام فكانت تُرفض في الهاتف والرقم السري.
+ * @param {*} value
+ * @returns {string}
+ */
+export function toLatinDigits(value) {
+  return String(value == null ? '' : value)
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
+}
+
+/**
  * التحقق من رقم هاتف مصري (01x + 8 أرقام).
  * يقبل: 010/011/012/015.
  * @param {*} phone
  * @returns {boolean}
  */
 export function isEgyptPhone(phone) {
-  const clean = String(phone || '').replace(/\D/g, '');
+  const clean = toLatinDigits(phone).replace(/\D/g, '');
   return /^01[0125]\d{8}$/.test(clean) || /^201[0125]\d{8}$/.test(clean);
 }
 
@@ -36,7 +48,7 @@ export function isEmail(email) {
  * @returns {boolean}
  */
 export function isValidPin(pin) {
-  return /^\d{4}$/.test(String(pin || ''));
+  return /^\d{4}$/.test(toLatinDigits(pin));
 }
 
 /**
@@ -45,8 +57,15 @@ export function isValidPin(pin) {
  * @returns {string} رقم بصيغة +20... أو السلسلة الأصلية
  */
 export function normalizePhone(phone) {
-  const clean = String(phone || '').replace(/\D/g, '');
+  let clean = toLatinDigits(phone).replace(/\D/g, '');
+  /* بادئة الاتصال الدولي 00 (0020…) = + */
+  if (clean.startsWith('00')) clean = clean.slice(2);
+  /* +20 (0)10… : صفر زائد بعد رمز الدولة */
+  if (/^2001[0125]\d{8}$/.test(clean)) clean = '20' + clean.slice(3);
   if (/^01[0125]\d{8}$/.test(clean)) return '+20' + clean.slice(1);
+  /* رقم بلا الصفر الأول (يحدث عند النسخ من Excel أو جهات الاتصال): 10 أرقام تبدأ 10/11/12/15.
+     كان يُترك كما هو فيصير wa.me/1012345678 = رقم أمريكي/كندي (+1) فتصل رسالة العميل لغريب. */
+  if (/^1[0125]\d{8}$/.test(clean)) return '+20' + clean;
   if (/^201[0125]\d{8}$/.test(clean)) return '+' + clean;
   return String(phone || '');
 }
@@ -56,6 +75,9 @@ export function normalizePhone(phone) {
    ========================================================================== */
 
 const AR_LOCALE = 'ar-EG-u-nu-latn';
+/* إنشاء Intl.*Format مكلف جداً (مئات المرات في الصفحة الواحدة) — نُنشئه مرة ونعيد استخدامه */
+const _dateCache = new Map();
+let _dateFmt = null, _timeFmt = null, _egpFmt = null;
 
 /**
  * صياغة عدد بالعربية حسب قواعد التمييز.
@@ -86,9 +108,15 @@ export function formatDate(date) {
   if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(AR_LOCALE, {
+  const ts = d.getTime();
+  const hit = _dateCache.get(ts);
+  if (hit !== undefined) return hit;
+  const out = (_dateFmt || (_dateFmt = new Intl.DateTimeFormat(AR_LOCALE, {
     year: 'numeric', month: 'long', day: 'numeric',
-  }).format(d);
+  }))).format(d);
+  if (_dateCache.size > 3000) _dateCache.clear();
+  _dateCache.set(ts, out);
+  return out;
 }
 
 /**
@@ -100,9 +128,9 @@ export function formatTime(date) {
   if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(AR_LOCALE, {
+  return (_timeFmt || (_timeFmt = new Intl.DateTimeFormat(AR_LOCALE, {
     hour: '2-digit', minute: '2-digit', hour12: true,
-  }).format(d);
+  }))).format(d);
 }
 
 /**
@@ -151,10 +179,10 @@ export function relativeTime(timestamp) {
 export function formatEGP(amount) {
   const num = Number(amount);
   if (!isFinite(num)) return '0 ج.م';
-  const formatted = new Intl.NumberFormat(AR_LOCALE, {
+  const formatted = (_egpFmt || (_egpFmt = new Intl.NumberFormat(AR_LOCALE, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(num);
+  }))).format(num);
   return `${formatted} ج.م`;
 }
 
@@ -214,4 +242,114 @@ export function throttle(fn, ms = 300) {
  */
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+
+/**
+ * تحويل قيمة حقل إدخال إلى رقم غير سالب (للمبالغ والأسعار والكميات).
+ * حقول type="number" لا تمنع كتابة القيم السالبة يدوياً (min للتحقق فقط)، لذا تُنظَّف هنا.
+ * القيم غير الرقمية أو السالبة أو اللانهائية تُعاد كصفر.
+ * @param {*} value
+ * @returns {number}
+ */
+export function toNonNegative(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * تاريخ محلي بصيغة YYYY-MM-DD لحقول <input type="date">.
+ * toISOString() يعيد تاريخ UTC فيظهر «أمس» بين منتصف الليل وفجراً بتوقيت مصر؛ هنا نستخدم أجزاء التاريخ المحلية.
+ * @param {number|Date} [value] — الافتراضي الآن
+ * @returns {string}
+ */
+export function localDateInput(value = Date.now()) {
+  const d = value instanceof Date ? value : new Date(value);
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+/**
+ * تحويل قيمة <input type="date"> (YYYY-MM-DD) إلى timestamp.
+ * يُحفظ التاريخ عند الساعة 12:00 ظهراً بالتوقيت المحلي، فيبقى اليوم نفسه في أي منطقة زمنية
+ * (كان يُحفظ كمنتصف ليل UTC فيظهر يوماً سابقاً لمن توقيته غرب UTC).
+ * يتبادل مع localDateInput() بلا انزياح.
+ * @param {string} str
+ * @returns {number|null} null إن كانت القيمة فارغة أو غير صالحة
+ */
+export function parseDateInput(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toLatinDigits(str).trim());
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]) - 1, day = Number(m[3]);
+  const d = new Date(y, mo, day, 12, 0, 0, 0);
+  /* رفض التواريخ المتجاوزة (مثل 2026-13-45 أو 2026-02-31) بدل تحويلها بصمت لتاريخ آخر */
+  if (isNaN(d.getTime()) || d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) return null;
+  return d.getTime();
+}
+
+/**
+ * خلية CSV آمنة (v3.5.3).
+ * - تُحيَّد الصيغ: الخلية النصية التي تبدأ بـ = أو + أو - أو @ أو Tab أو CR تُسبق بـ ' فلا يُنفّذها Excel/Sheets
+ *   (حقن صيغ CSV: اسم عميل مثل =HYPERLINK(...) كان يُصدَّر كما هو).
+ *   الأرقام (بما فيها السالبة وأرقام الهاتف الدولية +2010…) لا تُمسّ.
+ * - تُقتبس عند وجود فاصلة أو علامة اقتباس أو سطر جديد (\n أو \r).
+ * @param {*} value
+ * @returns {string}
+ */
+export function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+([.,]\d+)?$/.test(s)) s = "'" + s;
+  if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+/**
+ * صفوف → نص CSV (فاصل سطور \r\n) مع تحييد الصيغ.
+ * @param {Array<Array<*>>} rows
+ * @returns {string}
+ */
+export function toCSV(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => row.map(csvCell).join(',')).join('\r\n');
+}
+
+/**
+ * تطبيع نص للبحث (v3.5.3): أحرف صغيرة، أرقام عربية/فارسية ← لاتينية، إزالة التشكيل والتطويل،
+ * توحيد (أ إ آ ٱ ← ا) و(ى ← ي) و(ة ← ه) و(ؤ ← و) و(ئ ← ي)، وضغط المسافات.
+ * بحث «احمد» يجد «أحمد»، و«فاطمه» يجد «فاطمة»، و«٠١٠١٢٣» يجد «0101…».
+ * @param {*} s
+ * @returns {string}
+ */
+export function normalizeSearch(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .toLowerCase()
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * هل يطابق هاتفٌ نصَّ البحث؟ يقارن الأرقام فقط (يتجاهل المسافات والشرطات وعلامة +)،
+ * ويعدّ 010… و+2010… و0020 10… الرقم نفسه. نص البحث بلا أرقام لا يطابق شيئاً هنا.
+ * @param {*} phone — هاتف مخزَّن
+ * @param {*} query — نص البحث (يُطبَّع داخلياً)
+ * @returns {boolean}
+ */
+export function phoneMatches(phone, query) {
+  const q = toLatinDigits(query).replace(/\D/g, '');
+  if (!q) return false;
+  let p = toLatinDigits(phone).replace(/\D/g, '');
+  if (!p) return false;
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.includes(q)) return true;
+  /* التكافؤ دولي ⟷ محلي (+2010… ⟷ 010…) لا يُطبَّق على الاستعلامات القصيرة كي لا تتوسّع (كتابة «010» لا تعني «10») */
+  if (q.length < 8) return false;
+  const national = (x) => { let y = x.replace(/^00/, ''); if (y.startsWith('20') && y.length >= 11) y = y.slice(2); return y.replace(/^0/, ''); };
+  return national(p).includes(national(q));
 }

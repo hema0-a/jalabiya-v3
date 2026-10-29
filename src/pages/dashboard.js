@@ -1,205 +1,68 @@
 /* ==========================================================================
-   dashboard.js — لوحة المعلومات (KPIs + رسوم بيانية + ترحيب باسم الورشة)
+   dashboard.js — لوحة التحكم (إجراءات سريعة + «يحتاج إجراءك» + KPIs + رسوم بيانية)
    ==========================================================================
    API:
      dashboardPage.render(container)  → Promise<void>
      dashboardPage.destroy()          → void
 
+   v3.3.39: لوحة تحكم فعلية لا عرض فقط:
+   - أزرار سريعة تفتح نماذج (طلب/دفعة/عميل/موعد) مباشرة، وبطاقات KPI تفتح صفحاتها.
+   - «يحتاج إجراءك»: طلبات جاهزة لم تُستلم، طلبات متأخرة، مستحقات — اتصال/واتساب/تسليم/تقدّم حالة/تسجيل دفعة من اللوحة نفسها.
+   - المواعيد: «تم» واتصال. أحدث العملاء: اتصال وواتساب.
+
    ⚠️ v3.3.2:
    - يقرأ settings.workshop.name للترحيب + settings.workshop.logo للشعار.
    - يعرض 3 رسوم بيانية: مبيعات 7 أيام، توزيع الطلبات، ملخص مالي.
+
+   v3.5.5: تقسيم صيانة بلا تغيير سلوك — الملف يحتفظ بالحالة والرأس وتنبيه النسخة والبانر التجريبي والواجهة العامة،
+   وانتقل الباقي إلى: dashboard-kpis.js (الحسابات والتحميل) · dashboard-actions.js (الإجراءات)
+   · dashboard-sections.js (بناء الأقسام) · dashboard-customize.js (التخصيص).
    ========================================================================== */
 
-import { withDepositPayments, withWorkerExpenses } from '../services/payments-view.js';
-import { workerPayments } from '../data/repos/worker-payments.js';
+import { clearDemoData } from '../services/demo-data.js';
+import { modal } from '../ui/modal.js';
+import { toast } from '../ui/toast.js';
 import { el, clear } from '../core/dom.js';
-import { customers } from '../data/repos/customers.js';
-import { orders } from '../data/repos/orders.js';
-import { payments } from '../data/repos/payments.js';
-import { expenses } from '../data/repos/expenses.js';
-import { appointments } from '../data/repos/appointments.js';
-import { settings } from '../data/repos/settings.js';
-import { formatEGP, formatDate, formatTime } from '../core/utils.js';
+import { readLayout, isVisible, visibleSectionIds } from '../services/dashboard-layout.js'; /* v3.5.1 */
+import { backupNudge } from '../services/backup-nudge.js';
+import { getLastExternalBackupAt } from '../services/auto-backup.js';
+import { formatDate } from '../core/utils.js';
+import { loadKPIs } from './dashboard-kpis.js';
+import { createDashActions, go } from './dashboard-actions.js';
 import {
-  createSalesBarChart,
-  createOrdersDonutChart,
-  createFinanceChart,
-} from '../ui/dashboard-charts.js';
+  buildKPICards, buildAttention, buildDueSoonSection, buildTodayAppointmentsSection,
+  buildWeekVisitsSection, buildRecentCustomersSection, buildChartSections,
+} from './dashboard-sections.js';
+import { buildSectionsBar, openCustomize } from './dashboard-customize.js';
 
 let state = {
   container: null,
   data: null,
 };
 
-/* ==========================================================================
-   1. أدوات حسابية للرسوم
-   ========================================================================== */
-
-/**
- * حساب بداية الشهر الحالي.
- * @returns {number}
- */
-function startOfMonth() {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+/** إعادة رسم اللوحة مع الإبقاء على موضع التمرير. */
+async function refresh() {
+  const c = state.container;
+  if (!c) return;
+  const y = window.scrollY;
+  await dashboardPage.render(c);
+  window.scrollTo(0, y);
 }
 
-/**
- * حساب مبيعات آخر 7 أيام (يوم بيوم).
- * @param {Array} paymentsList
- * @returns {Array<{label:string, value:number}>}
- */
-function computeSalesLast7Days(paymentsList) {
-  const days = [];
-  const DAY_MS = 86400000;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayMs = today.getTime();
+/* إجراءات اللوحة (تقدّم حالة/دفعة/موعد) مربوطة بإعادة الرسم أعلاه */
+const actions = createDashActions(refresh);
 
-  /* أسماء أيام الأسبوع بالعربية (مختصرة) */
-  const DAY_NAMES = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
-
-  for (let i = 6; i >= 0; i--) {
-    const dayStart = todayMs - i * DAY_MS;
-    const dayEnd = dayStart + DAY_MS;
-
-    const total = paymentsList
-      .filter((p) => {
-        const t = p.createdAt || 0;
-        return t >= dayStart && t < dayEnd;
-      })
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-
-    const d = new Date(dayStart);
-    days.push({
-      label: DAY_NAMES[d.getDay()],
-      value: total,
-    });
-  }
-
-  return days;
-}
-
-/**
- * حساب توزيع الطلبات بالحالة.
- * @param {Array} ordersList
- * @returns {Object}
- */
-function computeOrdersByStatus(ordersList) {
-  const out = { pending: 0, in_progress: 0, ready: 0, delivered: 0, cancelled: 0 };
-  ordersList.forEach((o) => {
-    if (out[o.status] != null) out[o.status]++;
-  });
-  return out;
-}
-
-/**
- * حساب ملخص مالي لآخر 30 يوماً.
- * @param {Array} paymentsList
- * @param {Array} expensesList
- * @returns {{revenue:number, expenses:number, profit:number}}
- */
-function computeFinance(paymentsList, expensesList) {
-  const DAY_MS = 86400000;
-  const now = Date.now();
-  const start = now - 30 * DAY_MS;
-
-  const revenue = paymentsList
-    .filter((p) => (p.createdAt || 0) >= start)
-    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
-
-  const exp = expensesList
-    .filter((e) => (e.date || 0) >= start)
-    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-
-  return {
-    revenue,
-    expenses: exp,
-    profit: revenue - exp,
-  };
-}
-
-/* ==========================================================================
-   2. تحميل وحساب KPIs
-   ========================================================================== */
-
-/**
- * تحميل كل البيانات وحساب KPIs.
- * @returns {Promise<Object>}
- */
-async function loadKPIs() {
-  const monthStart = startOfMonth();
-
-  const [customersList, ordersList, rawPayments, rawExpenses, todayAppts, s, workerPaysList] = await Promise.all([
-    customers.list(),
-    orders.list(),
-    payments.list(),
-    expenses.list().catch(() => []),
-    appointments.getToday(),
-    settings.get().catch(() => ({})),
-    workerPayments.list().catch(() => []),
-  ]);
-  const expensesList = withWorkerExpenses(rawExpenses, workerPaysList);
-  const paymentsList = withDepositPayments(rawPayments, ordersList);
-
-  const activeOrders = ordersList.filter(
-    (o) => o.status !== 'delivered' && o.status !== 'cancelled'
-  );
-
-  const monthPayments = paymentsList.filter(
-    (p) => (p.createdAt || 0) >= monthStart
-  );
-  const monthRevenue = monthPayments.reduce(
-    (sum, p) => sum + (Number(p.amount) || 0),
-    0
-  );
-
-  const recentCustomers = customersList
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-    .slice(0, 5);
-
-  const dueSoonOrders = ordersList
-    .filter((o) => {
-      if (o.status === 'delivered' || o.status === 'cancelled') return false;
-      if (!o.dueDate) return false;
-      const days = (o.dueDate - Date.now()) / 86400000;
-      return days >= -1 && days <= 7;
-    })
-    .sort((a, b) => a.dueDate - b.dueDate)
-    .slice(0, 5);
-
-  /* قراءة معلومات الورشة */
-  const workshopName = (s.workshop && s.workshop.name) ? String(s.workshop.name).trim() : '';
-  const workshopLogo = (s.workshop && s.workshop.logo) ? s.workshop.logo : '';
-
-  /* بيانات الرسوم */
-  const salesLast7Days = computeSalesLast7Days(paymentsList);
-  const ordersByStatus = computeOrdersByStatus(ordersList);
-  const finance = computeFinance(paymentsList, expensesList);
-
-  return {
-    totalCustomers: customersList.length,
-    activeOrders: activeOrders.length,
-    monthRevenue,
-    todayAppointments: todayAppts.length,
-    recentCustomers,
-    dueSoonOrders,
-    todayApptsList: todayAppts,
-    workshopName,
-    workshopLogo,
-    salesLast7Days,
-    ordersByStatus,
-    finance,
-  };
+/** بعد إغلاق نافذة التخصيص بتغيير فعلي: إعادة رسم اللوحة إن كانت ما زالت معروضة. */
+function rerenderAfterCustomize() {
+  if (!state.container) return;
+  Promise.resolve(dashboardPage.render(state.container)).catch((e) => console.error('[Dashboard] re-render after customize failed:', e));
 }
 
 /* ==========================================================================
    3. بناء المكونات
    ========================================================================== */
 
-function buildHeader(data) {
+function buildHeader(data, extra = null) {
   const hour = new Date().getHours();
   let greeting = 'أهلاً';
   if (hour < 12) greeting = 'صباح الخير';
@@ -230,148 +93,68 @@ function buildHeader(data) {
 
   const textWrap = el('div', { style: { flex: '1', minWidth: '0' } }, [nameEl, subEl]);
 
-  return el('div', {
-    className: 'card',
-    style: {
-      marginBottom: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-    },
-  }, [logoEl, textWrap]);
+  /* v3.5.2: بطاقة واحدة = الترحيب + الإجراءات السريعة (كانا بطاقتين منفصلتين تستهلكان ارتفاعاً على الجوال) */
+  const row = el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, [logoEl, textWrap]);
+  return el('div', { className: 'card dash-hero', style: { marginBottom: '16px' } }, [row, extra]);
 }
 
-function buildKPICards(data) {
-  const grid = el('div', {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(2, 1fr)',
-      gap: '8px',
-      marginBottom: '16px',
-    },
-  });
 
+/** شريط تنبيه: توجد بيانات تجريبية (تدخل في الأرقام والتقارير حتى تُحذف). */
+/* تذكير بنسخة خارج الجهاز: يظهر بعد الرسم الأول ولا يؤخّره، ويُسكَت 3 أيام بزر «لاحقاً» */
+const NUDGE_SNOOZE_KEY = 'jalabiya_v3_backup_nudge_snoozed';
+async function buildBackupNudge(data) {
+  try {
+    let snoozedAt = 0;
+    try { snoozedAt = Number(localStorage.getItem(NUDGE_SNOOZE_KEY)) || 0; } catch (_) { /* اختياري */ }
+    const recordCount = data.realRecords || 0;
+    const n = backupNudge({ externalAt: getLastExternalBackupAt(), recordCount, snoozedAt });
+    if (!n.show) return null;
+    const box = el('div', { className: 'dash-demo', role: 'status', 'data-role': 'backup-nudge' }, [
+      el('span', {}, n.text),
+      el('a', { className: 'btn btn--sm btn--primary', href: '#/data-care', 'data-action': 'nudge-open' }, 'احفظ نسخة'),
+      el('button', {
+        className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'nudge-snooze',
+        onClick: () => {
+          try { localStorage.setItem(NUDGE_SNOOZE_KEY, String(Date.now())); } catch (_) { /* اختياري */ }
+          box.remove();
+        },
+      }, 'لاحقاً'),
+    ]);
+    return box;
+  } catch (e) { return null; }
+}
+
+function buildDemoBanner() {
+  return el('div', { className: 'dash-demo', role: 'status' }, [
+    el('span', {}, '🧪 تعرض بيانات تجريبية — تدخل في الأرقام والتقارير حتى تحذفها'),
+    el('button', {
+      className: 'btn btn--sm btn--secondary', type: 'button',
+      onClick: async () => {
+        const ok = await modal.confirm({
+          title: 'حذف البيانات التجريبية',
+          message: 'سيُحذف التجريبي فقط (المُعلَّم 🧪). بياناتك الحقيقية لن تُمسّ.',
+          confirmText: 'احذف التجريبي', cancelText: 'إلغاء', danger: true,
+        });
+        if (!ok) return;
+        try { const n = await clearDemoData(); toast.success('تم حذف ' + n + ' سجلاً تجريبياً'); await refresh(); }
+        catch (e) { toast.danger('تعذّر الحذف: ' + e.message); }
+      },
+    }, 'حذفها'),
+  ]);
+}
+
+function buildQuickActions() {
   const items = [
-    { icon: '👥', value: String(data.totalCustomers), label: 'عملاء' },
-    { icon: '📦', value: String(data.activeOrders), label: 'طلبات نشطة' },
-    { icon: '💰', value: formatEGP(data.monthRevenue), label: 'إيرادات الشهر' },
-    { icon: '📅', value: String(data.todayAppointments), label: 'مواعيد اليوم' },
+    { icon: '📋', label: 'طلب جديد', hash: '#/orders/new' },
+    { icon: '💰', label: 'دفعة', hash: '#/payments/new' },
+    { icon: '👤', label: 'عميل جديد', hash: '#/customers/new' },
+    { icon: '📅', label: 'موعد', hash: '#/appointments/new' },
   ];
-
-  items.forEach((it) => {
-    grid.appendChild(el('div', { className: 'stat' }, [
-      el('span', { className: 'stat__icon' }, it.icon),
-      el('span', { className: 'stat__value' }, it.value),
-      el('span', { className: 'stat__label' }, it.label),
-    ]));
-  });
-
-  return grid;
-}
-
-function buildDueSoonSection(list) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '⏰ طلبات مستحقة قريباً'),
-  ]));
-
-  if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا توجد طلبات مستحقة خلال 7 أيام.'));
-    return card;
-  }
-
-  list.forEach((o) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', {}, [
-        el('div', { style: { fontWeight: '500', fontSize: '14px', color: '#123C2F' } },
-          o.status === 'ready' ? '✅ جاهز للتسليم' : '⏳ ' + (o.status === 'pending' ? 'قيد الانتظار' : 'قيد التنفيذ')),
-        o.dueDate ? el('div', { style: { fontSize: '11px', color: '#2E8B6F' } },
-          '📅 ' + formatDate(o.dueDate)) : null,
-      ]),
-      el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#B8863B' } },
-        o.amount ? formatEGP(o.amount) : ''),
-    ]));
-  });
-
-  return card;
-}
-
-function buildTodayAppointmentsSection(list) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '📅 مواعيد اليوم'),
-  ]));
-
-  if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا توجد مواعيد اليوم.'));
-    return card;
-  }
-
-  list.forEach((a) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', { style: { fontSize: '13px', color: '#123C2F' } },
-        a.title || 'موعد'),
-      el('div', { style: { fontSize: '12px', color: '#2E8B6F' } },
-        '🕐 ' + formatTime(a.date)),
-    ]));
-  });
-
-  return card;
-}
-
-function buildRecentCustomersSection(list) {
-  const card = el('div', { className: 'card', style: { marginBottom: '16px' } });
-  card.appendChild(el('div', { className: 'card__header' }, [
-    el('h3', { className: 'card__title' }, '👥 أحدث العملاء'),
-  ]));
-
-  if (list.length === 0) {
-    card.appendChild(el('p', {
-      style: { fontSize: '13px', color: '#2E8B6F', margin: '0' },
-    }, 'لا يوجد عملاء بعد.'));
-    return card;
-  }
-
-  list.forEach((c) => {
-    card.appendChild(el('div', {
-      style: {
-        padding: '8px 0',
-        borderBottom: '1px solid #E5DDD0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      },
-    }, [
-      el('div', {}, [
-        el('div', { style: { fontWeight: '500', fontSize: '14px', color: '#123C2F' } },
-          c.name || 'بدون اسم'),
-        c.phone ? el('div', { style: { fontSize: '11px', color: '#2E8B6F' } }, c.phone) : null,
-      ]),
-      c.vip ? el('span', { className: 'badge badge--accent' }, '⭐ VIP') : null,
-    ]));
-  });
-
-  return card;
+  return el('div', { className: 'dash-quick', role: 'group', 'aria-label': 'إجراءات سريعة' },
+    items.map((it) => el('button', { className: 'dash-quick__btn', type: 'button', onClick: () => go(it.hash) }, [
+      el('span', { className: 'dash-quick__icon', 'aria-hidden': 'true' }, it.icon),
+      el('span', {}, it.label),
+    ])));
 }
 
 /* ==========================================================================
@@ -388,38 +171,31 @@ export const dashboardPage = {
     state.data = data;
 
     /* بناء */
-    container.appendChild(buildHeader(data));
-    container.appendChild(buildKPICards(data));
+    const layout = readLayout();   /* v3.5.1: الافتراضي = اللوحة كما كانت */
+    container.appendChild(buildHeader(data, isVisible(layout, 'quick') ? buildQuickActions() : null));
+    if (data.hasDemo) container.appendChild(buildDemoBanner());
+    const nudgeSlot = el('div', { 'data-role': 'nudge-slot' });
+    container.appendChild(nudgeSlot);
+    buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
+    if (isVisible(layout, 'kpis')) container.appendChild(buildKPICards(data));
+    container.appendChild(buildAttention(data, actions));
 
-    /* 📊 رسم المبيعات — آخر 7 أيام */
-    try {
-      container.appendChild(createSalesBarChart(data.salesLast7Days));
-    } catch (e) {
-      console.warn('[Dashboard] sales chart failed:', e);
-    }
-
-    /* 📅 مواعيد اليوم */
-    container.appendChild(buildTodayAppointmentsSection(data.todayApptsList));
-
-    /* ⏰ طلبات مستحقة */
-    container.appendChild(buildDueSoonSection(data.dueSoonOrders));
-
-    /* 💰 الملخص المالي — آخر 30 يومًا */
-    try {
-      container.appendChild(createFinanceChart(data.finance));
-    } catch (e) {
-      console.warn('[Dashboard] finance chart failed:', e);
-    }
-
-    /* 🥧 توزيع الطلبات */
-    try {
-      container.appendChild(createOrdersDonutChart(data.ordersByStatus));
-    } catch (e) {
-      console.warn('[Dashboard] donut chart failed:', e);
-    }
-
-    /* 👥 أحدث العملاء */
-    container.appendChild(buildRecentCustomersSection(data.recentCustomers));
+    /* أقسام قابلة للطي: مواعيد · عملاء الأسبوع · مستحقة · رسوم · أحدث العملاء */
+    const sections = el('div', { className: 'dash-sections' });
+    const bar = buildSectionsBar(sections, () => openCustomize(rerenderAfterCustomize));
+    sections.appendChild(bar);
+    const shownIds = visibleSectionIds(layout);
+    const want = (id) => shownIds.includes(id);
+    const built = new Map();
+    const keep = (n) => { if (n) built.set(n.getAttribute('data-collapsible-id'), n); };
+    if (want('dash-appts')) keep(buildTodayAppointmentsSection(data.todayApptsRows, actions));
+    if (want('dash-week')) keep(buildWeekVisitsSection(data.weekVisits, data.workshopNameRaw));
+    if (want('dash-due')) keep(buildDueSoonSection(data.dueSoonRows, actions));
+    if (want('dash-sales') || want('dash-finance') || want('dash-orders')) buildChartSections(data).forEach(keep);
+    if (want('dash-recent')) keep(buildRecentCustomersSection(data.recentCustomers, data.workshopName));
+    shownIds.forEach((id) => { const n = built.get(id); if (n) sections.appendChild(n); });
+    bar.update();
+    container.appendChild(sections);
   },
 
   destroy() {

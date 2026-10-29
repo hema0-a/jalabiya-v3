@@ -77,6 +77,10 @@ export async function loadFirebase() {
     return { app: _app, auth: _auth, db: _db };
   })();
 
+  /* إن فشل التحميل (مثلاً بلا إنترنت) نمسح الوعد المرفوض ليُعاد المحاولة لاحقاً
+     بدل بقاء المزامنة معطّلة حتى إعادة تحميل الصفحة. */
+  _loadPromise.catch(() => { _loadPromise = null; });
+
   return _loadPromise;
 }
 

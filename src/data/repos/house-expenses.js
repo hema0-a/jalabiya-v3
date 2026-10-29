@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import { createRepository } from '../repository.js';
+import { normalizeSearch } from '../../core/utils.js';
 import {
   STORES,
   HOUSE_EXPENSE_CATEGORIES,
@@ -68,13 +69,13 @@ export const houseExpenses = {
    * @returns {Promise<Array>}
    */
   async searchByQuery(query) {
-    const q = String(query ?? '').trim().toLowerCase();
+    const q = normalizeSearch(query);
     const all = await base.list();
     if (!q) return all;
     return all.filter((e) => {
-      const note = String(e.note || '').toLowerCase();
+      const note = normalizeSearch(e.note);
       const cat = CAT_MAP[e.category] || CAT_MAP.other;
-      const label = (cat ? cat.label : '').toLowerCase();
+      const label = normalizeSearch(cat ? cat.label : '');
       return note.includes(q) || label.includes(q);
     });
   },

@@ -6,20 +6,31 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { payments } from '../data/repos/payments.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { trash } from '../data/repos/trash.js';
-import { modal } from '../ui/modal.js';
+import { checkAmount } from '../services/amount-guard.js';
+import { modal, confirmIfStale } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
 import { previewPayment } from '../ui/quick-preview.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, normalizeSearch } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
+import { withDepositPayments, overpaidBy, computeRefundsDue } from '../services/payments-view.js';
+import { createProgressiveList } from '../ui/progressive-list.js';
 
 /* --- مفتاح المسودة --- */
 const DRAFT_KEY = 'payment-form';
 
 /* --- الحالة --- */
+/* قائمة تدريجية: 30 دفعة ثم المزيد عند التمرير (كانت ترسم الكل: 72 ألف عنصر DOM عند 6000 دفعة) */
+let paymentsList = null;
+function disposePaymentsList() {
+  if (paymentsList) { try { paymentsList.destroy(); } catch (e) { /* ignore */ } paymentsList = null; }
+}
+
 let state = {
   payments: [],
   customers: [],
@@ -59,12 +70,7 @@ function openPaymentForm(existing = null) {
   const isEdit = existing !== null;
 
   /* العميل */
-  const customerSelect = el('select', { className: 'select' });
-  customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
-  state.customers.forEach((c) => {
-    customerSelect.appendChild(el('option', { value: c.id }, c.name));
-  });
-  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
+  const customerSelect = createCustomerPicker({ customers: state.customers, value: isEdit ? existing.customerId : '' });
 
   /* الطلب (يعتمد على العميل المختار) */
   const orderSelect = el('select', { className: 'select' });
@@ -86,12 +92,12 @@ function openPaymentForm(existing = null) {
 
     orderSelect.disabled = false;
     const customerOrders = state.orders
-      .filter((o) => o.customerId === cid && o.status !== 'cancelled')
+      .filter((o) => o.customerId === cid && (o.status !== 'cancelled' || (isEdit && o.id === existing.orderId)))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     customerOrders.forEach((o) => {
       const label = '#' + String(o.id).slice(-6) + ' — ' +
-        formatEGP(o.amount) + ' (' + (o.status === 'delivered' ? 'تم التسليم' : 'نشط') + ')';
+        formatEGP(o.amount) + ' (' + (o.status === 'delivered' ? 'تم التسليم' : o.status === 'cancelled' ? 'ملغي' : 'نشط') + ')';
       orderSelect.appendChild(el('option', { value: o.id }, label));
     });
 
@@ -111,11 +117,42 @@ function openPaymentForm(existing = null) {
     setTimeout(() => { orderSelect.value = existing.orderId; }, 0);
   }
 
+  /* علامة «هذه الدفعة هي المقدم»: تظهر فقط إن كان للطلب المختار مقدم */
+  const depositCheck = el('input', { type: 'checkbox' });
+  const depositField = el('div', { className: 'field', style: { display: 'none' } }, [
+    el('label', { style: { display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' } }, [
+      depositCheck,
+      el('span', {}, 'هذه الدفعة هي مقدّم الطلب نفسه'),
+    ]),
+    el('div', { className: 'field__hint' },
+      'مقدّم الطلب يُحتسب تلقائياً. علّم هذا الخيار فقط إن كنت تسجّل المقدم نفسه كدفعة، حتى لا يُحسب مرتين.'),
+  ]);
+  function refreshDepositField() {
+    const o = state.orders.find((x) => x.id === orderSelect.value);
+    const dep = o ? Number(o.deposit) || 0 : 0;
+    depositField.style.display = dep > 0 ? '' : 'none';
+    if (dep <= 0) depositCheck.checked = false;
+  }
+  orderSelect.addEventListener('change', refreshDepositField);
+  customerSelect.addEventListener('change', () => setTimeout(refreshDepositField, 0));
+  setTimeout(() => {
+    refreshDepositField();
+    if (isEdit && existing.orderId) {
+      const o = state.orders.find((x) => x.id === existing.orderId);
+      const dep = o ? Number(o.deposit) || 0 : 0;
+      /* دفعة قديمة بلا علامة وبمبلغ المقدم نفسه كانت تُعدّ مقدّماً: نحافظ على هذا الحساب */
+      depositCheck.checked = existing.isDeposit === true ||
+        (existing.isDeposit == null && dep > 0 && Math.abs((Number(existing.amount) || 0) - dep) <= 0.009);
+    }
+  }, 0);
+
   /* المبلغ */
   const amountInput = el('input', {
     className: 'input', type: 'number', placeholder: '0', min: '0', step: '0.01',
   });
   if (isEdit && existing.amount != null) amountInput.value = String(existing.amount);
+  /* دفعة «من رصيد العميل»: المبلغ مرتبط بحركة في المحفظة، فتعديله يفصل الاثنين → يُقفل (احذفها لإعادة الرصيد) */
+  if (isEdit && existing.fromCredit) amountInput.disabled = true;
 
   /* طريقة الدفع */
   const methodSelect = el('select', { className: 'select' });
@@ -140,6 +177,7 @@ function openPaymentForm(existing = null) {
       el('div', { className: 'field__hint' },
         'اختر الطلب لربط الدفعة به — يساعد في تتبع المدفوع/المتبقي'),
     ]),
+    depositField,
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, 'المبلغ (ج.م) *'),
       amountInput,
@@ -165,9 +203,15 @@ function openPaymentForm(existing = null) {
         onClick: async () => {
           const customerId = customerSelect.value;
           const orderId = orderSelect.value || null;
-          const amount = Number(amountInput.value);
           if (!customerId) return toast.warning('اختر عميلاً');
-          if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          const chk = checkAmount(amountInput.value);
+          if (chk.level === 'invalid') return toast.warning('أدخل مبلغاً صحيحاً');
+          if (chk.level === 'huge') return toast.warning('المبلغ كبير جداً — تأكد من عدد الأصفار');
+          if (chk.level === 'confirm' && !(await modal.confirm({
+            title: 'مبلغ كبير', message: 'المبلغ ' + formatEGP(chk.amount) + ' كبير جداً. هل الرقم صحيح؟',
+            confirmText: 'نعم، احفظ', cancelText: 'تعديل',
+          }))) return;
+          const amount = chk.amount;
 
           const data = {
             customerId,
@@ -175,10 +219,31 @@ function openPaymentForm(existing = null) {
             amount,
             method: methodSelect.value,
             notes: notesInput.value.trim(),
+            isDeposit: !!orderId && depositCheck.checked,
           };
+          /* فائض: هل سيتجاوز مجموع المدفوع إجمالي الطلب؟ (كان يُحفظ بصمت ويُخفى بأن المتبقي لا يقل عن صفر) */
+          if (orderId) {
+            try {
+              const ord = await orders.find(orderId);
+              if (ord && ord.status !== 'cancelled') {
+                const others = (await payments.findByOrder(orderId)).filter((p) => !(isEdit && p.id === existing.id));
+                const over = overpaidBy(ord, others.concat([{ ...data, id: isEdit ? existing.id : 'new' }]));
+                if (over > 0 && !(await modal.confirm({
+                  title: 'دفعة أكبر من المتبقي',
+                  message: 'بهذه الدفعة يصير المدفوع أكبر من إجمالي الطلب (' + formatEGP(ord.amount) + ') بمقدار ' +
+                    formatEGP(over) + '.\nهل الرقم صحيح؟',
+                  confirmText: 'نعم، احفظ', cancelText: 'تعديل المبلغ',
+                }))) return;
+              }
+            } catch (e) { /* فشل الفحص لا يمنع الحفظ */ }
+          }
+          if (isEdit && !(await confirmIfStale((id) => payments.find(id), existing, 'هذه الدفعة'))) return;
           try {
-            if (isEdit) { await payments.update(existing.id, data); toast.success('تم التحديث'); }
-            else { await payments.create(data); toast.success('تم الإضافة'); }
+            if (isEdit) {
+              const res = await payments.update(existing.id, data);
+              if (!res) { toast.danger('الدفعة لم تعد موجودة (حُذفت من جهاز آخر؟)'); return; }
+              toast.success('تم التحديث');
+            } else { await payments.create(data); toast.success('تم الإضافة'); }
             draft.clear(DRAFT_KEY);
             handle.close();
             await refreshAll();
@@ -257,16 +322,31 @@ async function deletePayment(p) {
   const c = state.customerMap[p.customerId];
   const ok = await modal.confirm({
     title: 'حذف دفعة',
-    message: 'حذف دفعة "' + (c ? c.name : '') + '" بمبلغ ' + formatEGP(p.amount) + '؟',
+    message: 'حذف دفعة "' + (c ? c.name : '') + '" بمبلغ ' + formatEGP(p.amount) + '؟' +
+      (p.fromCredit ? '\n\n💳 هذه الدفعة خُصمت من رصيد العميل، وسيُعاد إليه ' + formatEGP(p.amount) + '.' : ''),
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
+  let refunded = false;
   try {
-    await trash.addToTrash('payments', p);
+    /* دفعة من الرصيد: نُعيد المبلغ للمحفظة أولاً (كان الرصيد يضيع عند حذفها) */
+    if (p.fromCredit && p.customerId && Number(p.amount) > 0) {
+      await customers.walletAdjust(p.customerId, {
+        balance: Number(p.amount), type: 'adjust', orderId: p.orderId || null,
+        note: 'استرجاع: حذف دفعة من الرصيد',
+      });
+      refunded = true;
+    }
+    await trash.addToTrash('payments', refunded ? { ...p, creditRefunded: true } : p);
     await payments.remove(p.id);
-    toast.success('تم الحذف');
+    toast.success(p.fromCredit ? 'تم الحذف وأُعيد المبلغ لرصيد العميل' : 'تم الحذف');
     await refreshAll();
-  } catch (err) { toast.danger('فشل: ' + err.message); }
+  } catch (err) {
+    if (refunded) {   // فشل الحذف بعد الإعادة: نتراجع كي لا يتضاعف الرصيد
+      try { await customers.walletAdjust(p.customerId, { balance: -Number(p.amount), type: 'adjust', note: 'تراجع: فشل حذف الدفعة' }); } catch (e2) { /* ignore */ }
+    }
+    toast.danger('فشل: ' + err.message);
+  }
 }
 
 /* ==========================================================================
@@ -296,7 +376,7 @@ function buildPaymentCard(p) {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
   }, [
     el('div', { style: { flex: '1', minWidth: '0' } }, [
-      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
+      el('div', { 'data-customer-id': p.customerId || null, style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, name),
       orderLabel ? el('div', {
         style: { fontSize: '11px', color: '#1F6D57', marginTop: '2px', fontWeight: '500' },
       }, '🔗 ' + orderLabel) : el('div', {
@@ -348,14 +428,18 @@ function renderStats() {
   if (!wrap) return;
   clear(wrap);
 
-  const total = state.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  /* دفعات الطلبات الملغاة ليست إيراداً (تُردّ للعميل): تُستبعد من الإجمالي كي يطابق اللوحة والتقارير */
+  const cancelledIds = new Set(state.orders.filter((o) => o && o.status === 'cancelled').map((o) => o.id));
+  const live = state.payments.filter((p) => !(p.orderId && cancelledIds.has(p.orderId)));
+  const total = live.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
-  const monthTotal = state.payments
+  const monthTotal = live
     .filter((p) => (p.createdAt || 0) >= monthStart.getTime())
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const linked = state.payments.filter((p) => p.orderId).length;
+  const linked = live.filter((p) => p.orderId).length;
+  const refundsDue = computeRefundsDue(state.orders, state.payments).total;
 
   wrap.appendChild(el('div', { className: 'stat' }, [
     el('span', { className: 'stat__icon' }, '💰'),
@@ -372,6 +456,27 @@ function renderStats() {
     el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#1F6D57' } }, String(linked)),
     el('span', { className: 'stat__label' }, 'مرتبطة بطلب'),
   ]));
+
+  if (refundsDue > 0) {
+    wrap.appendChild(el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '💸'),
+      el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#C62828' } }, formatEGP(refundsDue)),
+      el('span', { className: 'stat__label' }, 'تُردّ للعملاء (طلبات ملغاة)'),
+    ]));
+  }
+
+  /* المقدمات المقبوضة في الطلبات ولم تُسجَّل كدفعات: تُحتسب في الإيرادات (اللوحة/التقارير)
+     فنعرضها هنا حتى لا يختلف إجمالي هذه الصفحة عن بقية الصفحات بلا تفسير. */
+  const deposits = withDepositPayments(state.payments, state.orders)
+    .filter((p) => p && p.synthetic)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  if (deposits > 0) {
+    wrap.appendChild(el('div', { className: 'stat' }, [
+      el('span', { className: 'stat__icon' }, '🧾'),
+      el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#B8863B' } }, formatEGP(deposits)),
+      el('span', { className: 'stat__label' }, 'مقدمات طلبات (خارج الإجمالي)'),
+    ]));
+  }
 }
 
 function renderFilters() {
@@ -409,12 +514,12 @@ function applyFilters() {
     list = list.filter((p) => !p.orderId);
   }
 
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((p) => {
       const c = state.customerMap[p.customerId];
-      const name = c ? String(c.name || '').toLowerCase() : '';
-      const notes = String(p.notes || '').toLowerCase();
+      const name = c ? normalizeSearch(c.name) : '';
+      const notes = normalizeSearch(p.notes);
       return name.includes(q) || notes.includes(q);
     });
   }
@@ -425,6 +530,7 @@ function applyFilters() {
 function renderList() {
   const lc = state.container?.querySelector('#payments-list');
   if (!lc) return;
+  disposePaymentsList();
   clear(lc);
 
   const filtered = applyFilters();
@@ -443,7 +549,12 @@ function renderList() {
     return;
   }
 
-  filtered.forEach((p) => lc.appendChild(buildPaymentCard(p)));
+  paymentsList = createProgressiveList({
+    items: filtered,
+    pageSize: 30,
+    render: (p) => buildPaymentCard(p),
+  });
+  lc.appendChild(paymentsList.node);
 }
 
 async function refreshAll() {
@@ -458,7 +569,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const paymentsPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activeFilter = 'all';
@@ -496,9 +607,11 @@ export const paymentsPage = {
     container.appendChild(el('div', { id: 'payments-list' }));
 
     await refreshAll();
+    consumeNew(sub, 'payments', () => openPaymentForm());
   },
 
   destroy() {
+    disposePaymentsList();
     state = {
       payments: [], customers: [], orders: [],
       customerMap: {}, orderMap: {},

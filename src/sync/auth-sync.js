@@ -85,6 +85,25 @@ export async function login(email, password) {
   }
 }
 
+/* ==========================================================================
+   «صاحب الجهاز»: حساب المزامنة الذي سُجّل به الدخول في جلسة مفتوحة (بعد القفل)
+   يُستعمل لتقييد استرجاع الرقم السري بحساب الورشة نفسه (v3.3.48): لو قُبل أي حساب
+   Firebase لأمكن لمن يحمل الجوال إنشاء حساب جديد بنفسه وتجاوز القفل.
+   لا يُربط من شاشة القفل أبداً — فقط من جلسة مفتوحة (auto-sync.setUser).
+   ========================================================================== */
+const OWNER_KEY = 'jalabiya_v3_owner_uid';
+
+/** @returns {string|null} */
+export function getOwnerUid() {
+  try { return localStorage.getItem(OWNER_KEY) || null; } catch (e) { return null; }
+}
+
+/** ربط الجهاز بحساب (يستبدل السابق: المستخدم غيّر حسابه عمداً من جلسة مفتوحة). */
+export function bindOwner(uid) {
+  if (!uid) return false;
+  try { localStorage.setItem(OWNER_KEY, String(uid)); return true; } catch (e) { return false; }
+}
+
 /**
  * تسجيل الخروج.
  * @returns {Promise<{ok:boolean, error?:string}>}

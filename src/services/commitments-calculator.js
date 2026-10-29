@@ -93,6 +93,41 @@ export function getCommitmentPaidThisMonth(commitmentId, paymentsList) {
   );
 }
 
+/* عدد أشهر الدورة للالتزامات غير الشهرية */
+const PERIOD_MONTHS = { quarterly: 3, semi_annual: 6, annual: 12 };
+
+/**
+ * حالة التغطية للالتزامات الدورية (كل 3/6/12 شهراً) والمرة الواحدة.
+ * الالتزام الدوري يُدفع مبلغه كاملاً مرة كل دورة، فمقارنة دفعات الشهر الحالي بمعادله الشهري
+ * كانت تُظهره «متأخراً» في كل شهر لا يُدفع فيه. نعدّه مغطّى إن دُفع مبلغ الدورة كاملاً خلال
+ * آخر N شهراً (حتى نهاية الشهر الحالي).
+ * @param {Object} commitment
+ * @param {Array} paymentsList
+ * @param {Date} [now]
+ * @returns {{periodic:boolean, once:boolean, covered:boolean, paidInWindow:number, amount:number}|null}
+ *          null للشهري/الأسبوعي (يُقاس بدفعات الشهر الحالي).
+ */
+export function getPeriodCoverage(commitment, paymentsList, now = new Date()) {
+  const freq = commitment?.frequency || 'monthly';
+  const amount = Number(commitment?.amount) || 0;
+  const mine = (paymentsList || []).filter((p) => p.commitmentId === commitment.id);
+
+  if (freq === 'once') {
+    const paidInWindow = sum(mine.map((p) => p.amount));
+    return { periodic: false, once: true, covered: amount > 0 && paidInWindow >= amount, paidInWindow, amount };
+  }
+
+  const months = PERIOD_MONTHS[freq];
+  if (!months) return null;
+
+  const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).getTime();
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+  const paidInWindow = sum(
+    mine.filter((p) => p.date && p.date >= start && p.date < end).map((p) => p.amount)
+  );
+  return { periodic: true, once: false, covered: amount > 0 && paidInWindow >= amount, paidInWindow, amount };
+}
+
 /* ==========================================================================
    5. getCommitmentsStats
    ========================================================================== */
@@ -119,6 +154,7 @@ export async function getCommitmentsStats() {
 
   /* المدفوع هذا الشهر */
   let totalPaidThisMonth = 0;
+  let totalRemaining = 0;
   let paidCount = 0;
   let pendingCount = 0;
   let overdueCount = 0;
@@ -131,6 +167,28 @@ export async function getCommitmentsStats() {
     const paid = getCommitmentPaidThisMonth(c.id, paymentsList);
     totalPaidThisMonth += paid;
 
+    const cov = getPeriodCoverage(c, paymentsList, today);
+
+    if (cov && cov.once) {
+      /* مرة واحدة: مسدّد بالكامل = مدفوع، وإلا معلّق (لا يُحسب متأخراً بيوم الشهر) */
+      if (cov.covered) paidCount++; else pendingCount++;
+      return;
+    }
+
+    if (cov && cov.periodic) {
+      if (cov.covered) {
+        paidCount++;            /* دُفعت دورته: لا متبقٍ ولا تأخير في بقية أشهرها */
+      } else {
+        totalRemaining += Math.max(0, cov.amount - cov.paidInWindow);
+        if (c.dueDay && c.dueDay < todayDay) overdueCount++;
+        else pendingCount++;
+      }
+      return;
+    }
+
+    /* شهري/أسبوعي: يُقاس بدفعات الشهر الحالي، والمتبقي لكل التزام على حدة
+       (الفائض في التزام لا يُخفي المتبقي في غيره) */
+    totalRemaining += Math.max(0, expected - paid);
     if (paid >= expected && expected > 0) {
       paidCount++;
     } else if (c.dueDay && c.dueDay < todayDay && paid < expected) {
@@ -139,8 +197,6 @@ export async function getCommitmentsStats() {
       pendingCount++;
     }
   });
-
-  const totalRemaining = Math.max(0, totalMonthlyExpected - totalPaidThisMonth);
 
   /* الأهداف */
   const goalsWithProgress = goalsList.map((g) => {
@@ -340,10 +396,15 @@ export async function getCommitmentsWithPayments() {
   return commitmentsList.map((c) => {
     const monthlyEquiv = getMonthlyEquivalent(c);
     const paidThisMonth = getCommitmentPaidThisMonth(c.id, paymentsList);
-    const remaining = Math.max(0, monthlyEquiv - paidThisMonth);
-    const progressPercent = monthlyEquiv > 0
+    const cov = getPeriodCoverage(c, paymentsList);
+    let remaining = Math.max(0, monthlyEquiv - paidThisMonth);
+    let progressPercent = monthlyEquiv > 0
       ? Math.min(100, Math.round((paidThisMonth / monthlyEquiv) * 100))
       : 0;
+    if (cov && cov.amount > 0) {
+      remaining = Math.max(0, cov.amount - cov.paidInWindow);
+      progressPercent = Math.min(100, Math.round((cov.paidInWindow / cov.amount) * 100));
+    }
 
     return {
       ...c,

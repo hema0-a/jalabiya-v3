@@ -17,3 +17,8 @@ firebase-debug.log
 
 # Node (احتياطاً)
 node_modules/
+*.bak
+
+# نتائج الفحص المحلي
+test-results/
+package-lock.json.bak

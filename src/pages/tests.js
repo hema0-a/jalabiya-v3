@@ -10,6 +10,7 @@
 import { el, clear } from '../core/dom.js';
 import { runAll } from '../tests/registry.js';
 import * as idb from '../data/idb.js';
+import { auth as pinAuth } from '../security/auth.js';
 import '../tests/index.js';  // ← يُشغّل كل register() في modules/
 
 /* ==========================================================================
@@ -106,7 +107,7 @@ async function runTests() {
   try {
     const guarded = ['customers', 'orders', 'payments', 'inventory', 'workers',
       'expenses', 'appointments', 'portfolio', 'commitments', 'houseExpenses',
-      'personalLoans', 'referrals'];
+      'personalLoans', 'referrals', 'quotes', 'ledger', 'orderMedia'];
     let real = 0;
     for (const sn of guarded) real += await idb.count(sn).catch(() => 0);
     if (real > 0) {
@@ -117,6 +118,17 @@ async function runTests() {
       return;
     }
   } catch (e) { /* إن تعذّر الفحص نكمل كما كان */ }
+
+  /* 🛡️ اختبارات الأمان تضبط الرقم السري ثم تمسحه: لا تعمل وفي الجهاز رقم سري حقيقي */
+  try {
+    if (pinAuth.hasPin()) {
+      state.outputEl.textContent =
+        '🛑 تم إيقاف الاختبارات لحماية رقمك السري.\n' +
+        'بعض اختبارات الأمان تضبط الرقم السري ثم تمسحه، وفي هذا الجهاز رقم سري حقيقي.\n' +
+        'شغّلها على نسخة تجريبية (متصفح آخر أو بعد مسح بيانات الموقع).';
+      return;
+    }
+  } catch (e) { /* إن تعذّر الفحص نكمل */ }
 
   state.isRunning = true;
   state.runBtn.disabled = true;

@@ -1,6 +1,8 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
+   v11: إضافة مخزن ledger (الدفتر المالي — v3.3.79، يُنشأ تلقائياً بالترقية).
+   v10: إضافة مخزن quotes (عروض الأسعار).
    v9: إضافة مخزن backups (النسخ الاحتياطية التلقائية).
    ⚠️ لا تُستخدم boolean كمفاتيح فهرس.
    ========================================================================== */
@@ -146,6 +148,14 @@ export const SCHEMA = {
     ],
   },
   /* --- جديد v8 --- */
+  [STORES.QUOTES]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_customerId', 'customerId'),
+      idx('by_status', 'status'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
   [STORES.WORKER_PAYMENTS]: {
     keyPath: 'id', autoIncrement: false,
     indexes: [
@@ -159,6 +169,21 @@ export const SCHEMA = {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v11: الدفتر المالي (أسطر ثابتة لا تُعدَّل) --- */
+  [STORES.LEDGER]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_acct', 'acct'),
+      idx('by_at', 'at'),
+    ],
+  },
+  /* --- جديد v12: وسائط الطلبات (صورة مرجعية/توقيعات) — المعرّف orderId + ':' + slot --- */
+  [STORES.ORDER_MEDIA]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_orderId', 'orderId'),
     ],
   },
 };

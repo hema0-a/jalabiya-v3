@@ -8,6 +8,35 @@
    - getActiveSession(workSessions) — هل المؤقت يعمل الآن؟
    ========================================================================== */
 
+import { dayDiff, endOfDay } from '../core/day-math.js';
+
+/* ==========================================================================
+   0. حدّ "التأخير": نهاية يوم الموعد وليس بدايته
+   ========================================================================== */
+
+/**
+ * نهاية يوم الموعد (23:59:59.999 بالتوقيت المحلي).
+ * نموذج الطلب يحفظ التاريخ كمنتصف ليل UTC (= 02:00/03:00 صباحاً في مصر)، فالمقارنة المباشرة
+ * dueDate < now كانت تعتبر طلب "تسليم اليوم" متأخراً من الثالثة فجراً بينما بطاقة الطلب تقول "اليوم".
+ * @param {number} dueDate
+ * @returns {number} NaN إن لم يوجد موعد
+ */
+export function dueDayEndMs(dueDate) {
+  if (!dueDate) return NaN;
+  return endOfDay(dueDate);
+}
+
+/**
+ * هل فات موعد التسليم؟ (يُعتبر متأخراً بعد نهاية يوم الموعد فقط)
+ * @param {number} dueDate
+ * @param {number} [now=Date.now()]
+ * @returns {boolean}
+ */
+export function isPastDue(dueDate, now = Date.now()) {
+  if (!dueDate) return false;
+  return now > dueDayEndMs(dueDate);
+}
+
 /* ==========================================================================
    1. الموعد النهائي
    ========================================================================== */
@@ -23,13 +52,12 @@ export function getDeadlineInfo(dueDate) {
       bg: '#F0EAE0', icon: '⏱️', daysLeft: null };
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dueDate);
-  target.setHours(0, 0, 0, 0);
-
-  const diffMs = target.getTime() - today.getTime();
-  const daysLeft = Math.round(diffMs / 86400000);
+  /* فرق أيام تقويمي دقيق (لا يتأثر بالتوقيت الصيفي ولا بساعة حفظ التاريخ) */
+  const daysLeft = dayDiff(Date.now(), dueDate);
+  if (Number.isNaN(daysLeft)) {
+    return { status: 'none', label: 'بدون موعد', color: '#666',
+      bg: '#F0EAE0', icon: '⏱️', daysLeft: null };
+  }
 
   if (daysLeft < 0) {
     const abs = Math.abs(daysLeft);

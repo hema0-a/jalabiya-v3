@@ -10,6 +10,11 @@
    - استخدم `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
+import { applyAppearance, applyFont, applyFontSize, ensureAllFonts } from '../../ui/display-settings.js';
+import { isDarkMode, setDarkMode } from '../../ui/theme.js';
+import { isClientMode, setClientMode } from '../../ui/client-mode.js';
+import { isBottomNavEnabled, setBottomNavEnabled, NAV_CHOICES, getNavSlots, setNavSlots } from '../../ui/bottom-nav.js';
+import { isMorningEnabled, setMorningEnabled } from '../../ui/morning-summary.js';
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
@@ -66,6 +71,59 @@ const workshopInfoSection = {
     body.appendChild(textField('العنوان', 'address', 'المحافظة — المدينة — الشارع'));
     body.appendChild(textField('رقم الهاتف', 'phone', '01xxxxxxxxx'));
     body.appendChild(textField('رقم WhatsApp', 'whatsapp', '+20xxxxxxxxxx'));
+    body.appendChild(textField('مواعيد الاستلام (تظهر في الرسائل)', 'pickupHours', 'مثال: يومياً من 10 ص إلى 9 م'));
+
+    /* شروط الورشة (v3.3.51): تُطبع أسفل الفاتورة، سطر لكل شرط */
+    {
+      const termsArea = el('textarea', {
+        className: 'textarea', rows: '4',
+        placeholder: 'مثال:\nالمقدم غير مسترد بعد القص\nالتعديلات مجانية خلال 7 أيام من التسليم\nنحتفظ بالجلابية 30 يوماً بعد الجهوزية',
+      });
+      termsArea.value = ws.terms || '';
+      let termsSaved = String(ws.terms || '');
+      let termsTimer = null;
+      const saveTerms = () => {
+        const v = termsArea.value.trim();
+        if (v === termsSaved) return;
+        termsSaved = v;
+        saveFn({ workshop: { terms: v } });
+      };
+      termsArea.addEventListener('blur', () => { if (termsTimer) { clearTimeout(termsTimer); termsTimer = null; } saveTerms(); });
+      termsArea.addEventListener('input', () => { if (termsTimer) clearTimeout(termsTimer); termsTimer = setTimeout(saveTerms, 800); });
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, 'شروط الورشة (تظهر أسفل الفاتورة — سطر لكل شرط)'),
+        termsArea,
+      ]));
+    }
+
+    /* نقاط الولاء (v3.3.51) */
+    {
+      const loy = currentSettings.loyalty || {};
+      const enabledCb = el('input', { type: 'checkbox' });
+      enabledCb.checked = loy.enabled !== false;
+      const earnIn = el('input', { className: 'input', type: 'number', min: '1', step: '1', inputmode: 'numeric' });
+      earnIn.value = String(Number(loy.earnEvery) > 0 ? loy.earnEvery : 20);
+      const valIn = el('input', { className: 'input', type: 'number', min: '0.01', step: '0.01', inputmode: 'decimal' });
+      valIn.value = String(Number(loy.pointValue) > 0 ? loy.pointValue : 1);
+      let loyTimer = null;
+      const saveLoy = () => {
+        const earnEvery = Math.max(1, Number(earnIn.value) || 20);
+        const pointValue = Math.max(0.01, Number(valIn.value) || 1);
+        saveFn({ loyalty: { enabled: enabledCb.checked, earnEvery, pointValue } });
+      };
+      const later = () => { if (loyTimer) clearTimeout(loyTimer); loyTimer = setTimeout(saveLoy, 800); };
+      [earnIn, valIn].forEach((i) => { i.addEventListener('input', later); i.addEventListener('blur', saveLoy); });
+      enabledCb.addEventListener('change', saveLoy);
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, '⭐ نقاط الولاء'),
+        el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '4px 0' } },
+          [enabledCb, el('span', {}, 'تفعيل النقاط (تُمنح عند تسليم الطلب)')]),
+        el('div', { style: { fontSize: '12px', color: '#666', margin: '6px 0 2px' } }, 'نقطة واحدة لكل كذا ج.م من إجمالي الطلب:'),
+        earnIn,
+        el('div', { style: { fontSize: '12px', color: '#666', margin: '8px 0 2px' } }, 'قيمة النقطة الواحدة عند الاستبدال (ج.م خصم):'),
+        valIn,
+      ]));
+    }
 
     /* الشعار */
     const logoPreview = el('div', {
@@ -142,6 +200,7 @@ const appearanceSection = {
           document.documentElement.style.setProperty('--color-primary', th.primary);
           document.documentElement.style.setProperty('--color-accent', th.accent);
           document.documentElement.style.setProperty('--color-bg', th.bg);
+          markActiveCard(themesGrid, 'theme', th.id);
         },
       }, [
         el('span', { className: 'settings-theme-card__emoji' }, th.emoji),
@@ -195,9 +254,8 @@ const appearanceSection = {
         onClick: () => {
           const def = DEFAULT_SETTINGS.appearance;
           saveFn({ appearance: def });
-          document.documentElement.style.setProperty('--color-primary', def.primaryColor);
-          document.documentElement.style.setProperty('--color-accent', def.accentColor);
-          toast.info('تمت الاستعادة — أعد فتح الصفحة');
+          applyAppearance(def);
+          toast.info('تمت استعادة المظهر الافتراضي');
         },
       }, '↩️ استعادة الافتراضي'),
     ]));
@@ -207,6 +265,21 @@ const appearanceSection = {
 /* ==========================================================================
    3. الخلفيات الإبداعية
    ========================================================================== */
+
+
+/**
+ * يبدّل البطاقة النشطة داخل شبكة خيارات دون إعادة رسم القسم (v3.3.85).
+ * كانت الأزرار تعيد رسم القسم داخل `grid.parentNode` (غلاف الحقل لا جسم القسم) فيتكرر القسم ويتداخل مع كل ضغطة،
+ * وكانت تستعمل innerHTML (ممنوع). الحفظ والتطبيق يجريان قبل هذه الدالة؛ هي تحدّث التمييز فقط.
+ * @param {HTMLElement} grid — الشبكة الحاضنة للأزرار
+ * @param {string} key — اسم سمة data المميِّزة (font | size | bg | icon)
+ * @param {string} id — معرّف الخيار الجديد
+ */
+function markActiveCard(grid, key, id) {
+  grid.querySelectorAll('button[data-' + key + ']').forEach((b) => {
+    b.classList.toggle('settings-theme-card--active', b.dataset[key] === id);
+  });
+}
 
 const backgroundsSection = {
   id: 'backgrounds',
@@ -249,13 +322,7 @@ const backgroundsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ appearance: { backgroundPattern: bg.id } });
           applyBackground(bg.id);
-          /* إعادة رسم القسم */
-          const parent = grid.parentNode;
-          parent.innerHTML = '';
-          backgroundsSection.render(parent, {
-            ...currentSettings,
-            appearance: { ...ap, backgroundPattern: bg.id },
-          }, saveFn);
+          markActiveCard(grid, 'bg', bg.id);
         },
       }, [
         el('div', { style: previewStyle }),
@@ -306,12 +373,7 @@ const iconsSection = {
           /* ⚠️ حقل واحد */
           saveFn({ appearance: { iconStyle: st.id } });
           applyIconStyle(st.id);
-          const parent = grid.parentNode;
-          parent.innerHTML = '';
-          iconsSection.render(parent, {
-            ...currentSettings,
-            appearance: { ...ap, iconStyle: st.id },
-          }, saveFn);
+          markActiveCard(grid, 'icon', st.id);
         },
       }, [
         el('span', { style: { fontSize: '24px', lineHeight: '1', marginBottom: '4px' } }, '👥'),
@@ -340,6 +402,8 @@ const fontsSection = {
   async render(body, currentSettings, saveFn) {
     const dp = currentSettings.display || {};
 
+    ensureAllFonts();   /* لمعاينة الخطوط */
+
     /* --- اختيار الخط --- */
     const fontGrid = el('div', {
       style: { display: 'flex', flexDirection: 'column', gap: '6px' },
@@ -358,13 +422,8 @@ const fontsSection = {
         onClick: () => {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontFamily: f.id } });
-          document.documentElement.setAttribute('data-font', f.id);
-          const parent = fontGrid.parentNode;
-          parent.innerHTML = '';
-          fontsSection.render(parent, {
-            ...currentSettings,
-            display: { ...dp, fontFamily: f.id },
-          }, saveFn);
+          applyFont(f.id);
+          markActiveCard(fontGrid, 'font', f.id);
         },
       }, [
         el('span', { style: { fontFamily: f.font, fontSize: '18px', fontWeight: '600' } }, 'أ'),
@@ -393,13 +452,8 @@ const fontsSection = {
         onClick: () => {
           /* ⚠️ حقل واحد */
           saveFn({ display: { fontSize: sz.id } });
-          document.documentElement.setAttribute('data-size', sz.id);
-          const parent = sizeGrid.parentNode;
-          parent.innerHTML = '';
-          fontsSection.render(parent, {
-            ...currentSettings,
-            display: { ...dp, fontSize: sz.id },
-          }, saveFn);
+          applyFontSize(sz.id);
+          markActiveCard(sizeGrid, 'size', sz.id);
         },
       }, [
         el('span', { style: { fontSize: (16 * sz.factor) + 'px', lineHeight: '1' } }, 'أ'),
@@ -426,11 +480,27 @@ const displaySection = {
   async render(body, currentSettings, saveFn) {
     const dp = currentSettings.display || {};
 
+    /* الليلي ووضع العميل: حالة كل جهاز (تبقى متزامنة مع زر الشريط العلوي) */
+    const current = {
+      darkMode: isDarkMode(),
+      clientMode: isClientMode(),
+      highContrast: !!dp.highContrast,
+      compactMode: !!dp.compactMode,
+    };
+    const APPLY = {
+      darkMode: (v) => setDarkMode(v),
+      clientMode: (v) => setClientMode(v),
+      highContrast: (v) => document.body.classList.toggle('high-contrast', v),
+      compactMode: (v) => document.body.classList.toggle('compact-mode', v),
+    };
+
     function toggleRow(label, key, hint = '') {
       const t = createToggle({
         label,
-        checked: !!dp[key],
+        checked: current[key],
         onChange: (v) => {
+          current[key] = v;
+          try { APPLY[key](v); } catch (e) { console.warn('[display] apply', key, e); }
           /* ⚠️ حقل واحد */
           saveFn({ display: { [key]: v } });
         },
@@ -444,10 +514,45 @@ const displaySection = {
       ]);
     }
 
-    body.appendChild(toggleRow('الوضع الليلي 🌙', 'darkMode', 'يُطبَّق فوراً بعد إعادة الفتح'));
-    body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast'));
-    body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل'));
+    body.appendChild(toggleRow('الوضع الليلي 🌙', 'darkMode', 'يُطبَّق فوراً'));
+    body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast', 'نصوص أغمق وحدود أوضح'));
+    body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل لعرض بيانات أكثر'));
     body.appendChild(toggleRow('وضع العميل 👁️', 'clientMode', 'إخفاء الأرقام والإحصائيات'));
+    /* شريط التنقّل السفلي: تفضيل لهذا الجهاز فقط (لا يُزامَن) */
+    body.appendChild(el('div', { className: 'settings-row', 'data-setting': 'bottom-nav' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'شريط التنقّل السفلي 📱'),
+        el('div', { className: 'settings-row__hint' }, 'أزرار في أسفل الشاشة تصلها بإبهام واحد (للجوال فقط)'),
+      ]),
+      createToggle({ label: '', checked: isBottomNavEnabled(), onChange: (v) => setBottomNavEnabled(v) }),
+    ]));
+    /* اختيار الصفحات الثلاث في الشريط (الزر الأوسط ＋ والأخير «المزيد» ثابتان) */
+    const slotSelects = [0, 1, 2].map((i) => {
+      const sel = el('select', { className: 'select', 'data-slot': String(i), 'aria-label': 'زر الشريط ' + (i + 1) },
+        NAV_CHOICES.map((c) => el('option', { value: c.id }, c.icon + ' ' + c.label)));
+      sel.value = getNavSlots()[i];
+      sel.addEventListener('change', () => {
+        const ids = slotSelects.map((s) => s.value);
+        if (!setNavSlots(ids)) {
+          toast.warning('اختر صفحة مختلفة لكل زر');
+          const cur = getNavSlots();
+          slotSelects.forEach((s, k) => { s.value = cur[k]; });
+        }
+      });
+      return sel;
+    });
+    body.appendChild(el('div', { className: 'settings-field', 'data-setting': 'bottom-nav-slots' }, [
+      el('label', { className: 'settings-field__label' }, 'صفحات الشريط السفلي (من اليمين)'),
+      el('div', { className: 'settings-slots' }, slotSelects),
+    ]));
+    /* ملخص الصباح: نافذة مرة كل يوم عند أول فتح (تفضيل لهذا الجهاز) */
+    body.appendChild(el('div', { className: 'settings-row', 'data-setting': 'morning-summary' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'ملخص الصباح ☀️'),
+        el('div', { className: 'settings-row__hint' }, 'نافذة قصيرة عند أول فتح كل يوم بما ينتظرك (المتأخر والتسليمات والمواعيد)'),
+      ]),
+      createToggle({ label: '', checked: isMorningEnabled(), onChange: (v) => setMorningEnabled(v) }),
+    ]));
   },
 };
 

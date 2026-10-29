@@ -6,28 +6,12 @@
    - فتح نافذة الطباعة (window.print).
    ========================================================================== */
 
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, toCSV } from '../core/utils.js';
 
 /* ==========================================================================
    1. CSV
    ========================================================================== */
 
-/**
- * تحويل مصفوفة صفوف إلى نص CSV.
- * @param {Array<Array<string|number>>} rows
- * @returns {string}
- */
-function toCSV(rows) {
-  return rows.map((row) =>
-    row.map((cell) => {
-      const s = String(cell ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }).join(',')
-  ).join('\r\n');
-}
 
 /**
  * تنزيل ملف CSV مع BOM (لدعم العربية).
@@ -65,7 +49,7 @@ export function exportPaymentsCSV(payments, customerMap) {
       p.notes || '',
     ]);
   });
-  const filename = 'payments-' + new Date().toISOString().slice(0, 10) + '.csv';
+  const filename = 'payments-' + localDateInput() + '.csv';
   downloadCSV(filename, toCSV(rows));
 }
 
@@ -84,7 +68,7 @@ export function exportExpensesCSV(expenses) {
       e.notes || '',
     ]);
   });
-  const filename = 'expenses-' + new Date().toISOString().slice(0, 10) + '.csv';
+  const filename = 'expenses-' + localDateInput() + '.csv';
   downloadCSV(filename, toCSV(rows));
 }
 
@@ -143,7 +127,7 @@ export function exportSummaryCSV(data, payments, expenses, customerMap) {
     lines.push([e.date ? formatDate(e.date) : '', cats[e.category] || '', Number(e.amount) || 0, e.notes || '']);
   });
 
-  const filename = 'financial-summary-' + new Date().toISOString().slice(0, 10) + '.csv';
+  const filename = 'financial-summary-' + localDateInput() + '.csv';
   downloadCSV(filename, toCSV(lines));
 }
 

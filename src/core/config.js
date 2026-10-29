@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.3.8',
+  version: '3.5.12',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 9,
+  version: 12,   /* v11: مخزن ledger (الدفتر المالي) · v12: مخزن orderMedia (صور/توقيعات الطلبات منفصلة عن سجل الطلب) */
 };
 
 /* --- 4. Stores --- */
@@ -50,6 +50,9 @@ export const STORES = {
   REFERRALS:           'referrals',
   WORKER_PAYMENTS:     'workerPayments',
   BACKUPS:             'backups',
+  QUOTES:              'quotes',
+  LEDGER:              'ledger',
+  ORDER_MEDIA:         'orderMedia',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
@@ -177,7 +180,9 @@ export const WEEKDAYS = [
 
 /* --- 17. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
-  workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '' },
+  workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '', pickupHours: '' },
+  /* الولاء (v3.3.51): نقطة لكل earnEvery ج.م من الطلب المسلَّم، وقيمة النقطة عند الاستبدال pointValue ج.م */
+  loyalty: { enabled: true, earnEvery: 20, pointValue: 1 },
   appearance: {
     theme: 'classic', primaryColor: '#1F6D57', accentColor: '#B8863B',
     backgroundColor: '#F6F1E6', backgroundPattern: 'none', iconStyle: 'default',
@@ -206,7 +211,8 @@ export const DEFAULT_SETTINGS = {
     defaultMargin: 30, marginPresets: [20, 30, 50, 100],
     saveHistory: true, enableCreateOrder: true, maxHistoryItems: 50,
   },
-  autoMessages: { enabled: true, templates: {} },
+  autoMessages: { enabled: true, promptOnStatus: true, templates: {}, custom: [] },
+  depositPolicy: { enabled: true, minPercent: 30 },
   backup: { autoBackup: true, intervalHours: 24 },
   cloudSync: { enabled: false, lastSyncAt: null },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600 },
@@ -215,6 +221,12 @@ export const DEFAULT_SETTINGS = {
   },
   lockScreen: {
     background: null, message: 'أدخل الرقم السري للدخول', showLogo: true,
+  },
+  /* الدفتر المالي كمرجع أساسي (v3.3.81، الخطوة 2أ): مفتاح يدوي محلي لهذا الجهاز — ليس ضمن مفاتيح
+     الإعدادات المُزامَنة (settings-sync). في 2أ لا يقرؤه أي كود مالي؛ يُحفظ فقط بعد اجتياز لوحة الجاهزية
+     في بطاقة الدفتر (مزامنة نظيفة + صفر فروق + نسخة احتياطية جديدة سليمة). انظر ledger-authority.js. */
+  ledgerAuthority: {
+    enabled: false, enabledAt: null, disabledAt: null, deviceId: null, backupId: null, backupAt: null, checkedAt: null,
   },
 };
 
@@ -266,6 +278,7 @@ export const STORAGE_KEYS = {
   V3_CALENDAR_FILTER: 'jalabiya_v3_calendar_filter',
   V3_DATA_HASH: 'jalabiya_v3_data_hash',
   V3_LAST_AUTO_BACKUP: 'jalabiya_v3_last_auto_backup',
+  V3_LAST_EXTERNAL_BACKUP: 'jalabiya_v3_last_external_backup',
 };
 
 /* --- 21. الحدود القصوى --- */
@@ -285,12 +298,4 @@ export const LIMITS = {
   imageMaxSizeKB: 500,
   imageMaxDimensionPx: 1600,
   lowDataThreshold: 5,
-};
-
-/* --- 22. المزامنة --- */
-export const SYNC_CONFIG = {
-  debounceMs: 30000,
-  maxRetries: 3,
-  retryDelayMs: 2000,
-  offlineCheckMs: 30000,
 };

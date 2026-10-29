@@ -8,12 +8,15 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { consumeNew } from '../core/deeplink.js';
 import { appointments } from '../data/repos/appointments.js';
 import { customers } from '../data/repos/customers.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { formatDate, formatTime } from '../core/utils.js';
+import { createCustomerPicker } from '../ui/customer-picker.js';
+import { formatDate, formatTime, localDateInput } from '../core/utils.js';
+import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -40,10 +43,8 @@ const STATUS_MAP = {
  * @returns {{start:number, end:number}}
  */
 export function getTodayRange() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const startMs = start.getTime();
-  return { start: startMs, end: startMs + 24 * 60 * 60 * 1000 };
+  const startMs = startOfDay(Date.now());
+  return { start: startMs, end: startOfNextDay(startMs) };
 }
 
 /**
@@ -114,13 +115,13 @@ function splitDateTime(ts) {
   if (!ts) {
     const d = new Date();
     return {
-      dateStr: d.toISOString().slice(0, 10),
+      dateStr: localDateInput(d),
       timeStr: '09:00',
     };
   }
   const d = new Date(ts);
   return {
-    dateStr: d.toISOString().slice(0, 10),
+    dateStr: localDateInput(d),
     timeStr: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'),
   };
 }
@@ -136,12 +137,7 @@ function openAppointmentForm(existing = null) {
   });
 
   /* العميل */
-  const customerSelect = el('select', { className: 'select' });
-  customerSelect.appendChild(el('option', { value: '' }, '— اختر عميلاً —'));
-  state.customers.forEach((c) => {
-    customerSelect.appendChild(el('option', { value: c.id }, c.name));
-  });
-  if (isEdit && existing.customerId) customerSelect.value = existing.customerId;
+  const customerSelect = createCustomerPicker({ customers: state.customers, value: isEdit ? existing.customerId : '' });
 
   /* التاريخ + الوقت */
   const dt = splitDateTime(isEdit ? existing.date : Date.now() + 86400000);
@@ -170,7 +166,7 @@ function openAppointmentForm(existing = null) {
       el('label', { className: 'field__label' }, 'العميل *'),
       customerSelect,
     ]),
-    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
+    el('div', { className: 'form-grid-2' }, [
       el('div', { className: 'field' }, [
         el('label', { className: 'field__label' }, 'التاريخ *'),
         dateInput,
@@ -274,7 +270,7 @@ function buildAppointmentCard(a) {
   const meta = el('div', {
     style: { display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '12px', color: '#666', marginBottom: '8px' },
   }, [
-    el('span', {}, '👤 ' + name),
+    el('span', { 'data-customer-id': a.customerId || null }, '👤 ' + name),
     a.date ? el('span', {}, '📅 ' + formatDate(a.date)) : null,
     a.date ? el('span', {}, '🕐 ' + formatTime(a.date)) : null,
   ]);
@@ -425,7 +421,7 @@ async function refreshAll() {
    ========================================================================== */
 
 export const appointmentsPage = {
-  async render(container) {
+  async render(container, sub) {
     clear(container);
     state.container = container;
     state.activeFilter = 'upcoming';
@@ -454,6 +450,7 @@ export const appointmentsPage = {
     container.appendChild(el('div', { id: 'appointments-list' }));
 
     await refreshAll();
+    consumeNew(sub, 'appointments', () => openAppointmentForm());
   },
 
   destroy() {

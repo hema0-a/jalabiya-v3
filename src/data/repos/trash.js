@@ -8,8 +8,24 @@
 import { createRepository } from '../repository.js';
 import { STORES, LIMITS } from '../../core/config.js';
 import * as idb from '../idb.js';
+import { customers as customersRepo } from './customers.js';
+import { recordStockMove } from '../../services/ledger-shadow.js';
+import { isAuthorityActive } from '../../services/ledger-flag.js';
+import { ledgerWalletOf } from '../../services/ledger-apply.js';
+import { orderMedia } from './order-media.js';
 
 const base = createRepository(STORES.TRASH);
+
+/**
+ * عند الحذف **النهائي** لطلب من السلة تُحذف وسائطه من orderMedia (v3.3.86). وجود الطلب في السلة يحفظ وسائطه
+ * (قد يُسترجع)، وإن وُجد طلب حيّ بالمعرّف نفسه لا نحذف شيئاً.
+ * @param {Object} item — عنصر السلة
+ */
+async function dropOrderMediaIfOrder(item) {
+  if (!item || item.originalStore !== STORES.ORDERS || item.originalId == null) return;
+  if (await idb.get(STORES.ORDERS, item.originalId)) return;
+  await orderMedia.removeByOrder(item.originalId);
+}
 
 export const trash = {
   ...base,
@@ -58,7 +74,30 @@ export const trash = {
   async restore(trashId) {
     const item = await base.find(trashId);
     if (!item || !item.originalStore || !item.data) return null;
-    await idb.put(item.originalStore, item.data);
+    const data = { ...item.data };
+    /* دفعة «من الرصيد» حُذفت فأُعيد مبلغها للمحفظة (creditRefunded): استرجاعها يخصم المبلغ ثانيةً،
+       وإن لم يكفِ الرصيد يُرفض الاسترجاع قبل أي كتابة. عناصر السلة القديمة بلا العلامة لا تتأثر. */
+    if (item.originalStore === STORES.PAYMENTS && data.fromCredit && data.creditRefunded) {
+      await customersRepo.walletAdjust(data.customerId, {
+        balance: -(Number(data.amount) || 0), type: 'adjust', orderId: data.orderId || null,
+        note: 'خصم: استرجاع دفعة من الرصيد',
+      });
+    }
+    delete data.creditRefunded;
+    /* حراسة السلة (v3.3.83): حين يكون الدفتر مرجعاً لا نثق بعدّادات العميل المحفوظة في السلة (قديمة)؛
+       يُشتق الرصيد والنقاط من الدفتر قبل الكتابة، فلا يظهر العميل بأرقام قديمة ولا نافذة مزامنة بها.
+       (walletLog يبقى كما هو: سجل عرض فقط.) */
+    if (item.originalStore === STORES.CUSTOMERS && await isAuthorityActive()) {
+      const w = await ledgerWalletOf(data.id);
+      data.creditBalance = Math.max(0, w.balance);
+      data.points = Math.max(0, w.points);
+    }
+    /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
+    await idb.put(item.originalStore, { ...data, updatedAt: Date.now() });
+    /* الدفتر الظلّي (v3.3.80): استرجاع صنف يعيد كميته؛ المعرّف مشتق من عنصر السلة فلا يتكرر */
+    if (item.originalStore === STORES.INVENTORY && Number(data.quantity) > 0) {
+      await recordStockMove(data.id, Number(data.quantity), { type: 'adjust', moveId: 'restore:' + trashId, note: 'استرجاع صنف من السلة' });
+    }
     await base.remove(trashId);
     return item.data;
   },
@@ -75,6 +114,7 @@ export const trash = {
     let removed = 0;
     for (const item of all) {
       if ((item.deletedAt || 0) < cutoff) {
+        await dropOrderMediaIfOrder(item);
         await base.remove(item.id);
         removed++;
       }
@@ -94,8 +134,33 @@ export const trash = {
     const sorted = all.sort((a, b) => a.deletedAt - b.deletedAt);
     const excess = sorted.slice(0, all.length - LIMITS.maxTrashItems);
     for (const item of excess) {
+      await dropOrderMediaIfOrder(item);
       await base.remove(item.id);
     }
     return excess.length;
+  },
+
+  /**
+   * حذف نهائي لعنصر من السلة مع وسائط طلبه (إن كان طلباً).
+   * @param {string} trashId
+   * @returns {Promise<boolean>} true إن وُجد العنصر وحُذف
+   */
+  async removeForever(trashId) {
+    const item = await base.find(trashId);
+    if (!item) return false;
+    await dropOrderMediaIfOrder(item);
+    await base.remove(trashId);
+    return true;
+  },
+
+  /**
+   * تفريغ السلة نهائياً مع وسائط الطلبات التي فيها.
+   * @returns {Promise<number>} عدد العناصر المحذوفة
+   */
+  async clearAllForever() {
+    const all = await base.list();
+    for (const item of all) await dropOrderMediaIfOrder(item);
+    await base.clear();
+    return all.length;
   },
 };

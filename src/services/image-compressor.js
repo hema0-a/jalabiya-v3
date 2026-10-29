@@ -108,6 +108,19 @@ export async function compress(file, options = {}) {
     attempts++;
   }
 
+  /* لم تكفِ الجودة وحدها (صورة معقّدة): نصغّر الأبعاد تدريجياً حتى يتحقق الحد */
+  let shrinks = 0;
+  while (sizeKB > maxSizeKB && shrinks < 4 && w > 400 && h > 400) {
+    w = Math.round(w * 0.8);
+    h = Math.round(h * 0.8);
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    compressed = canvas.toDataURL('image/jpeg', Math.max(q, 0.5));
+    sizeKB = (compressed.length * 3 / 4) / 1024;
+    shrinks++;
+  }
+
   const savedPercent = originalKB > 0
     ? Math.round((1 - sizeKB / originalKB) * 100)
     : 0;
@@ -124,6 +137,27 @@ export async function compress(file, options = {}) {
 /* ==========================================================================
    4. Thumbnail
    ========================================================================== */
+
+/**
+ * مصغّر مربّع صغير جداً من dataURL (v3.3.87): يبقى داخل سجل الطلب (refThumb) لتُرسم قوائم الطلبات بلا قراءة الصورة الكاملة.
+ * ≈ 2–4KB. فشل أي خطوة ⟵ '' (القائمة تعرض رمزاً بديلاً).
+ * @param {string} dataUrl
+ * @param {number} [size=96]
+ * @param {number} [quality=0.6]
+ * @returns {Promise<string>} dataURL أو ''
+ */
+export async function thumbFromDataUrl(dataUrl, size = 96, quality = 0.6) {
+  try {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return '';
+    const img = await loadImage(dataUrl);
+    const minSide = Math.min(img.naturalWidth, img.naturalHeight);
+    if (!minSide) return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - minSide) / 2, (img.naturalHeight - minSide) / 2, minSide, minSide, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch (e) { return ''; }
+}
 
 /**
  * توليد thumbnail مربّع.

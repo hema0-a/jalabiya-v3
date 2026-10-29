@@ -17,7 +17,8 @@ import {
   HOUSE_EXPENSE_CATEGORY_COLORS,
   LIMITS,
 } from '../core/config.js';
-import { formatEGP, formatDate } from '../core/utils.js';
+import { formatEGP, formatDate, localDateInput, parseDateInput, normalizeSearch } from '../core/utils.js';
+import { dayDiff } from '../core/day-math.js';
 
 /* --- الحالة --- */
 let state = {
@@ -66,14 +67,12 @@ function getDaysInPeriod(period, filtered) {
   if (period === 'month') return now.getDate();
   if (period === 'year') {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
-    return Math.floor((now - startOfYear) / 86400000) + 1;
+    return dayDiff(startOfYear, now) + 1; /* بالتقويم لا بالساعات (التوقيت الصيفي) */
   }
   if (filtered.length === 0) return 1;
-  const dates = filtered.map((e) => e.date).filter(Boolean).sort();
+  const dates = filtered.map((e) => e.date).filter(Boolean).sort((a, b) => a - b); /* رقمياً لا نصياً */
   if (dates.length === 0) return 1;
-  const first = new Date(dates[0]).setHours(0, 0, 0, 0);
-  const last = new Date(dates[dates.length - 1]).setHours(0, 0, 0, 0);
-  return Math.max(1, Math.round((last - first) / 86400000) + 1);
+  return Math.max(1, dayDiff(dates[0], dates[dates.length - 1]) + 1);
 }
 
 /* ==========================================================================
@@ -90,7 +89,7 @@ function getMonthlyComparison(allExpenses) {
   const thisTotal = allExpenses
     .filter((e) => {
       if (!e.date) return false;
-      const d = new Date(e.date);
+      const d = localDate(e.date);
       return d.getMonth() === thisM && d.getFullYear() === thisY;
     })
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -98,7 +97,7 @@ function getMonthlyComparison(allExpenses) {
   const lastTotal = allExpenses
     .filter((e) => {
       if (!e.date) return false;
-      const d = new Date(e.date);
+      const d = localDate(e.date);
       return d.getMonth() === lastM && d.getFullYear() === lastY;
     })
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -227,8 +226,8 @@ function openExpenseForm(existing = null) {
 
   const dateInput = el('input', { className: 'input', type: 'date' });
   dateInput.value = isEdit && existing.date
-    ? new Date(existing.date).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+    ? localDateInput(existing.date)
+    : localDateInput();
 
   const noteInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) noteInput.value = existing.note || '';
@@ -246,12 +245,12 @@ function openExpenseForm(existing = null) {
       text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
       onClick: async () => {
         const amount = Number(amountInput.value);
-        if (!amount || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+        if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
         if (!dateInput.value) return toast.warning('التاريخ مطلوب');
         const data = {
           category: catSelect.value,
           amount,
-          date: new Date(dateInput.value).getTime(),
+          date: parseDateInput(dateInput.value),
           note: noteInput.value.trim(),
         };
         try {
@@ -317,11 +316,11 @@ function applyFilters() {
   if (state.activeCategory !== 'all') {
     list = list.filter((e) => (e.category || 'other') === state.activeCategory);
   }
-  const q = state.searchQuery.trim().toLowerCase();
+  const q = normalizeSearch(state.searchQuery);
   if (q) {
     list = list.filter((e) => {
-      const note = String(e.note || '').toLowerCase();
-      const label = getCategoryLabel(e.category).toLowerCase();
+      const note = normalizeSearch(e.note);
+      const label = normalizeSearch(getCategoryLabel(e.category));
       return note.includes(q) || label.includes(q);
     });
   }
@@ -524,3 +523,8 @@ export const houseExpensesPage = {
     };
   },
 };
+
+/* تاريخ yyyy-mm-dd يُفسَّر محلياً (new Date('yyyy-mm-dd') يعتمد UTC فيُزيح الشهر في المناطق خلف UTC) */
+function localDate(v) {
+  return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? new Date(v + 'T00:00:00') : new Date(v);
+}

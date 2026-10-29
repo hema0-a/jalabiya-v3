@@ -12,6 +12,8 @@ import { settings } from '../data/repos/settings.js';
 import { getCalendarEvents, getOverdueOrdersCount } from '../services/calendar-events.js';
 import { DAY_NAMES_SHORT, MONTH_NAMES, DEFAULT_SETTINGS } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
+import { isPastDue } from '../services/order-timing.js';
+import { startOfNextDay } from '../core/day-math.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -137,7 +139,7 @@ function renderFilters() {
 function renderStats() {
   const now = Date.now();
   const todayStart = startOfDayMs(now);
-  const todayEnd = todayStart + 86400000;
+  const todayEnd = startOfNextDay(todayStart);
 
   const monthOrders = state.events.filter((e) => e.type === 'order').length;
   const todayOrders = state.events.filter((e) =>
@@ -179,11 +181,11 @@ function buildDayCell(day, ts) {
   let dotColor = null;
   if (orders.length > 0) {
     const hasOverdue = orders.some((o) =>
-      o.date < now && o.metadata.status !== 'delivered' && o.metadata.status !== 'cancelled'
+      isPastDue(o.date, now) && o.metadata.status !== 'delivered' && o.metadata.status !== 'cancelled'
     );
     const hasSoon = orders.some((o) => {
       const diff = o.date - now;
-      return diff >= 0 && diff < 3 * 86400000;
+      return !isPastDue(o.date, now) && diff < 3 * 86400000;
     });
     const allDelivered = orders.every((o) => o.metadata.status === 'delivered');
     dotColor = hasOverdue ? '#C62828' : hasSoon ? '#F57C00' : allDelivered ? '#2E7D32' : '#2E7D32';

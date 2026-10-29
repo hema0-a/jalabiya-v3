@@ -8,6 +8,7 @@
 import { orders } from '../data/repos/orders.js';
 import { appointments } from '../data/repos/appointments.js';
 import { customers } from '../data/repos/customers.js';
+import { isPastDue } from './order-timing.js';
 
 /* --- ألوان حالات الطلبات --- */
 export const ORDER_STATUS_COLORS = {
@@ -101,8 +102,7 @@ export async function getOverdueOrdersCount() {
   const all = await orders.list();
   const now = Date.now();
   return all.filter((o) =>
-    o.dueDate &&
-    o.dueDate < now &&
+    isPastDue(o.dueDate, now) &&
     o.status !== 'delivered' &&
     o.status !== 'cancelled'
   ).length;

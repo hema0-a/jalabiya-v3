@@ -1,0 +1,94 @@
+/* ==========================================================================
+   audit-3314.test.js — اختبارات انحدار لإصلاحات الفحص الشامل
+   ========================================================================== */
+
+import { register } from '../registry.js';
+import * as idb from '../../data/idb.js';
+import { STORES } from '../../core/config.js';
+import { localDateInput, toLatinDigits, isEgyptPhone, isValidPin, normalizePhone, parseDateInput } from '../../core/utils.js';
+import { withDepositPayments, unrecordedDeposit } from '../../services/payments-view.js';
+import { getPeriodCoverage } from '../../services/commitments-calculator.js';
+
+register('audit v3.3.14 write durability', async (t) => {
+  const id = 'dur-test-' + Date.now();
+  const v0 = idb.getWriteVersion();
+  await idb.put(STORES.CUSTOMERS, { id, name: 'اختبار', createdAt: 1, updatedAt: 1 });
+  await t.test('1. put يُنهي المعاملة ويزيد عدّاد الكتابة',
+    idb.getWriteVersion() === v0 + 1 && (await idb.get(STORES.CUSTOMERS, id)).name === 'اختبار');
+
+  let rejected = false;
+  try { await idb.put(STORES.CUSTOMERS, { id: id + '-bad', fn() {} }); }
+  catch (e) { rejected = true; }
+  await t.test('2. قيمة غير قابلة للتخزين ترفض الوعد (لا نجاح كاذب)', rejected);
+
+  await idb.remove(STORES.CUSTOMERS, id);
+  await t.test('3. remove يُنهي المعاملة ويحذف السجل',
+    (await idb.get(STORES.CUSTOMERS, id)) === undefined);
+});
+
+register('audit v3.3.14 periodic commitments', async (t) => {
+  const now = new Date(2026, 9, 10);                       /* 10 أكتوبر 2026 */
+  const at = (monthsAgo) => new Date(2026, 9 - monthsAgo, 15).getTime();
+  const q = { id: 'q', amount: 3000, frequency: 'quarterly' };
+
+  await t.test('4. التزام ربع سنوي دُفع قبل شهرين = مغطّى (لا يُعدّ متأخراً)',
+    getPeriodCoverage(q, [{ commitmentId: 'q', amount: 3000, date: at(2) }], now).covered === true);
+
+  await t.test('5. دُفع قبل 4 أشهر = غير مغطّى (حان موعد الدورة)',
+    getPeriodCoverage(q, [{ commitmentId: 'q', amount: 3000, date: at(4) }], now).covered === false);
+
+  const a = { id: 'a', amount: 12000, frequency: 'annual' };
+  await t.test('6. سنوي: دفعة كاملة قبل 8 أشهر مغطّى، وجزئية غير مغطّى',
+    getPeriodCoverage(a, [{ commitmentId: 'a', amount: 12000, date: at(8) }], now).covered === true &&
+    getPeriodCoverage(a, [{ commitmentId: 'a', amount: 5000, date: at(8) }], now).covered === false);
+
+  const o = { id: 'o', amount: 5000, frequency: 'once' };
+  await t.test('7. مرة واحدة: دفعتان تكملان المبلغ = مسدّد',
+    getPeriodCoverage(o, [
+      { commitmentId: 'o', amount: 2000, date: at(10) },
+      { commitmentId: 'o', amount: 3000, date: at(1) },
+    ], now).covered === true);
+
+  await t.test('8. الشهري والأسبوعي يُقاسان بالشهر الحالي (null)',
+    getPeriodCoverage({ id: 'm', amount: 100, frequency: 'monthly' }, [], now) === null &&
+    getPeriodCoverage({ id: 'w', amount: 100, frequency: 'weekly' }, [], now) === null);
+});
+
+register('audit v3.3.14 local date inputs', async (t) => {
+  const lateNight = new Date(2026, 9, 11, 0, 30);          /* 11 أكتوبر 00:30 محلي */
+  await t.test('9. localDateInput يعيد التاريخ المحلي (لا تاريخ UTC)',
+    localDateInput(lateNight) === '2026-10-11');
+  await t.test('10. localDateInput يملأ الأصفار (شهر/يوم مفرد)',
+    localDateInput(new Date(2026, 0, 5, 12)) === '2026-01-05');
+});
+
+register('audit v3.3.14 arabic digits', async (t) => {
+  await t.test('11. toLatinDigits يحوّل ٠-٩ و۰-۹ ويترك غيرها',
+    toLatinDigits('٠١٠٢٣۴۵abc9') === '0102345abc9' && toLatinDigits(null) === '');
+  await t.test('12. رقم الهاتف بالأرقام العربية يُقبل ويُحوَّل لصيغة دولية',
+    isEgyptPhone('٠١٠١٢٣٤٥٦٧٨') === true && normalizePhone('٠١٠١٢٣٤٥٦٧٨') === '+201012345678');
+  await t.test('13. الرقم السري بالأرقام العربية يُقبل (4 أرقام فقط)',
+    isValidPin('١٢٣٤') === true && isValidPin('١٢٣') === false && isValidPin('12٣٤٥') === false);
+});
+
+register('audit v3.3.14 date round trip', async (t) => {
+  const ts = parseDateInput('2026-10-11');
+  await t.test('14. parseDateInput ثم localDateInput يعيدان اليوم نفسه (بلا انزياح)',
+    localDateInput(ts) === '2026-10-11' && new Date(ts).getHours() === 12);
+  await t.test('15. قيمة فارغة/غير صالحة → null، وأرقام عربية تُقبل',
+    parseDateInput('') === null && parseDateInput('abc') === null && parseDateInput('2026-13-45') === null &&
+    localDateInput(parseDateInput('٢٠٢٦-٠١-٠٥')) === '2026-01-05');
+  await t.test('16. تاريخ قديم محفوظ كمنتصف ليل UTC يبقى يومه في التوقيت المحلي الحالي أو يختلف بيوم واحد فقط',
+    Math.abs(new Date(localDateInput(Date.UTC(2026, 9, 11))).getTime() - new Date('2026-10-11').getTime()) <= 86400000);
+});
+
+register('audit v3.3.14 explicit deposit flag', async (t) => {
+  const order = { id: 'o1', customerId: 'c1', status: 'pending', amount: 2000, deposit: 500 };
+  const sum = (l) => l.reduce((a, p) => a + p.amount, 0);
+  await t.test('17. دفعة لاحقة بمبلغ المقدم نفسه وisDeposit=false → المقدم لا يضيع (1000)',
+    sum(withDepositPayments([{ id: 'p', orderId: 'o1', amount: 500, isDeposit: false }], [order])) === 1000);
+  await t.test('18. دفعة معلَّمة isDeposit=true → المقدم لا يُعدّ مرتين (500)',
+    sum(withDepositPayments([{ id: 'p', orderId: 'o1', amount: 500, isDeposit: true }], [order])) === 500);
+  await t.test('19. توافق قديم: دفعة بلا الحقل وبمبلغ المقدم تُعدّ هي المقدم',
+    unrecordedDeposit(500, [{ amount: 500 }]) === 0 && unrecordedDeposit(500, [{ amount: 300 }]) === 500);
+});

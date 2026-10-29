@@ -45,6 +45,7 @@
   position: sticky;
   top: 130px;
   max-height: calc(100vh - 150px);
+  max-height: calc(100dvh - 150px);
   overflow-y: auto;
   background: var(--color-surface);
   border-radius: var(--radius-l);
@@ -256,13 +257,8 @@
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary-dark);
 }
-.collapsible.settings-section .collapsible__content {
-  padding: 0;
-}
-.collapsible.settings-section.collapsible--open .collapsible__content {
-  padding: var(--space-m);
-  padding-top: var(--space-s);
-  border-top: 1px solid var(--color-border);
+.collapsible.settings-section.collapsible--open > .collapsible__content > .collapsible__body {
+  padding: var(--space-s) var(--space-m) var(--space-m);
 }
 .collapsible.settings-danger {
   padding: 0;

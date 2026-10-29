@@ -8,6 +8,7 @@
 import { STORES, DEFAULT_SETTINGS } from '../../core/config.js';
 import { SETTINGS_ID } from '../schema.js';
 import * as idb from '../idb.js';
+import { noteSaved } from '../../sync/settings-sync.js';
 
 /**
  * دمج المحفوظ مع الافتراضي (مستوى واحد عمق).
@@ -58,6 +59,8 @@ export const settings = {
       updatedAt: Date.now(),
     };
     await idb.put(STORES.SETTINGS, record);
+    /* مزامنة السحابة: ختم وقت المفاتيح المُزامَنة التي تغيّرت (لا يُفشل الحفظ أبداً) */
+    await noteSaved(existing, record);
     return record;
   },
 

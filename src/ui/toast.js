@@ -6,7 +6,9 @@
      toast.warning('رسالة')   → إشعار برتقالي
      toast.danger('رسالة')    → إشعار أحمر
      toast.info('رسالة')      → إشعار أزرق
-     toast.show('رسالة', {type, duration, closable})
+     toast.show('رسالة', {type, duration, closable, action:{label,onClick}, actions:[{label,onClick}]})
+     toast.undo('تم التسليم', async () => {...}, {extraAction:{label,onClick}})
+                              → إشعار بزر «تراجع» (7 ثوانٍ) + زر إضافي اختياري (مثل «📱 إشعار العميل»)
      toast.clear()            → إزالة كل الإشعارات
    ========================================================================== */
 
@@ -51,6 +53,8 @@ function show(message, options = {}) {
     type = 'default',
     duration = DEFAULT_DURATION,
     closable = true,
+    action = null,
+    actions = [],
   } = options;
 
   const container = getContainer();
@@ -87,6 +91,15 @@ function show(message, options = {}) {
     events.emit('toast:closed', { message, type });
   }
 
+  /* أزرار إجراء داخل الإشعار (مثل «تراجع» و«📱 إشعار العميل»): يُغلق الإشعار ثم ينفّذ */
+  [action, ...(Array.isArray(actions) ? actions : [])].forEach((a) => {
+    if (!a || typeof a.onClick !== 'function') return;
+    node.appendChild(el('button', {
+      className: 'toast__action', type: 'button',
+      onClick: () => { close(); try { a.onClick(); } catch (e) { console.warn('[toast] action failed:', e); } },
+    }, String(a.label || 'تراجع')));
+  });
+
   if (closable) {
     const closeBtn = el('button', {
       className: 'toast__close',
@@ -114,6 +127,22 @@ export const toast = {
   danger:  (msg, opts = {}) => show(msg, { ...opts, type: 'danger'  }),
   info:    (msg, opts = {}) => show(msg, { ...opts, type: 'info'    }),
   error:   (msg, opts = {}) => show(msg, { ...opts, type: 'danger'  }),
+  /** نجاح مع زر «تراجع» لمدة 7 ثوانٍ: onUndo يعيد الحال، وأي فشل فيه يظهر للمستخدم.
+   *  opts.extraAction = زر إضافي بعد «تراجع» (مثل «📱 إشعار العميل»). */
+  undo(msg, onUndo, opts = {}) {
+    const { extraAction = null, ...rest } = opts;
+    return show(msg, {
+      type: 'success', duration: 7000, ...rest,
+      actions: extraAction ? [extraAction] : [],
+      action: {
+        label: 'تراجع',
+        onClick: async () => {
+          try { await onUndo(); }
+          catch (e) { show('تعذّر التراجع: ' + (e && e.message ? e.message : e), { type: 'danger' }); }
+        },
+      },
+    });
+  },
   clear() {
     const c = document.getElementById(CONTAINER_ID);
     if (!c) return;

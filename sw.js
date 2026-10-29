@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.3.8 — إكمال الكاش + تحديثات فورية
+   الإصدار: v3.5.12 — إصلاح بحث الهاتف في القروض والإحالات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.3.8';
+const CACHE_VERSION = 'v3.5.12';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -17,43 +17,48 @@ const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
    ========================================================================== */
 
 const PRECACHE_URLS = [
+  /* @generated:begin — scripts/gen-precache.cjs (لا تعدّل هذه القائمة يدوياً؛ شغّل: npm run gen:precache) */
   /* --- Core shell --- */
   './',
   './index.html',
   './manifest.json',
 
   /* --- Styles --- */
-  './styles/main.css',
   './styles/base.css',
   './styles/components.css',
   './styles/layout.css',
   './styles/settings.css',
   './styles/themes.css',
 
-  /* --- Icons --- */
-  './assets/icons/icon.svg',
+  /* --- Assets --- */
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
+  './assets/icons/icon.svg',
 
   /* --- Main entry --- */
   './src/main.js',
   './src/pwa.js',
 
-  /* --- Core modules --- */
+  /* --- src/core --- */
   './src/core/config.js',
+  './src/core/day-math.js',
+  './src/core/deeplink.js',
   './src/core/dom.js',
+  './src/core/error-handler.js',
   './src/core/events.js',
   './src/core/sanitize.js',
+  './src/core/save-error.js',
   './src/core/utils.js',
-  './src/core/error-handler.js',
 
-  /* --- Data layer --- */
-  './src/data/schema.js',
+  /* --- src/data --- */
   './src/data/idb.js',
+  './src/data/record-meta.js',
+  './src/data/record-schema.js',
   './src/data/repository.js',
+  './src/data/schema.js',
   './src/data/search.js',
 
-  /* --- Data repos --- */
+  /* --- src/data/repos --- */
   './src/data/repos/activity.js',
   './src/data/repos/appointments.js',
   './src/data/repos/commitment-payments.js',
@@ -62,11 +67,14 @@ const PRECACHE_URLS = [
   './src/data/repos/expenses.js',
   './src/data/repos/house-expenses.js',
   './src/data/repos/inventory.js',
+  './src/data/repos/ledger.js',
   './src/data/repos/loan-payments.js',
+  './src/data/repos/order-media.js',
   './src/data/repos/orders.js',
   './src/data/repos/payments.js',
   './src/data/repos/personal-loans.js',
   './src/data/repos/portfolio.js',
+  './src/data/repos/quotes.js',
   './src/data/repos/referrals.js',
   './src/data/repos/savings-goals.js',
   './src/data/repos/settings.js',
@@ -74,88 +82,219 @@ const PRECACHE_URLS = [
   './src/data/repos/worker-payments.js',
   './src/data/repos/workers.js',
 
-  /* --- Security --- */
-  './src/security/auth.js',
-  './src/security/pin-crypto.js',
+  /* --- src/pages --- */
+  './src/pages/activity-log.js',
+  './src/pages/appointments.js',
+  './src/pages/calendar.js',
+  './src/pages/cloud-sync.js',
+  './src/pages/commitments-actions.js',
+  './src/pages/commitments-cards.js',
+  './src/pages/commitments-forms.js',
+  './src/pages/commitments-load.js',
+  './src/pages/commitments-logic.js',
+  './src/pages/commitments-views.js',
+  './src/pages/commitments.js',
+  './src/pages/customers-actions.js',
+  './src/pages/customers-cards.js',
+  './src/pages/customers-form.js',
+  './src/pages/customers-load.js',
+  './src/pages/customers-logic.js',
+  './src/pages/customers-measure.js',
+  './src/pages/customers-views.js',
+  './src/pages/customers.js',
+  './src/pages/dashboard-actions.js',
+  './src/pages/dashboard-customize.js',
+  './src/pages/dashboard-kpis.js',
+  './src/pages/dashboard-sections.js',
+  './src/pages/dashboard.js',
+  './src/pages/data-care.js',
+  './src/pages/debts.js',
+  './src/pages/expenses.js',
+  './src/pages/financial-center.js',
+  './src/pages/house-expenses.js',
+  './src/pages/inventory.js',
+  './src/pages/kpis.js',
+  './src/pages/loans-cards.js',
+  './src/pages/loans-detail.js',
+  './src/pages/loans-forms.js',
+  './src/pages/loans-logic.js',
+  './src/pages/loans-views.js',
+  './src/pages/loans.js',
+  './src/pages/messages.js',
+  './src/pages/occasions.js',
+  './src/pages/orders-actions.js',
+  './src/pages/orders-cards.js',
+  './src/pages/orders-delivery.js',
+  './src/pages/orders-form.js',
+  './src/pages/orders-item-rows.js',
+  './src/pages/orders-logic.js',
+  './src/pages/orders-summary.js',
+  './src/pages/orders-views.js',
+  './src/pages/orders.js',
+  './src/pages/payments.js',
+  './src/pages/pickups.js',
+  './src/pages/portfolio.js',
+  './src/pages/pricing-calculator.js',
+  './src/pages/quotes.js',
+  './src/pages/referrals.js',
+  './src/pages/reports.js',
+  './src/pages/season-compare.js',
+  './src/pages/tests.js',
+  './src/pages/trash.js',
+  './src/pages/wall.js',
+  './src/pages/workers-actions.js',
+  './src/pages/workers-cards.js',
+  './src/pages/workers-detail.js',
+  './src/pages/workers-forms.js',
+  './src/pages/workers-logic.js',
+  './src/pages/workers-views.js',
+  './src/pages/workers.js',
 
-  /* --- UI components --- */
+  /* --- src/pages/settings --- */
+  './src/pages/settings/index.js',
+  './src/pages/settings/sections-data.js',
+  './src/pages/settings/sections-security.js',
+  './src/pages/settings/sections-system.js',
+  './src/pages/settings/sections-workshop.js',
+
+  /* --- src/security --- */
+  './src/security/auth.js',
+  './src/security/biometric.js',
+  './src/security/pin-crypto.js',
+  './src/security/pin-recovery.js',
+
+  /* --- src/services --- */
+  './src/services/alert-rules.js',
+  './src/services/amount-guard.js',
+  './src/services/auto-backup.js',
+  './src/services/auto-messages.js',
+  './src/services/backup-nudge.js',
+  './src/services/calendar-events.js',
+  './src/services/capacity-strip.js',
+  './src/services/catalog-page.js',
+  './src/services/commitments-calculator.js',
+  './src/services/contacts-import.js',
+  './src/services/customer-merge-exec.js',
+  './src/services/customer-merge.js',
+  './src/services/dashboard-layout.js',
+  './src/services/data-integrity.js',
+  './src/services/delivery-receipt.js',
+  './src/services/demo-data.js',
+  './src/services/deposit-policy.js',
+  './src/services/diagnostics.js',
+  './src/services/draft-manager.js',
+  './src/services/financial-calculator.js',
+  './src/services/financial-export.js',
+  './src/services/house-expenses-export.js',
+  './src/services/image-compressor.js',
+  './src/services/invoice-image.js',
+  './src/services/invoice-print.js',
+  './src/services/item-catalog.js',
+  './src/services/kpis-calculator.js',
+  './src/services/ledger-apply.js',
+  './src/services/ledger-authority.js',
+  './src/services/ledger-conflicts.js',
+  './src/services/ledger-flag.js',
+  './src/services/ledger-report.js',
+  './src/services/ledger-shadow.js',
+  './src/services/ledger-union.js',
+  './src/services/ledger.js',
+  './src/services/loans-calculator.js',
+  './src/services/media-diagnostic.js',
+  './src/services/media-migration.js',
+  './src/services/message-composer.js',
+  './src/services/message-log.js',
+  './src/services/message-queue.js',
+  './src/services/message-templates.js',
+  './src/services/morning-summary.js',
+  './src/services/nav-groups.js',
+  './src/services/notifications.js',
+  './src/services/order-media-scan.js',
+  './src/services/order-media.js',
+  './src/services/order-profit.js',
+  './src/services/order-risk.js',
+  './src/services/order-scheduler.js',
+  './src/services/order-timing.js',
+  './src/services/partial-delivery.js',
+  './src/services/payments-view.js',
+  './src/services/perf-probe.js',
+  './src/services/pickup-reminders.js',
+  './src/services/quotes.js',
+  './src/services/receivables.js',
+  './src/services/referral-rewards.js',
+  './src/services/season-compare.js',
+  './src/services/signature-pref.js',
+  './src/services/size-clusters.js',
+  './src/services/status-notify.js',
+  './src/services/storage-health.js',
+  './src/services/system-status.js',
+  './src/services/vip-rules.js',
+  './src/services/wall-board.js',
+  './src/services/week-visits.js',
+
+  /* --- src/sync --- */
+  './src/sync/auth-sync.js',
+  './src/sync/auto-sync.js',
+  './src/sync/conflict-log.js',
+  './src/sync/dirty-state.js',
+  './src/sync/firebase-config.js',
+  './src/sync/firestore-sync.js',
+  './src/sync/min-version.js',
+  './src/sync/offline-queue.js',
+  './src/sync/record-merge.js',
+  './src/sync/settings-sync.js',
+  './src/sync/sync-flow.js',
+  './src/sync/sync-identity.js',
+  './src/sync/tombstones.js',
+
+  /* --- src/ui --- */
+  './src/ui/bottom-nav.js',
+  './src/ui/capacity-strip-view.js',
+  './src/ui/catalog-page-share.js',
   './src/ui/client-mode.js',
   './src/ui/collapsible.js',
+  './src/ui/contacts-import-dialog.js',
   './src/ui/controls.js',
+  './src/ui/customer-menu.js',
+  './src/ui/customer-picker.js',
+  './src/ui/dashboard-charts.js',
+  './src/ui/delivery-receipt-dialog.js',
+  './src/ui/deposit-guard.js',
+  './src/ui/display-settings.js',
   './src/ui/fab.js',
   './src/ui/form-builder.js',
   './src/ui/layout.js',
+  './src/ui/ledger-shadow-card.js',
+  './src/ui/lock-failure.js',
+  './src/ui/lock-screen.js',
+  './src/ui/media-migration-card.js',
+  './src/ui/message-composer-dialog.js',
   './src/ui/modal.js',
+  './src/ui/morning-summary.js',
   './src/ui/notifications-center.js',
   './src/ui/offline-indicator.js',
+  './src/ui/onboarding.js',
   './src/ui/order-image-picker.js',
   './src/ui/progressive-list.js',
+  './src/ui/quick-preview-catalog.js',
+  './src/ui/quick-preview-customer.js',
+  './src/ui/quick-preview-entities.js',
+  './src/ui/quick-preview-helpers.js',
+  './src/ui/quick-preview-order.js',
   './src/ui/quick-preview.js',
+  './src/ui/report-issue.js',
   './src/ui/sidebar.js',
   './src/ui/signature-pad.js',
   './src/ui/sub-page.js',
+  './src/ui/swipe.js',
+  './src/ui/sync-indicator.js',
+  './src/ui/system-status-card.js',
   './src/ui/theme.js',
   './src/ui/toast.js',
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
-  './src/ui/dashboard-charts.js',
-  './src/ui/onboarding.js',
-
-  /* --- Sync (Firebase) --- */
-  './src/sync/auth-sync.js',
-  './src/sync/firebase-config.js',
-  './src/sync/firestore-sync.js',
-  './src/sync/offline-queue.js',
-
-  /* --- Services --- */
-  './src/services/auto-backup.js',
-  './src/services/commitments-calculator.js',
-  './src/services/draft-manager.js',
-  './src/services/financial-calculator.js',
-  './src/services/kpis-calculator.js',
-  './src/services/loans-calculator.js',
-  './src/services/notifications.js',
-  './src/services/order-scheduler.js',
-  './src/services/order-timing.js',
-  './src/services/payments-view.js',
-  './src/services/auto-messages.js',
-  './src/services/calendar-events.js',
-  './src/services/financial-export.js',
-  './src/services/house-expenses-export.js',
-  './src/services/image-compressor.js',
-  './src/services/invoice-print.js',
-
-  /* --- Pages --- */
-  './src/pages/dashboard.js',
-  './src/pages/customers.js',
-  './src/pages/orders.js',
-  './src/pages/payments.js',
-  './src/pages/inventory.js',
-  './src/pages/workers.js',
-  './src/pages/expenses.js',
-  './src/pages/reports.js',
-  './src/pages/calendar.js',
-  './src/pages/pricing-calculator.js',
-  './src/pages/financial-center.js',
-  './src/pages/kpis.js',
-  './src/pages/portfolio.js',
-  './src/pages/commitments.js',
-  './src/pages/house-expenses.js',
-  './src/pages/loans.js',
-  './src/pages/referrals.js',
-  './src/pages/occasions.js',
-  './src/pages/activity-log.js',
-  './src/pages/trash.js',
-  './src/pages/cloud-sync.js',
-  './src/pages/tests.js',
-  './src/pages/appointments.js',
-
-  /* --- Settings sub-pages --- */
-  './src/pages/settings/index.js',
-  './src/pages/settings/sections-workshop.js',
-  './src/pages/settings/sections-data.js',
-  './src/pages/settings/sections-system.js',
-  './src/pages/settings/sections-security.js',
+  './src/ui/update-banner.js',
+  /* @generated:end */
 ];
 
 /* ==========================================================================
@@ -172,7 +311,9 @@ self.addEventListener('install', (event) => {
           })
         )
       );
-    }).then(() => self.skipWaiting())
+    })
+    /* لا skipWaiting هنا: التفعيل الفوري كان يُعيد تحميل الصفحة فجأة أثناء العمل (وقد يضيّع نموذجاً مفتوحاً).
+       التحديث يُفعَّل بعد موافقة المستخدم عبر رسالة SKIP_WAITING (pwa.js → notifyUpdate). */
   );
 });
 
@@ -210,8 +351,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+          /* لا نخزّن صفحات الأخطاء (404/500) حتى لا تُعرض لاحقاً بلا إنترنت */
+          if (res && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+          }
           return res;
         })
         .catch(() => caches.match('./index.html'))
