@@ -5,6 +5,35 @@
 
 ---
 
+## [3.5.10] — 2026-10-29 — تقسيم صفحة الالتزامات إلى وحدات (صيانة بلا تغيير سلوك) 🧩
+
+تقسيم `commitments.js` (909 أسطر ← مدخل + 6 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
+القاعدة نفسها كـ v3.5.9: الدوال تُنقل **حرفياً**، والتواصل عبر `ctx` صريح `{ state, refresh, openCommitmentForm, openGoalForm }`.
+
+### 🧩 الملفات
+- **`src/pages/commitments.js`** (يبقى المدخل، 88 سطراً): الحالة + `ctx` + `resetCommitmentsState` + `refreshAll` + `commitmentsPage`.
+- **`commitments-logic.js`** (جديد، 49): `statusColor` · `filterCommitments(items, category, q)` · `filterGoals(items, q)`.
+- **`commitments-load.js`** (جديد، 24): `loadData(state)`.
+- **`commitments-forms.js`** (جديد، 269): `openCommitmentForm(ctx, existing)` · `openPaymentForm(ctx, commitment)` · `openGoalForm(ctx, existing)` · `openGoalDeposit(ctx, goal)`.
+- **`commitments-actions.js`** (جديد، 157): `deleteCommitment(ctx, item)` · `deleteGoal(ctx, goal)` · `openCommitmentPreview` · `openGoalPreview` · `openCommitmentDetail(item)`.
+- **`commitments-cards.js`** (جديد، 157): `buildCommitmentCard(ctx, item)` · `buildGoalCard(ctx, goal)`.
+- **`commitments-views.js`** (جديد، 334): `renderTabs` · `renderStats` · `renderHealth` · `renderAlerts` · `renderSearchBox` · `renderCategoryFilters` · `renderCommitmentsList` · `renderGoalsList` · `renderPage`.
+
+### 🛡️ قرارات التصميم
+- الاستيراد أحادي الاتجاه: logic ← forms ← actions/cards ← views ← المدخل. لا استيراد دائري، والوحدات لا تستورد المدخل.
+- `state` صار `const` يُصفَّر في مكانه عند `destroy` (كان يُعاد إسناده، وهذا كان سيُبقي مرجعاً قديماً داخل `ctx`).
+- معالجا الحذف (التزام/هدف) نُقلا حرفياً من `onClick` داخل البطاقة إلى `deleteCommitment` و`deleteGoal`؛ والفلترة المضمّنة في دالتَي رسم القائمة صارت `filterCommitments` و`filterGoals` بالمنطق نفسه.
+- `statusColor` غير مستخدمة في الأصل (كود ميت)؛ أُبقيت ولم تُحذف (قرار الحذف لإصدار منفصل).
+- الواجهة العامة كما كانت: `commitmentsPage`.
+
+### 🧪 الاختبارات
+- لم يُعدَّل ولم يُحذف أي اختبار. مقارنة سطور الوحدات بالأصل: لا فرق سوى تمرير `ctx` وتوقيعات الدوال والترويسات واستدعاءات `refreshAll` ← `ctx.refresh`.
+
+### 📦 الإصدار
+- `package.json` · `config.js` · `sw.js` (`CACHE_VERSION`) · `README.md` ← 3.5.10، وقائمة precache مولَّدة (+6 ملفات).
+
+---
+
 ## [3.5.9] — 2026-10-29 — تقسيم صفحة العمال إلى وحدات (صيانة بلا تغيير سلوك) 🧩
 
 تقسيم `workers.js` (794 سطراً ← مدخل + 6 وحدات). **لا تغيير في السلوك ولا في الشكل ولا في أي API.**
