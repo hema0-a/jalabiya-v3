@@ -113,5 +113,6 @@ import './modules/v351-dashboard-customize.test.js';
 import './modules/v353-audit-deep.test.js';
 import './modules/v354-accordion-merge.test.js';
 import './modules/v355-dashboard-split.test.js';
+import './modules/v3516-image-compress-core.test.js';
 
 export { runAll, register } from './registry.js';
