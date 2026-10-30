@@ -8,6 +8,8 @@
      fitDimensions (الأبعاد بعد التصغير) · searchEncoding (حلقة الجودة ثم الأبعاد بمرمِّز مُحقَن)
      · fillWhite (خلفية بيضاء) · savedPercentOf (نسبة التوفير).
    + compressToBlob(file, options): نفس الضغط لكن يعيد Blob (بلا Base64 ولا FileReader).
+   v3.5.18: generateThumbnail تفك الأصل برابط كائن (Blob URL) بدل readAsDataURL: لا نص Base64 بحجم الأصل
+     على الخيط الرئيسي (شاشة إضافة صورة للمعرض). التوقيع والناتج نفسهما.
    v3.5.17: الضغط في Web Worker أولاً (workers/image-worker.js عبر services/image-worker-client.js) فلا تتجمّد
      الواجهة؛ وعند عدم الدعم أو أي فشل يُكمل المسار الرئيسي الحالي تلقائياً. الدوال النقية انتقلت حرفياً إلى
      image-compress-core.js (يستوردها الـWorker) وتُعاد تصديرها من هنا بالأسماء نفسها. خيار useWorker:false
@@ -286,8 +288,10 @@ export async function thumbFromDataUrl(dataUrl, size = 96, quality = 0.6) {
  * @returns {Promise<string>} data URL
  */
 export async function generateThumbnail(file, size = LIMITS.imageThumbnailSize) {
-  const dataUrl = await readAsDataURL(file);
-  const img = await loadImage(dataUrl);
+  /* v3.5.18: رابط كائن بدل readAsDataURL — لا نحوّل الأصل (حتى 5MB) إلى نص Base64 (≈6.7MB) على الخيط الرئيسي */
+  const objectUrl = URL.createObjectURL(file);
+  let img;
+  try { img = await loadImage(objectUrl); } finally { URL.revokeObjectURL(objectUrl); }
 
   const minSide = Math.min(img.naturalWidth, img.naturalHeight);
   const sx = (img.naturalWidth - minSide) / 2;
