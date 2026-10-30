@@ -8,12 +8,22 @@
      fitDimensions (الأبعاد بعد التصغير) · searchEncoding (حلقة الجودة ثم الأبعاد بمرمِّز مُحقَن)
      · fillWhite (خلفية بيضاء) · savedPercentOf (نسبة التوفير).
    + compressToBlob(file, options): نفس الضغط لكن يعيد Blob (بلا Base64 ولا FileReader).
+   v3.5.17: الضغط في Web Worker أولاً (workers/image-worker.js عبر services/image-worker-client.js) فلا تتجمّد
+     الواجهة؛ وعند عدم الدعم أو أي فشل يُكمل المسار الرئيسي الحالي تلقائياً. الدوال النقية انتقلت حرفياً إلى
+     image-compress-core.js (يستوردها الـWorker) وتُعاد تصديرها من هنا بالأسماء نفسها. خيار useWorker:false
+     يفرض الخيط الرئيسي. الصور الأصغر من الحد لا تتغير نتيجتها؛ sizeKB في مسار الـWorker من حجم الـBlob
+     (فرق ≈ 17 بايت عن تقدير dataURL).
    compress() بتوقيعها وشكل نتيجتها نفسهما (dataUrl). التغيير الوحيد في السلوك:
      الصور الشفافة (PNG) تُرسم على خلفية بيضاء قبل التحويل إلى JPEG بدل الأسود
      (JPEG بلا شفافية فكانت الشفافية تظهر سوداء). ينطبق على compress والمصغّرين.
    ========================================================================== */
 
 import { DEFAULT_SETTINGS, LIMITS } from '../core/config.js';
+import { fitDimensions, savedPercentOf, fillWhite, searchEncoding } from './image-compress-core.js';
+import { compressInWorker, isImageWorkerSupported } from './image-worker-client.js';
+
+/* إعادة تصدير الدوال النقية بالأسماء نفسها (الاختبارات والمستدعون يستوردونها من هنا) */
+export { fitDimensions, savedPercentOf, fillWhite, searchEncoding };
 
 const MAX_INPUT_SIZE_MB = LIMITS.maxImageInputMB;
 
@@ -36,17 +46,6 @@ function loadImage(dataUrl) {
     img.onerror = () => reject(new Error('فشل تحميل الصورة'));
     img.src = dataUrl;
   });
-}
-
-/**
- * ملء اللوحة بالأبيض قبل رسم الصورة (JPEG لا يدعم الشفافية فتظهر سوداء بدونه).
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w
- * @param {number} h
- */
-export function fillWhite(ctx, w, h) {
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, w, h);
 }
 
 /* ==========================================================================
@@ -78,76 +77,7 @@ export async function hashImage(file) {
 }
 
 /* ==========================================================================
-   3. منطق الضغط النقي (بلا DOM — قابل للاختبار وللنقل إلى Worker)
-   ========================================================================== */
-
-/**
- * الأبعاد بعد التصغير ليبقى أكبر ضلع ≤ الحد (بنفس النسبة). لا تكبير أبداً.
- * @param {number} width
- * @param {number} height
- * @param {number} maxDimensionPx
- * @returns {{width:number, height:number}}
- */
-export function fitDimensions(width, height, maxDimensionPx) {
-  let w = width;
-  let h = height;
-  if (w > maxDimensionPx || h > maxDimensionPx) {
-    const ratio = Math.min(maxDimensionPx / w, maxDimensionPx / h);
-    w = Math.round(w * ratio);
-    h = Math.round(h * ratio);
-  }
-  return { width: w, height: h };
-}
-
-/**
- * نسبة التوفير المئوية بين الحجم الأصلي والناتج.
- * @param {number} originalKB
- * @param {number} sizeKB
- * @returns {number}
- */
-export function savedPercentOf(originalKB, sizeKB) {
-  return originalKB > 0 ? Math.round((1 - sizeKB / originalKB) * 100) : 0;
-}
-
-/**
- * البحث عن ترميز يحقق الحد الأقصى للحجم: أولاً تخفيض الجودة (حتى 6 محاولات ولا ينزل عن ~0.4)،
- * فإن لم يكفِ (صورة معقّدة) تصغير الأبعاد ×0.8 تدريجياً (حتى 4 مرات ولا ينزل ضلع عن 400px)
- * بجودة لا تقل عن 0.5. المرمِّز يُحقَن، فالمنطق نفسه يخدم dataURL وBlob والـWorker.
- * @param {Object} p
- * @param {number} p.width — الأبعاد الابتدائية
- * @param {number} p.height
- * @param {number} p.quality — الجودة الابتدائية (0–1)
- * @param {number} p.maxSizeKB
- * @param {(w:number, h:number, q:number) => Promise<{sizeKB:number, payload:*}>|{sizeKB:number, payload:*}} p.encode
- * @returns {Promise<{payload:*, sizeKB:number, width:number, height:number}>}
- */
-export async function searchEncoding({ width, height, quality, maxSizeKB, encode }) {
-  let w = width;
-  let h = height;
-  let q = quality;
-  let out = await encode(w, h, q);
-
-  let attempts = 0;
-  while (out.sizeKB > maxSizeKB && q > 0.4 && attempts < 6) {
-    q -= 0.1;
-    out = await encode(w, h, q);
-    attempts++;
-  }
-
-  /* لم تكفِ الجودة وحدها (صورة معقّدة): نصغّر الأبعاد تدريجياً حتى يتحقق الحد */
-  let shrinks = 0;
-  while (out.sizeKB > maxSizeKB && shrinks < 4 && w > 400 && h > 400) {
-    w = Math.round(w * 0.8);
-    h = Math.round(h * 0.8);
-    out = await encode(w, h, Math.max(q, 0.5));
-    shrinks++;
-  }
-
-  return { payload: out.payload, sizeKB: out.sizeKB, width: w, height: h };
-}
-
-/* ==========================================================================
-   4. ضغط الصورة الرئيسية (Canvas على الخيط الرئيسي)
+   3. ضغط الصورة الرئيسية (Worker أولاً ثم Canvas على الخيط الرئيسي)
    ========================================================================== */
 
 /** الخيارات الفعلية: المُمرَّر ثم إعدادات التطبيق ثم القيم الافتراضية. */
@@ -164,6 +94,28 @@ function resolveOptions(options = {}) {
 function assertInputSize(file) {
   if (file.size > MAX_INPUT_SIZE_MB * 1024 * 1024) {
     throw new Error('الصورة كبيرة جداً (الحد ' + MAX_INPUT_SIZE_MB + 'MB)');
+  }
+}
+
+/** تحويل Blob (ناتج مضغوط صغير ≤ الحد) إلى dataURL. */
+function blobToDataURL(blob) {
+  return readAsDataURL(blob);
+}
+
+/**
+ * يجرّب الضغط في Worker. يعيد null إن عُطِّل/لم يُدعَم/فشل لأي سبب (فيُكمل المستدعي على الخيط الرئيسي).
+ * @param {File} file
+ * @param {{quality:number, maxSizeKB:number, maxDimensionPx:number}} params
+ * @param {boolean} [useWorker] — false يفرض الخيط الرئيسي
+ * @returns {Promise<{blob:Blob, sizeKB:number, width:number, height:number}|null>}
+ */
+async function tryWorker(file, params, useWorker) {
+  if (useWorker === false || !isImageWorkerSupported()) return null;
+  try {
+    return await compressInWorker(file, params);
+  } catch (e) {
+    console.warn('[image-compressor] تعذّر الضغط في Worker — يُكمل على الخيط الرئيسي:', (e && (e.code || e.message)) || e);
+    return null;
   }
 }
 
@@ -193,7 +145,7 @@ function createPainter(img) {
 /**
  * ضغط صورة مع الحفاظ على الأبعاد المقبولة.
  * @param {File} file
- * @param {Object} [options] - {quality, maxSizeKB, maxDimensionPx}
+ * @param {Object} [options] - {quality, maxSizeKB, maxDimensionPx, useWorker} (useWorker:false يفرض الخيط الرئيسي)
  * @returns {Promise<{dataUrl:string, sizeKB:number, width:number, height:number, savedPercent:number}>}
  */
 export async function compress(file, options = {}) {
@@ -201,6 +153,21 @@ export async function compress(file, options = {}) {
   assertInputSize(file);
 
   const originalKB = file.size / 1024;
+
+  /* Worker أولاً (لا تجمّد الواجهة)؛ أي فشل ⟵ المسار الرئيسي أدناه كما كان */
+  const viaWorker = await tryWorker(file, { quality, maxSizeKB, maxDimensionPx }, options.useWorker);
+  if (viaWorker) {
+    try {
+      return {
+        dataUrl: await blobToDataURL(viaWorker.blob),
+        sizeKB: Math.round(viaWorker.sizeKB),
+        width: viaWorker.width,
+        height: viaWorker.height,
+        savedPercent: savedPercentOf(originalKB, viaWorker.sizeKB),
+      };
+    } catch (e) { /* فشل تحويل الناتج: نكمل على الخيط الرئيسي */ }
+  }
+
   const dataUrl = await readAsDataURL(file);
   const img = await loadImage(dataUrl);
 
@@ -230,9 +197,9 @@ export async function compress(file, options = {}) {
 
 /**
  * نفس ضغط compress() لكن يعيد Blob (بلا Base64: لا FileReader ولا تضخّم 33% في الذاكرة).
- * مقدّمة لاستعمال Blob في المعاينة (3.5.18) ولنقل الضغط إلى Worker (3.5.17).
+ * Worker أولاً ثم الخيط الرئيسي (كما compress). تُستعمل لمعاينات Blob في 3.5.18.
  * @param {File} file
- * @param {Object} [options] - {quality, maxSizeKB, maxDimensionPx}
+ * @param {Object} [options] - {quality, maxSizeKB, maxDimensionPx, useWorker} (useWorker:false يفرض الخيط الرئيسي)
  * @returns {Promise<{blob:Blob, sizeKB:number, width:number, height:number, savedPercent:number}>}
  */
 export async function compressToBlob(file, options = {}) {
@@ -240,6 +207,18 @@ export async function compressToBlob(file, options = {}) {
   assertInputSize(file);
 
   const originalKB = file.size / 1024;
+
+  const viaWorker = await tryWorker(file, { quality, maxSizeKB, maxDimensionPx }, options.useWorker);
+  if (viaWorker) {
+    return {
+      blob: viaWorker.blob,
+      sizeKB: Math.round(viaWorker.sizeKB),
+      width: viaWorker.width,
+      height: viaWorker.height,
+      savedPercent: savedPercentOf(originalKB, viaWorker.sizeKB),
+    };
+  }
+
   const url = URL.createObjectURL(file);
   let img;
   try { img = await loadImage(url); } finally { URL.revokeObjectURL(url); }
@@ -274,7 +253,7 @@ export async function compressToBlob(file, options = {}) {
 }
 
 /* ==========================================================================
-   5. Thumbnail
+   4. Thumbnail
    ========================================================================== */
 
 /**

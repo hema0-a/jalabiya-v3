@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.16 — ضغط الصور: منطق نقي + compressToBlob + خلفية بيضاء للشفاف
+   الإصدار: v3.5.17 — ضغط الصور في Web Worker مع تراجع تلقائي
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.16';
+const CACHE_VERSION = 'v3.5.17';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -193,7 +193,9 @@ const PRECACHE_URLS = [
   './src/services/financial-calculator.js',
   './src/services/financial-export.js',
   './src/services/house-expenses-export.js',
+  './src/services/image-compress-core.js',
   './src/services/image-compressor.js',
+  './src/services/image-worker-client.js',
   './src/services/invoice-image.js',
   './src/services/invoice-print-css.js',
   './src/services/invoice-print-order.js',
@@ -305,6 +307,9 @@ const PRECACHE_URLS = [
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
   './src/ui/update-banner.js',
+
+  /* --- src/workers --- */
+  './src/workers/image-worker.js',
   /* @generated:end */
 ];
 
