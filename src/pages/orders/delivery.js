@@ -5,19 +5,19 @@
    orders.js يحتفظ بغلافين رفيعين بالتوقيع القديم (order) ويمرّر ctx.
    ========================================================================== */
 
-import { el } from '../core/dom.js';
-import { formatEGP } from '../core/utils.js';
-import { orders } from '../data/repos/orders.js';
-import { customers } from '../data/repos/customers.js';
-import { payments as paymentsRepo } from '../data/repos/payments.js';
-import { modal } from '../ui/modal.js';
-import { toast } from '../ui/toast.js';
-import { openSignaturePad, SIGNATURE_SKIPPED } from '../ui/signature-pad.js';
-import { getAskSignature, setAskSignature } from '../services/signature-pref.js';
-import { orderPaidBreakdown } from '../services/payments-view.js';
-import { suggestCollection } from '../services/delivery-receipt.js';
-import { openDeliveryReceipt } from '../ui/delivery-receipt-dialog.js';
-import { deliveryProgress, planDelivery, applyDelivery, completeRemaining } from '../services/partial-delivery.js';
+import { el } from '../../core/dom.js';
+import { formatEGP } from '../../core/utils.js';
+import { orders } from '../../data/repos/orders.js';
+import { customers } from '../../data/repos/customers.js';
+import { payments as paymentsRepo } from '../../data/repos/payments.js';
+import { modal } from '../../ui/modal.js';
+import { toast } from '../../ui/toast.js';
+import { openSignaturePad, SIGNATURE_SKIPPED } from '../../ui/signature-pad.js';
+import { getAskSignature, setAskSignature } from '../../services/signature-pref.js';
+import { orderPaidBreakdown } from '../../services/payments-view.js';
+import { suggestCollection } from '../../services/delivery-receipt.js';
+import { openDeliveryReceipt } from '../../ui/delivery-receipt-dialog.js';
+import { deliveryProgress, planDelivery, applyDelivery, completeRemaining } from '../../services/partial-delivery.js';
 
 /** نافذة تأكيد التسليم مع خانة «طلب توقيع العميل» (تحفظ اختيارها كتفضيل للجهاز). @returns {Promise<{ask:boolean}|null>} */
 function confirmDeliveryDialog(message) {

@@ -24,18 +24,18 @@ import { createCollapsible } from '../ui/collapsible.js'; // يُستخدم من
 import { assessOrderRisks } from '../services/order-risk.js';
 import { getTotalWorkTime, getActiveSession, formatDuration } from '../services/order-timing.js';
 import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
-import { sessionsOf } from './orders-logic.js';
-import { syncTypesDatalist } from './orders-item-rows.js';
+import { sessionsOf } from './orders/logic.js';
+import { syncTypesDatalist } from './orders/item-rows.js';
 import { renderStats, renderTopBanners } from './orders-summary.js';
 import { renderView, disposeOrdersList } from './orders-views.js';
-import { openOrderForm } from './orders-form.js';
-import { deliverWithSignature as deliverWithSignatureImpl, openPartialDelivery as openPartialDeliveryImpl } from './orders-delivery.js';
+import { openOrderForm } from './orders/form.js';
+import { deliverWithSignature as deliverWithSignatureImpl, openPartialDelivery as openPartialDeliveryImpl } from './orders/delivery.js';
 
 /* --- إعادة تصدير الواجهة العامة (نفس الأسماء والتواقيع) --- */
 export {
   filterOrders, computeTotals, MAX_DISCOUNT_PERCENT, discountPercentOf, isDiscountExcessive, groupOrders,
-} from './orders-logic.js';
-export { buildItemRow } from './orders-item-rows.js';
+} from './orders/logic.js';
+export { buildItemRow } from './orders/item-rows.js';
 
 /* --- الحالة --- */
 /* كائن واحد ثابت طوال عمر الوحدة: destroy يصفّره في مكانه (لا إعادة إسناد) فلا يبقى أي مرجع قديم في الوحدات. */

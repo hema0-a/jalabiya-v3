@@ -5,17 +5,17 @@
    تستورد orders-actions وorders-delivery وorders-logic فقط (لا تستورد orders.js ولا orders-views).
    ========================================================================== */
 
-import { el } from '../core/dom.js';
-import { formatEGP, formatDate } from '../core/utils.js';
-import { previewOrder } from '../ui/quick-preview.js';
-import { attachSwipe } from '../ui/swipe.js';
-import { hasReferenceImage, hasOrderSignature } from '../services/order-media.js';
-import { deliveryProgress, canPartialDeliver, deliveryBadgeText } from '../services/partial-delivery.js';
-import { getDeadlineInfo, getPickupInfo, formatDuration, getTotalWorkTime, getActiveSession } from '../services/order-timing.js';
-import { orderProfit } from '../services/order-profit.js';
-import { STATUS_MAP, sessionsOf } from './orders-logic.js';
-import { deleteOrder, advanceStatus, printInvoice, shareInvoiceImage, openMessageMenu, toggleTimer, openReferenceImage, openSignature } from './orders-actions.js';
-import { deliverWithSignature, openPartialDelivery } from './orders-delivery.js';
+import { el } from '../../core/dom.js';
+import { formatEGP, formatDate } from '../../core/utils.js';
+import { previewOrder } from '../../ui/quick-preview.js';
+import { attachSwipe } from '../../ui/swipe.js';
+import { hasReferenceImage, hasOrderSignature } from '../../services/order-media.js';
+import { deliveryProgress, canPartialDeliver, deliveryBadgeText } from '../../services/partial-delivery.js';
+import { getDeadlineInfo, getPickupInfo, formatDuration, getTotalWorkTime, getActiveSession } from '../../services/order-timing.js';
+import { orderProfit } from '../../services/order-profit.js';
+import { STATUS_MAP, sessionsOf } from './logic.js';
+import { deleteOrder, advanceStatus, printInvoice, shareInvoiceImage, openMessageMenu, toggleTimer, openReferenceImage, openSignature } from './actions.js';
+import { deliverWithSignature, openPartialDelivery } from './delivery.js';
 
 /* ==========================================================================
    8. بطاقة الطلب

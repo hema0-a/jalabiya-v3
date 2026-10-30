@@ -5,10 +5,10 @@
    buildItemRow يعيد orders.js تصديره كما كان.
    ========================================================================== */
 
-import { el } from '../core/dom.js';
-import { uid, formatEGP, toNonNegative } from '../core/utils.js';
-import { findInCatalog } from '../services/item-catalog.js';
-import { EXTRA_FEE_TYPES } from './orders-logic.js';
+import { el } from '../../core/dom.js';
+import { uid, formatEGP, toNonNegative } from '../../core/utils.js';
+import { findInCatalog } from '../../services/item-catalog.js';
+import { EXTRA_FEE_TYPES } from './logic.js';
 
 export const TYPES_DL_ID = 'jalabiya-types-dl';
 

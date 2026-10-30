@@ -5,8 +5,8 @@
    orders.js يعيد تصدير: filterOrders · computeTotals · MAX_DISCOUNT_PERCENT · discountPercentOf · isDiscountExcessive · groupOrders.
    ========================================================================== */
 
-import { uid, toNonNegative } from '../core/utils.js';
-import { getActiveSession } from '../services/order-timing.js';
+import { uid, toNonNegative } from '../../core/utils.js';
+import { getActiveSession } from '../../services/order-timing.js';
 
 /* --- الحالات --- */
 export const STATUS_MAP = {

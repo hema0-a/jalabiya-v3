@@ -10,7 +10,7 @@ import { formatEGP, formatDate } from '../core/utils.js';
 import { getDayLoad } from '../services/order-scheduler.js';
 import { isPastDue } from '../services/order-timing.js';
 import { summarizeProfit } from '../services/order-profit.js';
-import { DAY_MS } from './orders-logic.js';
+import { DAY_MS } from './orders/logic.js';
 
 /* ==========================================================================
    6. شريط الحد اليومي

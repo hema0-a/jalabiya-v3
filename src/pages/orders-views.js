@@ -10,8 +10,8 @@ import { el, clear } from '../core/dom.js';
 import { toast } from '../ui/toast.js';
 import { createProgressiveList } from '../ui/progressive-list.js';
 import { clusterBySize } from '../services/size-clusters.js';
-import { STATUS_MAP, STATUS_ORDER, KANBAN_PAGE, kanbanSorted, filterOrders, groupOrders, orderType } from './orders-logic.js';
-import { buildOrderCard, buildMiniCard, groupOrderRow, groupCard } from './orders-cards.js';
+import { STATUS_MAP, STATUS_ORDER, KANBAN_PAGE, kanbanSorted, filterOrders, groupOrders, orderType } from './orders/logic.js';
+import { buildOrderCard, buildMiniCard, groupOrderRow, groupCard } from './orders/cards.js';
 
 /* --- الحالة --- */
 /* القائمة التدريجية: رسم 30 طلباً ثم المزيد عند التمرير (كانت ترسم الكل: 70 ألف عنصر DOM عند 4000 طلب) */

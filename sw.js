@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.13 — إصلاح بحث الهاتف في القروض والإحالات
+   الإصدار: v3.5.15 — إصلاح بحث الهاتف في القروض والإحالات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.13';
+const CACHE_VERSION = 'v3.5.15';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -122,12 +122,6 @@ const PRECACHE_URLS = [
   './src/pages/loans.js',
   './src/pages/messages.js',
   './src/pages/occasions.js',
-  './src/pages/orders-actions.js',
-  './src/pages/orders-cards.js',
-  './src/pages/orders-delivery.js',
-  './src/pages/orders-form.js',
-  './src/pages/orders-item-rows.js',
-  './src/pages/orders-logic.js',
   './src/pages/orders-summary.js',
   './src/pages/orders-views.js',
   './src/pages/orders.js',
@@ -149,6 +143,19 @@ const PRECACHE_URLS = [
   './src/pages/workers-logic.js',
   './src/pages/workers-views.js',
   './src/pages/workers.js',
+
+  /* --- src/pages/orders --- */
+  './src/pages/orders/actions.js',
+  './src/pages/orders/cards.js',
+  './src/pages/orders/delivery.js',
+  './src/pages/orders/form-draft.js',
+  './src/pages/orders/form-inputs.js',
+  './src/pages/orders/form-items.js',
+  './src/pages/orders/form-save.js',
+  './src/pages/orders/form-schedule.js',
+  './src/pages/orders/form.js',
+  './src/pages/orders/item-rows.js',
+  './src/pages/orders/logic.js',
 
   /* --- src/pages/settings --- */
   './src/pages/settings/index.js',

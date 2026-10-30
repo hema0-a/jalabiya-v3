@@ -78,7 +78,7 @@ export function renderFilters(ctx) {
       style: { marginInlineEnd: '4px', marginBottom: '4px' },
       onClick: () => {
         state.activeFilter = it.id;
-        renderFilters();
+        renderFilters(ctx);
         renderList(ctx);
       },
     }, it.label + ' (' + it.count + ')'));
