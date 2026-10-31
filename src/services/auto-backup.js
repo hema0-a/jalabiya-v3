@@ -7,6 +7,8 @@
    - يوفّر: runAutoBackupIfDue, createBackup, listBackups,
              restoreBackup, deleteBackup, clearAllBackups.
    - Backup record: { id, createdAt, label, sizeKB, stores: {customers:[...], ...} }
+   - v3.5.21: الملفات التي تخرج من الجهاز (exportBackupToFile · shareLatestBackup) تُشفَّر إن فُعِّل تشفير الملفات
+     (backup-crypto.js). الفشل مغلق: مفعّل ولا مشفِّر ⟵ لا ملف صريح أبداً. النسخ الداخلية في IndexedDB لا تتأثر.
    ========================================================================== */
 
 import { STORES, LIMITS, STORAGE_KEYS } from '../core/config.js';
@@ -16,6 +18,7 @@ import * as idb from '../data/idb.js';
 import { SETTINGS_ID } from '../data/schema.js';
 import { planLedgerUnion, logLedgerConflicts } from './ledger-union.js';
 import { reconcileDerivedCounters } from './ledger-apply.js';
+import { isFileEncryptionEnabled, encryptedFileName, looksEncrypted } from './backup-crypto.js';
 
 /* --- المخازن المُشتركة في النسخة (كل المخازن ما عدا backups) --- */
 const BACKUP_STORES = [
@@ -399,20 +402,41 @@ export async function clearAllBackups() {
    ========================================================================== */
 
 /**
- * تصدير نسخة احتياطية كملف JSON.
+ * يبني نص الملف واسمه: صريحاً، أو مشفّراً إن مُرِّر مشفِّر (الاسم ينتهي بـ.enc.json).
+ * يتحقق أن ناتج المشفِّر غلاف تشفير فعلاً، فلا يخرج نص صريح بخطأ في المشفِّر.
+ * @param {string} text
+ * @param {string} name
+ * @param {((text:string) => Promise<string>)|null} [encrypt]
+ * @returns {Promise<{text:string, name:string}>}
+ */
+export async function buildBackupFile(text, name, encrypt) {
+  if (typeof encrypt !== 'function') return { text, name };
+  const enc = await encrypt(text);
+  if (typeof enc !== 'string' || !looksEncrypted(enc)) throw new Error('فشل تشفير الملف — لم يُصدَّر شيء');
+  return { text: enc, name: encryptedFileName(name) };
+}
+
+/**
+ * تصدير نسخة احتياطية كملف JSON (مشفّراً إن فُعِّل التشفير).
  * @param {string} id
+ * @param {{encrypt?:(text:string) => Promise<string>}} [options] — المشفِّر من openEncryptor؛ مفعّل بلا مشفِّر ⟵ false (فشل مغلق)
  * @returns {Promise<boolean>}
  */
-export async function exportBackupToFile(id) {
+export async function exportBackupToFile(id, options = {}) {
   try {
+    const encrypt = options && typeof options.encrypt === 'function' ? options.encrypt : null;
+    if (!encrypt && isFileEncryptionEnabled()) return false;   // الفشل مغلق: لا ملف صريح والتشفير مفعّل
+
     const backup = await getBackup(id);
     if (!backup) return false;
 
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const file = await buildBackupFile(JSON.stringify(backup, null, 2),
+      'jalabiya-backup-' + localDateInput(backup.createdAt || Date.now()) + '.json', encrypt);
+    const blob = new Blob([file.text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jalabiya-backup-' + localDateInput(backup.createdAt || Date.now()) + '.json';
+    a.download = file.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -451,13 +475,19 @@ export function daysSinceExternalBackup(now = Date.now()) {
 }
 
 /**
- * ينشئ نسخة جديدة ثم يشاركها (Web Share مع ملف) وإلا ينزّلها.
- * @param {Object} [deps] — للاختبار: { navigator, download }
- * @returns {Promise<{ok:boolean, method?:'share'|'download', cancelled?:boolean, error?:string}>}
+ * ينشئ نسخة جديدة ثم يشاركها (Web Share مع ملف) وإلا ينزّلها. مشفّرة إن فُعِّل التشفير.
+ * @param {Object} [deps] — { navigator, download } للاختبار، و{ encrypt } المشفِّر من openEncryptor
+ * @returns {Promise<{ok:boolean, method?:'share'|'download', cancelled?:boolean, needsSecret?:boolean, error?:string}>}
  */
 export async function shareLatestBackup(deps = {}) {
   const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
   const download = deps.download || exportBackupToFile;
+  const encrypt = typeof deps.encrypt === 'function' ? deps.encrypt : null;
+
+  /* الفشل مغلق وبلا آثار جانبية: التشفير مفعّل ولا مشفِّر ⟵ لا ننشئ نسخة ولا نشارك شيئاً */
+  if (!encrypt && isFileEncryptionEnabled()) {
+    return { ok: false, needsSecret: true, error: 'تشفير الملفات مفعّل: أدخل عبارة المرور لمشاركة النسخة' };
+  }
 
   const created = await createBackup({ label: 'نسخة للمشاركة' });
   if (!created.ok) return { ok: false, error: created.error || 'تعذّر إنشاء النسخة' };
@@ -465,8 +495,9 @@ export async function shareLatestBackup(deps = {}) {
   try {
     const backup = await getBackup(created.id);
     if (backup && nav && typeof nav.canShare === 'function' && typeof File !== 'undefined') {
-      const file = new File([JSON.stringify(backup)],
-        'jalabiya-backup-' + localDateInput(Date.now()) + '.json', { type: 'application/json' });
+      const built = await buildBackupFile(JSON.stringify(backup),
+        'jalabiya-backup-' + localDateInput(Date.now()) + '.json', encrypt);
+      const file = new File([built.text], built.name, { type: 'application/json' });
       if (nav.canShare({ files: [file] })) {
         try {
           await nav.share({ files: [file], title: 'نسخة احتياطية — الجلابية' });
@@ -480,7 +511,7 @@ export async function shareLatestBackup(deps = {}) {
     }
   } catch { /* ننتقل للتنزيل */ }
 
-  const ok = await download(created.id);
+  const ok = await download(created.id, { encrypt });
   return ok ? { ok: true, method: 'download' } : { ok: false, error: 'تعذّر تنزيل النسخة' };
 }
 

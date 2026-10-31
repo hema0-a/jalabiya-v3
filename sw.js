@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.20 — مكتبة التشفير المعزولة data-crypto (غير موصولة)
+   الإصدار: v3.5.21 — تشفير الملفات الخارجية (اختياري)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.20';
+const CACHE_VERSION = 'v3.5.21';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -176,6 +176,7 @@ const PRECACHE_URLS = [
   './src/services/amount-guard.js',
   './src/services/auto-backup.js',
   './src/services/auto-messages.js',
+  './src/services/backup-crypto.js',
   './src/services/backup-nudge.js',
   './src/services/calendar-events.js',
   './src/services/capacity-strip.js',
@@ -297,6 +298,7 @@ const PRECACHE_URLS = [
   './src/ui/quick-preview-order.js',
   './src/ui/quick-preview.js',
   './src/ui/report-issue.js',
+  './src/ui/secret-dialog.js',
   './src/ui/sidebar.js',
   './src/ui/signature-pad.js',
   './src/ui/sub-page.js',

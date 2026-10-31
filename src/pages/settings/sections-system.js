@@ -32,8 +32,13 @@ import {
 } from '../../services/message-templates.js';
 import {
   createBackup, listBackups, restoreBackup, deleteBackup,
-  clearAllBackups, exportBackupToFile, shareLatestBackup, daysSinceExternalBackup,
+  clearAllBackups, exportBackupToFile, shareLatestBackup, daysSinceExternalBackup, buildBackupFile,
 } from '../../services/auto-backup.js';
+import { askSecret, showRecoveryKey } from '../../ui/secret-dialog.js';
+import {
+  getFileEncryptionInfo, createFileEncryptionSetup, disableFileEncryption,
+  prepareExportEncryptor, decryptImportedText, describeCryptoError,
+} from '../../services/backup-crypto.js';
 
 /* ==========================================================================
    1. التنبيهات
@@ -675,7 +680,10 @@ const backupSection = {
       onClick: async () => {
         shareBtn.disabled = true;
         try {
-          const res = await shareLatestBackup();
+          /* تشفير الملفات مفعّل ⟵ يُطلب السرّ أولاً؛ الإلغاء ⟵ لا مشاركة (لا ملف صريح أبداً) */
+          const ctx = await prepareExportEncryptor(askSecretFor);
+          if (!ctx) return;
+          const res = await shareLatestBackup({ encrypt: ctx.encrypt });
           if (res.ok) toast.success(res.method === 'share' ? 'تمت المشاركة' : 'تم تنزيل النسخة — احفظها خارج الجهاز');
           else if (!res.cancelled) toast.danger('فشل: ' + (res.error || 'خطأ'));
           await renderBackupsList();
@@ -684,6 +692,9 @@ const backupSection = {
     }, '📤 مشاركة نسخة خارج الجهاز (واتساب / تيليجرام / درايف)');
     body.appendChild(shareBtn);
     body.appendChild(extStatus);
+
+    /* تشفير الملفات الخارجية (اختياري ومعطّل افتراضياً). فشل رسمه لا يكسر بقية القسم. */
+    try { body.appendChild(buildEncryptionBlock()); } catch (e) { console.warn('[backup-encryption] تعذّر رسم الكتلة:', e); }
 
     body.appendChild(el('h4', {
       style: { fontSize: '13px', color: '#123C2F', margin: '16px 0 8px 0', fontWeight: '600' },
@@ -725,7 +736,9 @@ const backupSection = {
         row.appendChild(el('button', {
           className: 'btn btn--sm btn--ghost', type: 'button', title: 'تحميل كملف',
           onClick: async () => {
-            const ok = await exportBackupToFile(b.id);
+            const ctx = await prepareExportEncryptor(askSecretFor);
+            if (!ctx) return;
+            const ok = await exportBackupToFile(b.id, { encrypt: ctx.encrypt });
             if (ok) toast.success('تم التحميل');
             else toast.danger('فشل التحميل');
           },
@@ -817,8 +830,88 @@ const backupSection = {
   },
 };
 
+/** نافذة السرّ حسب الغرض (تصدير/استيراد) — تُمرَّر كـask لدوال backup-crypto. */
+function askSecretFor({ purpose, verify }) {
+  const isExport = purpose === 'export';
+  return askSecret({
+    title: isExport ? '🔐 تشفير الملف' : '🔐 ملف مشفّر',
+    message: isExport
+      ? 'أدخل عبارة المرور (أو مفتاح الاسترجاع) لتشفير الملف قبل خروجه من الجهاز.'
+      : 'هذا الملف مشفّر. أدخل عبارة المرور أو مفتاح الاسترجاع لفتحه.',
+    confirmText: isExport ? 'تشفير ومتابعة' : 'فتح الملف',
+    verify,
+  });
+}
+
+/** كتلة الإعدادات: تفعيل/تعطيل تشفير الملفات الخارجية (مفتاح التشغيل على هذا الجهاز). */
+function buildEncryptionBlock() {
+  const wrap = el('div', { style: { marginTop: '14px', padding: '10px', background: '#F6F1E6', borderRadius: '8px' } });
+
+  const draw = () => {
+    clear(wrap);
+    const info = getFileEncryptionInfo();
+    wrap.appendChild(el('div', {
+      style: { fontSize: '13px', fontWeight: '600', color: '#123C2F', marginBottom: '4px' },
+    }, '🔐 تشفير الملفات الخارجية'));
+    wrap.appendChild(el('div', {
+      style: { fontSize: '12px', color: '#555', lineHeight: '1.7', marginBottom: '8px' },
+    }, 'يشفّر الملفات التي تخرج من الجهاز (مشاركة النسخة عبر واتساب أو درايف، وتنزيل الملفات) بعبارة مرور تختارها. '
+      + 'النسخ داخل التطبيق والمزامنة السحابية لا تتأثر. التفعيل لهذا الجهاز فقط. '
+      + 'فقدان العبارة ومفتاح الاسترجاع معاً يعني فقدان الملفات المشفّرة نهائياً.'));
+
+    if (info.enabled) {
+      wrap.appendChild(el('div', {
+        style: { fontSize: '12px', color: '#2E8B6F', marginBottom: '8px' },
+      }, '🔒 مفعّل' + (info.enabledAt ? ' منذ ' + formatDate(info.enabledAt) : '')));
+      wrap.appendChild(el('button', {
+        className: 'btn btn--ghost btn--block', type: 'button', style: { color: '#C62828' },
+        onClick: async () => {
+          const ok = await modal.confirm({
+            title: 'تعطيل التشفير',
+            message: 'بعد التعطيل ستخرج الملفات صريحة غير مشفّرة. الملفات المشفّرة السابقة تبقى تُفتح بعبارتك أو بمفتاح الاسترجاع. متابعة؟',
+            confirmText: 'متابعة', cancelText: 'إلغاء', danger: true,
+          });
+          if (!ok) return;
+          const done = await askSecret({
+            title: 'تأكيد التعطيل',
+            message: 'أدخل عبارة المرور (أو مفتاح الاسترجاع) لتأكيد التعطيل.',
+            confirmText: 'تعطيل',
+            verify: (secret) => disableFileEncryption(secret),
+          });
+          if (done) { toast.success('تم تعطيل تشفير الملفات'); draw(); }
+        },
+      }, 'تعطيل التشفير'));
+    } else {
+      wrap.appendChild(el('button', {
+        className: 'btn btn--secondary btn--block', type: 'button',
+        onClick: async () => {
+          const setup = await askSecret({
+            title: '🔐 تفعيل تشفير الملفات',
+            message: 'اختر عبارة مرور (8 أحرف على الأقل). لا تُخزَّن في أي مكان ولا يمكن استرجاعها، وستحتاجها لفتح أي ملف مشفّر. '
+              + 'وهي ليست الرقم السري للتطبيق.',
+            confirm: true, confirmText: 'متابعة',
+            verify: (pass) => createFileEncryptionSetup(pass),
+          });
+          if (!setup) return;
+          /* لا يتفعّل شيء حتى يؤكد المستخدم حفظ مفتاح الاسترجاع */
+          if (!(await showRecoveryKey(setup.recoveryKey))) return;
+          try { setup.commit(); toast.success('تم تفعيل تشفير الملفات'); }
+          catch (e) { toast.danger('فشل: ' + describeCryptoError(e)); }
+          draw();
+        },
+      }, 'تفعيل تشفير الملفات'));
+    }
+  };
+
+  draw();
+  return wrap;
+}
+
 async function exportAllData() {
   try {
+    /* تشفير الملفات مفعّل ⟵ يُطلب السرّ أولاً؛ الإلغاء ⟵ لا تنزيل (لا ملف صريح أبداً) */
+    const ctx = await prepareExportEncryptor(askSecretFor);
+    if (!ctx) return;
     const stores = [
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
@@ -828,11 +921,12 @@ async function exportAllData() {
     const data = { version: 10, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const file = await buildBackupFile(JSON.stringify(data, null, 2), 'jalabiya-backup-' + localDateInput() + '.json', ctx.encrypt);
+    const blob = new Blob([file.text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jalabiya-backup-' + localDateInput() + '.json';
+    a.download = file.name;
     /* الرابط يجب أن يكون في الـ DOM ولا يُلغى فوراً وإلا يفشل التنزيل في Safari/بعض متصفحات الجوال */
     document.body.appendChild(a);
     a.click();
@@ -853,7 +947,10 @@ async function importAllData(file) {
   if (!ok) return;
 
   try {
-    const data = JSON.parse(await file.text());
+    /* ملف مشفّر ⟵ يُتعرَّف عليه ويُطلب سرّه؛ الإلغاء ⟵ لا استيراد */
+    const text = await decryptImportedText(await file.text(), askSecretFor);
+    if (text === null) return;
+    const data = JSON.parse(text);
     if (!data || !data.stores || typeof data.stores !== 'object') throw new Error('ملف غير صالح');
 
     /* مخازن مسموحة فقط (نفس قائمة التصدير) — لا نكتب في backups/trash ولا في اسم عشوائي */

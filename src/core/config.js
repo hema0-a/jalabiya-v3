@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.5.20',
+  version: '3.5.21',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -279,6 +279,7 @@ export const STORAGE_KEYS = {
   V3_DATA_HASH: 'jalabiya_v3_data_hash',
   V3_LAST_AUTO_BACKUP: 'jalabiya_v3_last_auto_backup',
   V3_LAST_EXTERNAL_BACKUP: 'jalabiya_v3_last_external_backup',
+  V3_FILE_ENCRYPTION: 'jalabiya_v3_file_encryption',   // v3.5.21: حلقة مفاتيح تشفير الملفات الخارجية (لا عبارة ولا مفتاح استرجاع)
 };
 
 /* --- 21. الحدود القصوى --- */

@@ -118,5 +118,8 @@ import './modules/v3517-image-worker.test.js';
 import './modules/v3518-thumbnail-object-url.test.js';
 import './modules/v3519-mobile-images.test.js';
 import './modules/v3520-data-crypto.test.js';
+import './modules/v3521-backup-encryption.test.js';
+import './modules/v3521b-secret-dialog.test.js';
+import './modules/v3521c-exif-orientation.test.js';
 
 export { runAll, register } from './registry.js';

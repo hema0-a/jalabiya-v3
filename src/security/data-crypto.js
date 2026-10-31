@@ -12,6 +12,9 @@
    - AES-GCM يضمن السرية والأصالة معاً: أي تعديل في الملف أو سرّ خاطئ ⟵ فشل فك صريح (لا نص مشوَّه).
    - AAD ثابت يربط الصيغة والإصدار. الصيغة بإصدار (v) ومعرّف (m) لتتعرّف عليها واجهة الاستعادة وتتطور لاحقاً.
    - العبارة تُطبَّع NFKC (لوحات مفاتيح عربية مختلفة قد تنتج أشكالاً مختلفة للحرف نفسه كـ«ﻻ» و«لا»).
+   v3.5.21: «حلقة مفاتيح» Keyring: أغلفة مفتاح بيانات واحد (بلا نص) تُنشأ مرة عند تفعيل تشفير الملفات وتُحفظ على الجهاز؛
+     وكل ملف يُشفَّر بذلك المفتاح (encryptWithKey) وينسخ أغلفة الحلقة، فيُفتح بالعبارة أو مفتاح الاسترجاع بلا حاجة للجهاز.
+     الصيغة v1 نفسها (يفتحها decryptText)، فلا يتغيّر المتجه المعروف. ولا يمكن أن يُنتَج ملف بعبارة خاطئة بخطأ طباعة.
    ⚠️ فقدان كل الأسرار = فقدان النسخة نهائياً (لا استرجاع من أي خادم). لذلك مفتاح الاسترجاع جزء من التصميم.
    ⚠️ لا تحمي من رقم سري من 4 خانات: مثل هذا يُكسر دون اتصال. تُستعمل عبارة مرور حقيقية (≥ 8 أحرف).
    ========================================================================== */
@@ -166,12 +169,21 @@ async function deriveKek(secretNorm, salt, iterations) {
 export async function encryptText(text, secrets, opts = {}) {
   requireCrypto();
   if (typeof text !== 'string') throw new DataCryptoError('bad-input', 'النص المراد تشفيره غير صالح');
+  const prepared = validateSecrets(secrets, opts);   // قبل أي عمل مكلف
+
+  const dek = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  const wraps = await buildWraps(dek, prepared);
+  const { iv, ct } = await encryptPayload(text, dek);
+
+  return JSON.stringify({ m: ENVELOPE_MARK, v: ENVELOPE_VERSION, alg: 'A256GCM', wraps, iv, ct });
+}
+
+/** يتحقق من الأسرار ويعيدها مطبَّعة مع عدد الدورات. */
+function validateSecrets(secrets, opts) {
   if (!Array.isArray(secrets) || secrets.length === 0 || secrets.length > MAX_WRAPS) {
     throw new DataCryptoError('bad-input', 'يلزم سرّ واحد على الأقل (عبارة مرور أو مفتاح استرجاع)');
   }
-
-  /* التحقق من كل الأسرار قبل أي عمل مكلف */
-  const prepared = secrets.map((s) => {
+  return secrets.map((s) => {
     if (!s || (s.type !== 'pass' && s.type !== 'rec')) throw new DataCryptoError('bad-input', 'نوع السرّ غير معروف');
     const norm = normalizeSecret(s.type, s.secret);
     if (s.type === 'pass' && norm.length < MIN_PASSPHRASE_LENGTH) {
@@ -180,15 +192,16 @@ export async function encryptText(text, secrets, opts = {}) {
     if (s.type === 'rec' && !isValidRecoveryKey(norm)) {
       throw new DataCryptoError('weak-secret', 'مفتاح الاسترجاع غير صالح');
     }
-    const iterations = s.iterations ?? opts.iterations ?? (s.type === 'rec' ? RECOVERY_ITERATIONS : DEFAULT_ITERATIONS);
+    const iterations = s.iterations ?? (opts && opts.iterations) ?? (s.type === 'rec' ? RECOVERY_ITERATIONS : DEFAULT_ITERATIONS);
     if (!Number.isInteger(iterations) || iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) {
       throw new DataCryptoError('bad-input', 'عدد دورات الاشتقاق غير صالح');
     }
     return { type: s.type, norm, iterations };
   });
+}
 
-  const dek = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-
+/** يغلّف مفتاح البيانات بكل سرّ (ملح وIV جديدان لكل غلاف). */
+async function buildWraps(dek, prepared) {
   const wraps = [];
   for (const p of prepared) {
     const salt = randomBytes(SALT_BYTES);
@@ -197,13 +210,16 @@ export async function encryptText(text, secrets, opts = {}) {
     const wrapped = new Uint8Array(await crypto.subtle.wrapKey('raw', dek, kek, { name: 'AES-GCM', iv, additionalData: AAD }));
     wraps.push({ t: p.type, kdf: 'PBKDF2-SHA256', i: p.iterations, s: toB64(salt), iv: toB64(iv), k: toB64(wrapped) });
   }
+  return wraps;
+}
 
+/** يشفّر النص بالمفتاح ويعيد { iv, ct } نصَّي Base64 (IV جديد عشوائي لكل رسالة). */
+async function encryptPayload(text, dek) {
   const iv = randomBytes(IV_BYTES);
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: AAD }, dek, new TextEncoder().encode(text)
   ));
-
-  return JSON.stringify({ m: ENVELOPE_MARK, v: ENVELOPE_VERSION, alg: 'A256GCM', wraps, iv: toB64(iv), ct: toB64(ct) });
+  return { iv: toB64(iv), ct: toB64(ct) };
 }
 
 /* ==========================================================================
@@ -222,26 +238,12 @@ export function isEncryptedEnvelope(input) {
   } catch (e) { return false; }
 }
 
-/** يفحص بنية الغلاف بصرامة ويعيد حقوله مفكوكة، أو يرمي bad-format / unsupported-version. */
-function parseEnvelope(input) {
-  let o;
-  try { o = typeof input === 'string' ? JSON.parse(input) : input; }
-  catch (e) { throw new DataCryptoError('bad-format', 'الملف ليس نسخة مشفّرة صالحة'); }
-
-  if (!o || typeof o !== 'object' || o.m !== ENVELOPE_MARK) throw new DataCryptoError('bad-format', 'الملف ليس نسخة مشفّرة من هذا التطبيق');
-  if (o.v !== ENVELOPE_VERSION) {
-    throw new DataCryptoError(typeof o.v === 'number' && o.v > ENVELOPE_VERSION ? 'unsupported-version' : 'bad-format',
-      'إصدار صيغة التشفير غير مدعوم — حدّث التطبيق');
-  }
-  if (o.alg !== 'A256GCM' || !Array.isArray(o.wraps) || o.wraps.length === 0 || o.wraps.length > MAX_WRAPS) {
+/** يفحص مصفوفة الأغلفة بصرامة ويعيدها مفكوكة، أو يرمي bad-format. */
+function parseWraps(rawWraps) {
+  if (!Array.isArray(rawWraps) || rawWraps.length === 0 || rawWraps.length > MAX_WRAPS) {
     throw new DataCryptoError('bad-format', 'بنية الملف المشفّر غير صالحة');
   }
-
-  const iv = fromB64(o.iv);
-  const ct = fromB64(o.ct);
-  if (!iv || iv.length !== IV_BYTES || !ct || ct.length < GCM_TAG_BYTES) throw new DataCryptoError('bad-format', 'الملف المشفّر تالف');
-
-  const wraps = o.wraps.map((w) => {
+  return rawWraps.map((w) => {
     const salt = w && fromB64(w.s);
     const wiv = w && fromB64(w.iv);
     const k = w && fromB64(w.k);
@@ -251,8 +253,47 @@ function parseEnvelope(input) {
     if (!ok) throw new DataCryptoError('bad-format', 'الملف المشفّر تالف');
     return { type: w.t, iterations: w.i, salt, iv: wiv, wrapped: k };
   });
+}
+
+/** يتحقق من الرأس المشترك (المعرّف والإصدار والخوارزمية) ويعيد الكائن، أو يرمي. */
+function parseHeader(input) {
+  let o;
+  try { o = typeof input === 'string' ? JSON.parse(input) : input; }
+  catch (e) { throw new DataCryptoError('bad-format', 'الملف ليس نسخة مشفّرة صالحة'); }
+
+  if (!o || typeof o !== 'object' || o.m !== ENVELOPE_MARK) throw new DataCryptoError('bad-format', 'الملف ليس نسخة مشفّرة من هذا التطبيق');
+  if (o.v !== ENVELOPE_VERSION) {
+    throw new DataCryptoError(typeof o.v === 'number' && o.v > ENVELOPE_VERSION ? 'unsupported-version' : 'bad-format',
+      'إصدار صيغة التشفير غير مدعوم — حدّث التطبيق');
+  }
+  if (o.alg !== 'A256GCM') throw new DataCryptoError('bad-format', 'بنية الملف المشفّر غير صالحة');
+  return o;
+}
+
+/** يفحص بنية الغلاف بصرامة ويعيد حقوله مفكوكة، أو يرمي bad-format / unsupported-version. */
+function parseEnvelope(input) {
+  const o = parseHeader(input);
+  const wraps = parseWraps(o.wraps);
+
+  const iv = fromB64(o.iv);
+  const ct = fromB64(o.ct);
+  if (!iv || iv.length !== IV_BYTES || !ct || ct.length < GCM_TAG_BYTES) throw new DataCryptoError('bad-format', 'الملف المشفّر تالف');
 
   return { wraps, iv, ct };
+}
+
+/** يفتح مفتاح البيانات من الأغلفة بسرّ واحد (كل غلاف بتطبيع نوعه)؛ null إن لم يطابق أي غلاف. */
+async function unwrapDek(wraps, secret) {
+  for (const w of wraps) {
+    try {
+      const kek = await deriveKek(normalizeSecret(w.type, secret), w.salt, w.iterations);
+      return await crypto.subtle.unwrapKey(
+        'raw', w.wrapped, kek, { name: 'AES-GCM', iv: w.iv, additionalData: AAD },
+        { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+      );
+    } catch (e) { /* سرّ لا يطابق هذا الغلاف: نجرّب التالي */ }
+  }
+  return null;
 }
 
 /**
@@ -266,17 +307,7 @@ export async function decryptText(input, secret) {
   requireCrypto();
   const env = parseEnvelope(input);
 
-  let dek = null;
-  for (const w of env.wraps) {
-    try {
-      const kek = await deriveKek(normalizeSecret(w.type, secret), w.salt, w.iterations);
-      dek = await crypto.subtle.unwrapKey(
-        'raw', w.wrapped, kek, { name: 'AES-GCM', iv: w.iv, additionalData: AAD },
-        { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-      );
-      break;
-    } catch (e) { /* سرّ لا يطابق هذا الغلاف: نجرّب التالي */ }
-  }
+  const dek = await unwrapDek(env.wraps, secret);
   if (!dek) throw new DataCryptoError('decrypt-failed', 'عبارة المرور أو مفتاح الاسترجاع غير صحيح، أو الملف تالف');
 
   try {
@@ -285,4 +316,61 @@ export async function decryptText(input, secret) {
   } catch (e) {
     throw new DataCryptoError('decrypt-failed', 'عبارة المرور أو مفتاح الاسترجاع غير صحيح، أو الملف تالف');
   }
+}
+
+/* ==========================================================================
+   6. حلقة المفاتيح Keyring (v3.5.21)
+   ========================================================================== */
+
+/**
+ * ينشئ حلقة مفاتيح: مفتاح بيانات عشوائي واحد مغلَّف بكل سرّ، بلا أي نص مشفَّر. تُخزَّن على الجهاز.
+ * @param {Array<{type:'pass'|'rec', secret:string, iterations?:number}>} secrets
+ * @param {{iterations?:number}} [opts]
+ * @returns {Promise<string>} JSON الحلقة
+ */
+export async function createKeyring(secrets, opts = {}) {
+  requireCrypto();
+  const prepared = validateSecrets(secrets, opts);
+  const dek = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  const wraps = await buildWraps(dek, prepared);
+  return JSON.stringify({ m: ENVELOPE_MARK, v: ENVELOPE_VERSION, alg: 'A256GCM', kr: 1, wraps });
+}
+
+/** يفحص الحلقة ويعيد أغلفتها مفكوكة (وليست ملفاً مشفّراً: بلا iv/ct). */
+function parseKeyring(keyring) {
+  const o = parseHeader(keyring);
+  if (o.kr !== 1) throw new DataCryptoError('bad-format', 'ليست حلقة مفاتيح صالحة');
+  return { raw: o.wraps, wraps: parseWraps(o.wraps) };
+}
+
+/**
+ * يفتح الحلقة بسرّ (عبارة أو مفتاح استرجاع) ويعيد مفتاح البيانات (غير قابل للتصدير).
+ * سرّ خاطئ ⟵ decrypt-failed. نجاحه دليل على صحة السرّ.
+ * @param {string} keyring
+ * @param {string} secret
+ * @returns {Promise<CryptoKey>}
+ */
+export async function openKeyring(keyring, secret) {
+  requireCrypto();
+  const { wraps } = parseKeyring(keyring);
+  const dek = await unwrapDek(wraps, secret);
+  if (!dek) throw new DataCryptoError('decrypt-failed', 'عبارة المرور أو مفتاح الاسترجاع غير صحيح');
+  return dek;
+}
+
+/**
+ * يشفّر نصاً بمفتاح مفتوح من الحلقة، ويعيد ملفاً بصيغة الغلاف v1 (أغلفته هي أغلفة الحلقة)
+ * فيفتحه decryptText بالعبارة أو مفتاح الاسترجاع على أي جهاز. IV جديد عشوائي لكل ملف.
+ * @param {string} text
+ * @param {CryptoKey} dek — من openKeyring
+ * @param {string} keyring
+ * @returns {Promise<string>}
+ */
+export async function encryptWithKey(text, dek, keyring) {
+  requireCrypto();
+  if (typeof text !== 'string') throw new DataCryptoError('bad-input', 'النص المراد تشفيره غير صالح');
+  if (!dek || typeof dek !== 'object') throw new DataCryptoError('bad-input', 'مفتاح البيانات غير صالح');
+  const { raw } = parseKeyring(keyring);
+  const { iv, ct } = await encryptPayload(text, dek);
+  return JSON.stringify({ m: ENVELOPE_MARK, v: ENVELOPE_VERSION, alg: 'A256GCM', wraps: raw, iv, ct });
 }
