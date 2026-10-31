@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.19 — تحسينات صور الجوال (صورة العميل أخف + decoding)
+   الإصدار: v3.5.20 — مكتبة التشفير المعزولة data-crypto (غير موصولة)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.19';
+const CACHE_VERSION = 'v3.5.20';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -167,6 +167,7 @@ const PRECACHE_URLS = [
   /* --- src/security --- */
   './src/security/auth.js',
   './src/security/biometric.js',
+  './src/security/data-crypto.js',
   './src/security/pin-crypto.js',
   './src/security/pin-recovery.js',
 

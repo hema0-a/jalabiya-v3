@@ -117,5 +117,6 @@ import './modules/v3516-image-compress-core.test.js';
 import './modules/v3517-image-worker.test.js';
 import './modules/v3518-thumbnail-object-url.test.js';
 import './modules/v3519-mobile-images.test.js';
+import './modules/v3520-data-crypto.test.js';
 
 export { runAll, register } from './registry.js';
