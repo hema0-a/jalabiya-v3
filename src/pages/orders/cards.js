@@ -48,7 +48,7 @@ export function buildOrderCard(ctx, o) {
   };
   const thumbClick = (e) => { e.stopPropagation(); openReferenceImage(o, 'صورة مرجعية — ' + name); };
   const thumb = hasImage ? (thumbSrc
-    ? el('img', { src: thumbSrc, alt: 'مرجع', style: thumbStyle, onClick: thumbClick })
+    ? el('img', { src: thumbSrc, alt: 'مرجع', decoding: 'async', style: thumbStyle, onClick: thumbClick })
     : el('div', { style: { ...thumbStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F6F1E6', fontSize: '22px' }, onClick: thumbClick }, '🖼️')) : null;
 
   const headerChildren = [
@@ -230,7 +230,7 @@ export function buildMiniCard(ctx, o, opts = {}) {
   /* صورة مصغّرة */
   if (o.refThumb || o.referenceImage) {
     card.appendChild(el('img', {
-      src: o.refThumb || o.referenceImage, alt: 'مرجع',
+      src: o.refThumb || o.referenceImage, alt: 'مرجع', decoding: 'async',
       style: {
         width: '36px', height: '36px', borderRadius: '6px',
         objectFit: 'cover', flexShrink: '0',

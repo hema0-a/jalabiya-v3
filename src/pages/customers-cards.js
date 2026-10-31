@@ -22,7 +22,7 @@ export function buildCustomerCard(ctx, c) {
   /* --- الأفاتار: صورة أو حرف --- */
   const avatar = hasImage
     ? el('img', {
-        src: c.image, alt: c.name || '',
+        src: c.image, alt: c.name || '', decoding: 'async',
         style: {
           width: '44px', height: '44px', borderRadius: '50%',
           objectFit: 'cover', flexShrink: '0', cursor: 'pointer',

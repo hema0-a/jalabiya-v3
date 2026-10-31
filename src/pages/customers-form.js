@@ -54,6 +54,10 @@ export function openCustomerForm(ctx, existing = null) {
     value: isEdit ? (existing.image || '') : '',
     label: '🖼️ صورة العميل',
     hint: 'صورة شخصية (اختياري) — تظهر في البطاقة والكشف',
+    /* v3.5.19: تظهر مصغّرة 44px وفي عرض مكبّر ≤ عرض الشاشة؛ 1200px/300KB زيادة تُفك كاملةً لكل بطاقة
+       وتُضاعف حجم السجل والمزامنة والمسودة. 800px/150KB كافية (الطلبات تبقى 1200px/300KB). */
+    maxDimensionPx: 800,
+    maxSizeKB: 150,
   });
 
   const measurements = buildMeasurementsSection(

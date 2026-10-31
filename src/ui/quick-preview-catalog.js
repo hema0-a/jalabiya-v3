@@ -81,7 +81,7 @@ export async function shareCatalog(opts = {}) {
     list.appendChild(el('label', {
       style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', padding: '4px 0' },
     }, [cb,
-      picOf(t) ? el('img', { src: picOf(t).thumbnail || picOf(t).image, alt: '',
+      picOf(t) ? el('img', { src: picOf(t).thumbnail || picOf(t).image, alt: '', decoding: 'async',
         style: { width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', flexShrink: '0' } }) : null,
       el('span', { style: { flex: '1' } }, t.name),
       el('span', { style: { color: '#B8863B', fontWeight: '600' } }, formatEGP(t.price))].filter(Boolean)));

@@ -294,7 +294,7 @@ function openTypeForm(types, editIdx, saveFn, rebuild) {
           borderRadius: '10px', padding: '0', overflow: 'hidden', background: '#fff', cursor: 'pointer' },
         onClick: () => { portfolioId = it.id; pickerHandle.close(); refreshPic(); },
       }, [
-        el('img', { src: it.thumbnail || it.image, alt: it.title || '',
+        el('img', { src: it.thumbnail || it.image, alt: it.title || '', decoding: 'async',
           style: { width: '100%', height: '90px', objectFit: 'cover', display: 'block' } }),
         el('div', { style: { fontSize: '11px', padding: '3px 4px', color: '#123C2F' } }, it.title || ''),
       ]));

@@ -5,6 +5,7 @@
    - عرض معاينة + أزرار تغيير/حذف.
    - يستخدم image-compressor.js (compress).
    - يستخدم sanitizeUrl للحماية (رفض SVG وغيرها).
+   v3.5.19: خيارات ضغط اختيارية (quality · maxSizeKB · maxDimensionPx)؛ الافتراضي كما كان (0.82 · 300KB · 1200px).
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
@@ -12,11 +13,27 @@ import { toast } from './toast.js';
 import { compress } from '../services/image-compressor.js';
 
 /**
+ * خيارات الضغط الفعلية للمنتقي: المُمرَّر ثم الافتراضي (جودة 0.82 · 300KB · 1200px — كما قبل 3.5.19).
+ * @param {{quality?:number, maxSizeKB?:number, maxDimensionPx?:number}} [options]
+ * @returns {{quality:number, maxSizeKB:number, maxDimensionPx:number}}
+ */
+export function resolvePickerCompression(options = {}) {
+  return {
+    quality: options.quality ?? 0.82,
+    maxSizeKB: options.maxSizeKB ?? 300,
+    maxDimensionPx: options.maxDimensionPx ?? 1200,
+  };
+}
+
+/**
  * إنشاء مكوّن اختيار صورة مرجعية.
  * @param {Object} [options]
  * @param {string} [options.value=''] — data URL للصورة الحالية
  * @param {string} [options.label='صورة مرجعية'] — عنوان القسم
  * @param {string} [options.hint='صورة للموديل المطلوب (اختياري)']
+ * @param {number} [options.quality=0.82] — جودة JPEG الابتدائية
+ * @param {number} [options.maxSizeKB=300] — أقصى حجم للناتج
+ * @param {number} [options.maxDimensionPx=1200] — أكبر ضلع
  * @returns {{node:HTMLElement, getValue:Function, setValue:Function, clear:Function}}
  */
 export function createOrderImagePicker(options = {}) {
@@ -120,11 +137,7 @@ export function createOrderImagePicker(options = {}) {
     statusEl.style.color = '#F57C00';
 
     try {
-      const result = await compress(file, {
-        quality: 0.82,
-        maxSizeKB: 300,
-        maxDimensionPx: 1200,
-      });
+      const result = await compress(file, resolvePickerCompression(options));
 
       currentValue = result.dataUrl;
       updatePreview();
