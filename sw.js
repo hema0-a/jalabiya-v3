@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.23 — وصول دائم للمزامنة السحابية
+   الإصدار: v3.5.24 — تقسيم صفحة الدفعات وصورة الفاتورة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.23';
+const CACHE_VERSION = 'v3.5.24';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -126,6 +126,9 @@ const PRECACHE_URLS = [
   './src/pages/orders-summary.js',
   './src/pages/orders-views.js',
   './src/pages/orders.js',
+  './src/pages/payments-card.js',
+  './src/pages/payments-form.js',
+  './src/pages/payments-list.js',
   './src/pages/payments.js',
   './src/pages/pickups.js',
   './src/pages/portfolio.js',
@@ -200,6 +203,11 @@ const PRECACHE_URLS = [
   './src/services/image-compress-core.js',
   './src/services/image-compressor.js',
   './src/services/image-worker-client.js',
+  './src/services/invoice-image-order.js',
+  './src/services/invoice-image-output.js',
+  './src/services/invoice-image-pen.js',
+  './src/services/invoice-image-receipt.js',
+  './src/services/invoice-image-statement.js',
   './src/services/invoice-image.js',
   './src/services/invoice-print-css.js',
   './src/services/invoice-print-order.js',
