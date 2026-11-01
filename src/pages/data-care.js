@@ -41,8 +41,8 @@ const REPOS = { orders, payments, appointments, portfolio, quotes, customers };
  * حالة الصفحة (تُعاد كاملة عند الفتح والإغلاق). حقول media* لأداة تشخيص الوسائط.
  * full: هل قُرئت كل المخازن (الطلبات والدفعات…)؟ false عند الفتح — العملاء فقط.
  */
-const freshState = (container = null) => ({
-  container, data: null, full: false, scan: null, backups: null, verifyResult: null,
+const freshState = (container = null, embedded = false) => ({
+  container, embedded, data: null, full: false, scan: null, backups: null, verifyResult: null,
   media: null, mediaRunning: false, mediaCancel: false, mediaScanned: 0, mediaTotal: null, mediaPhase: 'orders', mediaCount: 0,
   mediaError: '', mediaUsage: null, mediaProgressNode: null,
   perf: null, perfSynth: null, perfRunning: false, perfCancel: false, perfStep: '', perfError: '', perfProgressNode: null,
@@ -430,7 +430,7 @@ function draw() {
   const c = state.container;
   if (!c || !state.data) return;
   clear(c);
-  c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));
+  if (!state.embedded) c.appendChild(el('h2', { style: { margin: '0 0 12px' } }, '🧰 صيانة البيانات'));   /* v3.5.27: داخل الإعدادات يكفي عنوان القسم */
   c.appendChild(buildSystemStatusCard({ lazyIntegrity: true }));
   c.appendChild(buildLedgerShadowCard());
   c.appendChild(mediaDiagSection());
@@ -443,8 +443,9 @@ function draw() {
 }
 
 export const dataCarePage = {
-  async render(container) {
-    state = freshState(container);
+  /** @param {HTMLElement} container @param {*} [_sub] @param {{embedded?:boolean}} [opts] — embedded: داخل قسم الإعدادات بلا عنوان مكرر */
+  async render(container, _sub, opts) {
+    state = freshState(container, !!(opts && opts.embedded));
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await loadData(); draw(); } catch (err) {
       console.error('[data-care] render:', err);

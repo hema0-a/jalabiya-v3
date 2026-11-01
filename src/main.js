@@ -485,6 +485,11 @@ let _renderToken = 0;
 async function renderPage(fullRoute) {
   const token = ++_renderToken;   /* يمنع أن تكتب صفحة قديمة فوق صفحة أحدث */
   const id = getBaseRoute(fullRoute);
+  if (id === 'data-care') {
+    /* v3.5.27: «صيانة البيانات» صارت قسماً في الإعدادات؛ الروابط القديمة (مفضلة/إشارات مرجعية) تُعاد توجيهها */
+    location.replace('#/settings/data-care');
+    return;
+  }
   const subRoute = getSubRoute(fullRoute);
 
   const item = ALL_ITEMS.find((i) => i.id === id);

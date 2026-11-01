@@ -52,7 +52,6 @@ export const NAV_GROUPS = [
   { id: 'system', title: 'النظام', icon: '⚙️', items: [
     { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },
     { id: 'trash',        icon: '🗑️', label: 'سلة المحذوفات' },
-    { id: 'data-care',    icon: '🧰', label: 'صيانة البيانات' },
     { id: 'settings',     icon: '⚙️', label: 'الإعدادات' },
   ]},
 ];

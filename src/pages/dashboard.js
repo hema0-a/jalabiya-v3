@@ -112,7 +112,7 @@ async function buildBackupNudge(data) {
     if (!n.show) return null;
     const box = el('div', { className: 'dash-demo', role: 'status', 'data-role': 'backup-nudge' }, [
       el('span', {}, n.text),
-      el('a', { className: 'btn btn--sm btn--primary', href: '#/data-care', 'data-action': 'nudge-open' }, 'احفظ نسخة'),
+      el('a', { className: 'btn btn--sm btn--primary', href: '#/settings/data-care', 'data-action': 'nudge-open' }, 'احفظ نسخة'),
       el('button', {
         className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'nudge-snooze',
         onClick: () => {

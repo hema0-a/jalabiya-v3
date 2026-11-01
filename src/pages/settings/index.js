@@ -1,7 +1,7 @@
 /* ==========================================================================
    settings/index.js — صفحة الإعدادات (Sub-page Navigation)
    ==========================================================================
-   - Master view: قائمة 21 قسم.
+   - Master view: قائمة الأقسام.
    - Detail view: صفحة فرعية لكل قسم (Slide من اليمين).
    - زر الرجوع في Topbar.
    - تحديث URL عبر history.replaceState (بدون hashchange → لا إعادة بناء).
@@ -31,6 +31,16 @@ let state = {
   settings: null,
   mgr: null,
 };
+
+/* v3.5.27: القسم المفتوح حالياً — إن عرّف destroy() يُستدعى عند إغلاقه أو الانتقال لغيره أو مغادرة الصفحة */
+let activeSec = null;
+function destroyActiveSection() {
+  const s = activeSec;
+  activeSec = null;
+  if (s && typeof s.destroy === 'function') {
+    try { s.destroy(); } catch (e) { console.warn('[settings] section destroy failed:', e); }
+  }
+}
 
 /* --- تطبيق الإعدادات المحفوظة على الواجهة --- */
 function applySettings(s) {
@@ -90,6 +100,8 @@ export const settingsPage = {
       baseId: 'settings',
       sections: buildSubPageSections(),
       onOpen: (id) => {
+        destroyActiveSection();
+        activeSec = ALL_SECTIONS.find((s) => s.id === id) || null;
         if (!document.contains(state.container)) return;
         /* ⚠️ نستخدم replaceState بدلاً من location.hash */
         /* السبب: location.hash يُطلق hashchange → main.js يُعيد بناء الصفحة → نفقد القسم */
@@ -103,6 +115,7 @@ export const settingsPage = {
         });
       },
       onClose: () => {
+        destroyActiveSection();
         if (!document.contains(state.container)) return;
         try {
           history.replaceState(null, '', '#/settings');
@@ -134,6 +147,7 @@ export const settingsPage = {
   },
 
   destroy() {
+    destroyActiveSection();
     events.emit('topbar:setBack', null);
     state = {
       container: null,

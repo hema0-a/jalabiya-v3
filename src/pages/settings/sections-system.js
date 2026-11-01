@@ -1,7 +1,7 @@
 /* ==========================================================================
-   sections-system.js — أقسام النظام (8)
+   sections-system.js — أقسام النظام (9)
    ==========================================================================
-   التنبيهات، المواسم والأعياد، الرسائل التلقائية، النسخ الاحتياطي، المزامنة السحابية،
+   التنبيهات، المواسم والأعياد، الرسائل التلقائية، النسخ الاحتياطي، صيانة البيانات (v3.5.27)، المزامنة السحابية،
    ضغط الصور، بيانات تجريبية، الدعم.
 
    [v3.5.26] قُسِّم الملف (1364 سطراً) دون تغيير سلوك: لكل قسم ملف مستقل بجواره
@@ -14,6 +14,7 @@ import { notificationsSection } from './section-notifications.js';
 import { occasionsSection } from './section-occasions.js';
 import { autoMessagesSection } from './section-auto-messages.js';
 import { backupSection } from './section-backup.js';
+import { dataCareSection } from './section-data-care.js';
 import { cloudSyncSection } from './section-cloud-sync.js';
 import { imageCompressionSection } from './section-image-compression.js';
 import { demoDataSection } from './section-demo-data.js';
@@ -24,6 +25,7 @@ export const SYSTEM_SECTIONS = [
   occasionsSection,
   autoMessagesSection,
   backupSection,
+  dataCareSection,
   cloudSyncSection,
   imageCompressionSection,
   demoDataSection,
