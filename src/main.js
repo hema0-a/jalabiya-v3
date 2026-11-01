@@ -308,12 +308,23 @@ function buildNotificationsAction() {
   };
 }
 
+/* --- زر المزامنة السحابية (v3.5.23): الصفحة خارج القائمة الجانبية فصار لها مدخل دائم هنا --- */
+function buildCloudSyncAction() {
+  return {
+    id: 'cloud-sync',
+    icon: '☁️',
+    label: 'المزامنة السحابية',
+    onClick: () => { if (location.hash !== '#/cloud-sync') location.hash = '#/cloud-sync'; },
+  };
+}
+
 function buildTopbarActions() {
   return [
     { id: 'search', icon: '🔍', label: 'بحث شامل (Ctrl+K)', onClick: () => openUniversalSearch() },
     buildNotificationsAction(),
     buildClientModeAction(),
     buildThemeAction(),
+    buildCloudSyncAction(),
   ];
 }
 

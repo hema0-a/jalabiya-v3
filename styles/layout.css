@@ -245,6 +245,17 @@
   gap: var(--space-xs);
 }
 
+/* v3.5.23: خمسة أزرار في الشريط العلوي (أُضيف ☁️) — نضغطها على الشاشات الضيقة كي يبقى العنوان مقروءاً.
+   الارتفاع (منطقة اللمس) كما هو، والعرض فقط يضيق. */
+@media (max-width: 400px) {
+  .topbar { padding-inline: var(--space-s); }
+  .topbar__actions { gap: 0; }
+  .topbar__actions .btn--icon.btn--sm { width: 34px; min-width: 34px; padding-inline: 0; }
+}
+@media (max-width: 340px) {
+  .topbar__actions .btn--icon.btn--sm { width: 30px; min-width: 30px; }
+}
+
 /* ==========================================================================
    4. RESPONSIVE
    ========================================================================== */

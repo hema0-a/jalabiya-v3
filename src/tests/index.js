@@ -122,5 +122,6 @@ import './modules/v3521-backup-encryption.test.js';
 import './modules/v3521b-secret-dialog.test.js';
 import './modules/v3521c-exif-orientation.test.js';
 import './modules/v3522-v2-features.test.js';
+import './modules/v3523-sync-access.test.js';
 
 export { runAll, register } from './registry.js';

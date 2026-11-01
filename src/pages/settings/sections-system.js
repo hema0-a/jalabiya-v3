@@ -1072,6 +1072,11 @@ const cloudSyncSection = {
           passInput,
         ]));
         body.appendChild(loginBtn);
+        /* v3.5.23: «نسيت كلمة المرور» و«إنشاء حساب» في صفحة المزامنة (مصدر واحد لهذه الواجهة) */
+        body.appendChild(el('a', {
+          className: 'btn btn--secondary btn--block', href: '#/cloud-sync', 'data-action': 'open-cloud-page',
+          style: { marginTop: '8px', textDecoration: 'none', textAlign: 'center' },
+        }, '🔐 نسيت كلمة المرور / إنشاء حساب'));
         return;
       }
 
@@ -1145,6 +1150,10 @@ const cloudSyncSection = {
       body.appendChild(pushBtn);
       body.appendChild(pullBtn);
       body.appendChild(logoutBtn);
+      body.appendChild(el('a', {
+        className: 'btn btn--ghost btn--block', href: '#/cloud-sync', 'data-action': 'open-cloud-page',
+        style: { marginTop: '8px', textDecoration: 'none', textAlign: 'center' },
+      }, '☁️ فتح صفحة المزامنة الكاملة'));
     };
 
     /* --- رسم أولي (بحالة "تحقق من الجلسة") --- */
