@@ -127,5 +127,6 @@ import './modules/v3524-split-payments-invoice.test.js';
 import './modules/v3525-split-calendar-referrals.test.js';
 import './modules/v3526-split-settings-system.test.js';
 import './modules/v3527-data-care-in-settings.test.js';
+import './modules/v3528-settings-search-reset.test.js';
 
 export { runAll, register } from './registry.js';
