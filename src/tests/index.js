@@ -124,5 +124,6 @@ import './modules/v3521c-exif-orientation.test.js';
 import './modules/v3522-v2-features.test.js';
 import './modules/v3523-sync-access.test.js';
 import './modules/v3524-split-payments-invoice.test.js';
+import './modules/v3525-split-calendar-referrals.test.js';
 
 export { runAll, register } from './registry.js';

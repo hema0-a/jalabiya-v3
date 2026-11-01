@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.24 — تقسيم صفحة الدفعات وصورة الفاتورة
+   الإصدار: v3.5.25 — تقسيم التقويم والإحالات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.24';
+const CACHE_VERSION = 'v3.5.25';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -85,6 +85,9 @@ const PRECACHE_URLS = [
   /* --- src/pages --- */
   './src/pages/activity-log.js',
   './src/pages/appointments.js',
+  './src/pages/calendar-day.js',
+  './src/pages/calendar-grid.js',
+  './src/pages/calendar-utils.js',
   './src/pages/calendar.js',
   './src/pages/cloud-sync.js',
   './src/pages/commitments-actions.js',
@@ -134,6 +137,9 @@ const PRECACHE_URLS = [
   './src/pages/portfolio.js',
   './src/pages/pricing-calculator.js',
   './src/pages/quotes.js',
+  './src/pages/referrals-card.js',
+  './src/pages/referrals-form.js',
+  './src/pages/referrals-list.js',
   './src/pages/referrals.js',
   './src/pages/reports.js',
   './src/pages/season-compare.js',

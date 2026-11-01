@@ -9,23 +9,26 @@
      مُسلَّم للمُرشَّح، ويعتمدها المستخدم بزر (لا تُكتب تلقائياً).
    - [v3.3.45] مكافآت تلقائية: عند تسليم أول طلب للعميل المُحال تظهر الإحالة «🎁 جاهزة
      للمكافأة» وزر «شكر + مكافأة» يفتح واتساب برسالة للمُرشِّح (قالب قابل للتخصيص).
+   [v3.5.25] قُسِّمت الصفحة دون تغيير سلوك (على نمط orders*.js):
+     referrals.js        — الحالة + تحميل البيانات + الواجهة العامة (هذا الملف)
+     referrals-form.js   — نموذج الإحالة + نموذج نسبة المكافأة
+     referrals-card.js   — بطاقة الإحالة وإجراءاتها (حذف/دفع/اعتماد/شكر)
+     referrals-list.js   — الإحصائيات وبطاقة النسبة والفلاتر والقائمة
+   الوحدات تستلم ctx = { state, refresh, renderList } ولا تستورد هذا الملف.
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
-import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { referrals } from '../data/repos/referrals.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { settings } from '../data/repos/settings.js';
-import { computeReferralRewards, referralVars, rewardPercentOf, parseRewardPercent, suggestedReward } from '../services/referral-rewards.js';
-import { renderTemplate, KIND } from '../services/message-templates.js';
-import { sendLogged } from '../services/auto-messages.js';
-import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
-import { formatEGP, formatDate, normalizePhone, localDateInput, parseDateInput, toNonNegative, normalizeSearch, phoneMatches } from '../core/utils.js';
+import { computeReferralRewards } from '../services/referral-rewards.js';
+import { openReferralForm } from './referrals-form.js';
+import { renderStats, renderPercentCard, renderFilters, renderList } from './referrals-list.js';
 
-/* --- الحالة --- */
-let state = {
+/* --- الحالة (كائن واحد ثابت الهوية؛ يُعاد ضبطه في destroy) --- */
+const state = {
   container: null,
   items: [],
   stats: null,
@@ -34,6 +37,8 @@ let state = {
   rewards: new Map(),
   settings: null,
 };
+
+const ctx = { state, refresh: refreshAll, renderList: () => renderList(ctx) };
 
 /* ==========================================================================
    1. تحميل البيانات
@@ -55,420 +60,13 @@ async function loadData() {
   state.rewards = new Map(computeReferralRewards(items, custs, ords).map((x) => [x.referral.id, x]));
 }
 
-/** النسبة الافتراضية الحالية للمكافأة. */
-const currentPercent = () => rewardPercentOf(state.settings);
-
-/** نافذة تعديل نسبة المكافأة الافتراضية (تُحفظ في الإعدادات وتُرسم الصفحة من جديد). */
-function openRewardPercentForm() {
-  const input = el('input', {
-    className: 'input', type: 'number', min: '0', max: '100', step: '0.5',
-    value: String(currentPercent()),
-  });
-  const body = el('div', {}, [
-    el('p', { style: { fontSize: '13px', color: '#666', margin: '0 0 12px', lineHeight: '1.6' } },
-      'تُقترح مكافأة المُرشِّح كنسبة من أول طلب مُسلَّم للعميل المُحال. تعتمد الاقتراح بنفسك بزر واحد.'),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'النسبة (%) *'), input]),
-  ]);
-  const handle = modal.open({
-    title: '📊 نسبة المكافأة الافتراضية',
-    body,
-    actions: [
-      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
-      {
-        text: 'حفظ', variant: 'primary', action: 'save',
-        onClick: async () => {
-          const pct = parseRewardPercent(input.value);
-          if (pct === null) return toast.warning('أدخل نسبة صحيحة بين 0 و100');
-          try {
-            await settings.update({ referrals: { rewardPercent: pct } });
-            toast.success('تم حفظ النسبة');
-            handle.close();
-            await refreshAll();
-          } catch (e) { toast.danger('فشل: ' + e.message); }
-        },
-      },
-    ],
-  });
-}
-
-/** عدد الإحالات الجاهزة للمكافأة. */
-const dueCount = () => [...state.rewards.values()].filter((x) => x.state === 'due').length;
-
-function sendReward(item, reward) {
-  const text = renderTemplate(KIND.REFERRAL, referralVars(reward, (state.settings && state.settings.workshop) || {}),
-    (state.settings && state.settings.autoMessages) || null);
-  const phone = reward.referrer && reward.referrer.phone;
-  if (!sendLogged(phone, text, { kind: KIND.REFERRAL, ref: item.id, customerId: reward.referrer ? reward.referrer.id : null })) {
-    toast.warning('رقم هاتف المُرشِّح غير صالح');
-    return;
-  }
-  renderList();   /* لتحديث «آخر إرسال» */
-}
-
-/* ==========================================================================
-   2. نموذج إضافة/تعديل
-   ========================================================================== */
-
-function openReferralForm(existing = null) {
-  const isEdit = existing !== null;
-
-  const referrerInput = el('input', {
-    className: 'input', type: 'text', placeholder: 'اسم من أرشد',
-    value: isEdit ? (existing.referrerName || '') : '',
-  });
-
-  const referredInput = el('input', {
-    className: 'input', type: 'text', placeholder: 'اسم العميل الجديد',
-    value: isEdit ? (existing.referredName || '') : '',
-  });
-
-  const phoneInput = el('input', {
-    className: 'input', type: 'tel', placeholder: '01xxxxxxxxx',
-    value: isEdit ? (existing.referredPhone || '') : '',
-  });
-
-  const rewardInput = el('input', {
-    className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0',
-    value: isEdit ? (existing.reward || '') : '',
-  });
-
-  const dateInput = el('input', { className: 'input', type: 'date' });
-  dateInput.value = isEdit && existing.date
-    ? localDateInput(existing.date)
-    : localDateInput();
-
-  const paidCheckbox = el('input', { type: 'checkbox', className: 'toggle__input' });
-  paidCheckbox.checked = isEdit ? (existing.status === 'paid') : false;
-
-  const paidToggle = el('label', { className: 'toggle' }, [
-    paidCheckbox,
-    el('span', { className: 'toggle__track' }, [el('span', { className: 'toggle__thumb' })]),
-    el('span', { className: 'toggle__label' }, 'تم دفع المكافأة'),
-  ]);
-
-  const noteInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
-  if (isEdit) noteInput.value = existing.note || '';
-
-  const body = el('div', {}, [
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المُرشِّح *'), referrerInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المُرشَّح *'), referredInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'هاتف المُرشَّح (يربط الإحالة بالعميل تلقائياً)'), phoneInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المكافأة (ج.م)'), rewardInput]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التاريخ'), dateInput]),
-    el('div', { className: 'field' }, [paidToggle]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), noteInput]),
-  ]);
-
-  const handle = modal.open({
-    title: isEdit ? 'تعديل إحالة' : 'إضافة إحالة',
-    body,
-    actions: [
-      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
-      {
-        text: isEdit ? 'حفظ' : 'إضافة', variant: 'primary', action: 'save',
-        onClick: async () => {
-          const referrerName = referrerInput.value.trim();
-          const referredName = referredInput.value.trim();
-          if (!referrerName) return toast.warning('اسم المُرشِّح مطلوب');
-          if (!referredName) return toast.warning('اسم المُرشَّح مطلوب');
-
-          const data = {
-            referrerName,
-            referredName,
-            referredPhone: phoneInput.value.trim(),
-            reward: toNonNegative(rewardInput.value),
-            date: (dateInput.value ? parseDateInput(dateInput.value) : Date.now()),
-            status: paidCheckbox.checked ? 'paid' : 'pending',
-            note: noteInput.value.trim(),
-          };
-
-          try {
-            if (isEdit) { await referrals.update(existing.id, data); toast.success('تم التحديث'); }
-            else { await referrals.create(data); toast.success('تم الإضافة'); }
-            handle.close();
-            await refreshAll();
-          } catch (e) { toast.danger('فشل: ' + e.message); }
-        },
-      },
-    ],
-  });
-}
-
-/* ==========================================================================
-   3. حذف + تبديل الحالة
-   ========================================================================== */
-
-async function deleteReferral(item) {
-  const ok = await modal.confirm({
-    title: 'حذف إحالة',
-    message: 'حذف إحالة "' + item.referrerName + ' → ' + item.referredName + '"؟',
-    confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
-  });
-  if (!ok) return;
-  try {
-    await referrals.remove(item.id);
-    toast.success('تم الحذف');
-    await refreshAll();
-  } catch (e) { toast.danger('فشل: ' + e.message); }
-}
-
-async function togglePaid(item) {
-  try {
-    await referrals.togglePaid(item.id);
-    toast.info(item.status === 'paid' ? 'أُعيدت إلى معلقة' : 'تم تعليمها كمدفوعة');
-    await refreshAll();
-  } catch (e) { toast.danger('فشل: ' + e.message); }
-}
-
-async function applySuggested(item, amount) {
-  try {
-    await referrals.update(item.id, { reward: amount });
-    toast.success('تم اعتماد المكافأة ' + formatEGP(amount));
-    await refreshAll();
-  } catch (e) { toast.danger('فشل: ' + e.message); }
-}
-
-/* ==========================================================================
-   4. بطاقة إحالة
-   ========================================================================== */
-
-function buildReferralCard(item) {
-  const isPaid = item.status === 'paid';
-  const statusColor = isPaid ? '#2E7D32' : '#F57C00';
-  const statusBg = isPaid ? '#E8F5E9' : '#FFF3E0';
-  const statusLabel = isPaid ? '✅ مدفوعة' : '⏳ معلقة';
-
-  const card = el('div', {
-    className: 'card',
-    style: { marginBottom: '8px', borderRight: '4px solid ' + statusColor, padding: '10px 12px' },
-    'data-id': item.id,
-  });
-
-  /* السطر 1: الأسطر (المُرشِّح → المُرشَّح) + الحالة */
-  card.appendChild(el('div', {
-    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' },
-  }, [
-    el('div', { style: { flex: '1' } }, [
-      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } },
-        '🤝 ' + item.referrerName + ' → ' + item.referredName),
-      item.referredPhone ? el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
-        '📞 ' + item.referredPhone) : null,
-      item.date ? el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
-        '📅 ' + formatDate(item.date)) : null,
-    ]),
-    el('div', { style: { textAlign: 'left' } }, [
-      el('div', { style: { fontSize: '14px', fontWeight: '700', color: '#B8863B' } },
-        formatEGP(item.reward)),
-      el('span', {
-        style: {
-          display: 'inline-block',
-          fontSize: '10px',
-          fontWeight: '600',
-          color: statusColor,
-          background: statusBg,
-          padding: '2px 8px',
-          borderRadius: '10px',
-          marginTop: '4px',
-        },
-      }, statusLabel),
-    ]),
-  ]));
-
-  if (item.note) {
-    card.appendChild(el('div', {
-      style: { fontSize: '12px', color: '#666', marginBottom: '8px', lineHeight: '1.4' },
-    }, item.note));
-  }
-
-  /* حالة المكافأة التلقائية (للمعلّقة فقط) */
-  const rw = isPaid ? null : state.rewards.get(item.id);
-  if (rw) {
-    const sentAt = lastSentIn(loadLog(), { kinds: [KIND.REFERRAL], ref: item.id });
-    const info = {
-      due: ['🎁 جاهزة للمكافأة — ' + (item.referredName || 'العميل') + ' أتمّ أول طلب مُسلَّم', '#2E7D32', '#E8F5E9'],
-      waiting: ['⏳ بانتظار أول طلب مُسلَّم للعميل المُحال', '#6D4C41', '#F5F0EA'],
-      unlinked: ['🔗 المُرشَّح غير مربوط بعميل — أضف هاتفه أو اسماً مطابقاً لعميل موجود', '#757575', '#F5F5F5'],
-    }[rw.state];
-    card.appendChild(el('div', {
-      style: { fontSize: '12px', color: info[1], background: info[2], borderRadius: '6px', padding: '6px 8px', marginBottom: '8px', lineHeight: '1.5' },
-    }, info[0] + (sentAt && rw.state === 'due' ? ' · ✔ فُتح الشكر ' + sinceText(sentAt) : '')));
-  }
-
-  /* مكافأة مقترحة بالنسبة الافتراضية (لا تُكتب إلا باعتماد المستخدم) */
-  const suggested = (rw && rw.state === 'due' && !(Number(item.reward) > 0)) ? suggestedReward(rw.order, currentPercent()) : 0;
-  if (suggested > 0) {
-    card.appendChild(el('div', {
-      className: 'ref-suggest',
-      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px', background: '#FFF8E1', color: '#8A5A00', borderRadius: '6px', padding: '6px 8px', marginBottom: '8px' },
-    }, [
-      el('span', { style: { lineHeight: '1.5' } }, '💡 مكافأة مقترحة ' + formatEGP(suggested) + ' (' + currentPercent() + '% من ' + formatEGP(rw.order.amount) + ')'),
-      el('button', {
-        className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'apply-suggested',
-        onClick: () => applySuggested(item, suggested),
-      }, 'اعتماد'),
-    ]));
-  }
-
-  /* الأزرار */
-  card.appendChild(el('div', {
-    style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
-  }, [
-    el('button', {
-      className: 'btn btn--sm ' + (isPaid ? 'btn--ghost' : 'btn--primary'), type: 'button',
-      onClick: () => togglePaid(item),
-    }, isPaid ? '↩️ معلقة' : '✅ دفع'),
-    (rw && rw.state === 'due') ? el('button', {
-      className: 'btn btn--sm btn--primary', type: 'button',
-      disabled: (rw.referrer && rw.referrer.phone) ? null : 'disabled',
-      title: (rw.referrer && rw.referrer.phone) ? '' : 'المُرشِّح غير مربوط بعميل له هاتف',
-      onClick: () => sendReward(item, rw),
-    }, '💬 شكر + مكافأة') : null,
-    item.referredPhone ? el('button', {
-      className: 'btn btn--sm btn--ghost', type: 'button',
-      onClick: () => {
-        const phone = normalizePhone(item.referredPhone).replace(/\D/g, '');
-        window.open('https://wa.me/' + phone, '_blank', 'noopener,noreferrer');
-      },
-    }, '📱') : null,
-    el('button', {
-      className: 'btn btn--sm btn--secondary', type: 'button',
-      onClick: () => openReferralForm(item),
-    }, '✏️'),
-    el('button', {
-      className: 'btn btn--sm btn--danger', type: 'button',
-      onClick: () => deleteReferral(item),
-    }, '🗑️'),
-  ].filter(Boolean)));
-
-  return card;
-}
-
-/* ==========================================================================
-   5. الرسم
-   ========================================================================== */
-
-function renderStats() {
-  const wrap = state.container?.querySelector('#ref-stats');
-  if (!wrap) return;
-  clear(wrap);
-
-  const s = state.stats;
-
-  wrap.appendChild(el('div', { className: 'stat' }, [
-    el('span', { className: 'stat__icon' }, '🤝'),
-    el('span', { className: 'stat__value', style: { fontSize: '18px' } }, String(s.total)),
-    el('span', { className: 'stat__label' }, 'إجمالي'),
-  ]));
-
-  wrap.appendChild(el('div', { className: 'stat' }, [
-    el('span', { className: 'stat__icon' }, '⏳'),
-    el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#F57C00' } },
-      formatEGP(s.pending.amount)),
-    el('span', { className: 'stat__label' }, 'معلقة — ' + s.pending.count),
-  ]));
-
-  wrap.appendChild(el('div', { className: 'stat' }, [
-    el('span', { className: 'stat__icon' }, '✅'),
-    el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#2E7D32' } },
-      formatEGP(s.paid.amount)),
-    el('span', { className: 'stat__label' }, 'مدفوعة — ' + s.paid.count),
-  ]));
-}
-
-function renderPercentCard() {
-  const wrap = state.container?.querySelector('#ref-percent');
-  if (!wrap) return;
-  clear(wrap);
-  wrap.appendChild(el('div', {
-    className: 'card',
-    style: { padding: '10px 12px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
-  }, [
-    el('div', { style: { fontSize: '13px', color: '#666' } }, [
-      '📊 نسبة المكافأة الافتراضية: ',
-      el('strong', { style: { color: '#1F6D57' } }, currentPercent() + '%'),
-    ]),
-    el('button', {
-      className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'edit-percent',
-      onClick: openRewardPercentForm,
-    }, '✏️ تعديل النسبة'),
-  ]));
-}
-
-function renderFilters() {
-  const wrap = state.container?.querySelector('#ref-filters');
-  if (!wrap) return;
-  clear(wrap);
-
-  const items = [
-    { id: 'all',     label: '🎯 الكل',    count: state.stats.total },
-    { id: 'due',     label: '🎁 جاهزة',   count: dueCount() },
-    { id: 'pending', label: '⏳ معلقة',   count: state.stats.pending.count },
-    { id: 'paid',    label: '✅ مدفوعة', count: state.stats.paid.count },
-  ];
-
-  items.forEach((it) => {
-    const active = state.activeFilter === it.id;
-    wrap.appendChild(el('button', {
-      type: 'button',
-      className: 'btn btn--sm ' + (active ? 'btn--primary' : 'btn--ghost'),
-      'data-filter': it.id,
-      style: { marginInlineEnd: '4px', marginBottom: '4px' },
-      onClick: () => {
-        state.activeFilter = it.id;
-        renderFilters();
-        renderList();
-      },
-    }, it.label + ' (' + it.count + ')'));
-  });
-}
-
-function applyFilters() {
-  let list = state.items;
-  if (state.activeFilter === 'due') {
-    list = list.filter((r) => { const x = state.rewards.get(r.id); return !!x && x.state === 'due'; });
-  } else if (state.activeFilter !== 'all') {
-    list = list.filter((r) => (r.status || 'pending') === state.activeFilter);
-  }
-  const q = normalizeSearch(state.searchQuery);
-  if (q) {
-    list = list.filter((r) =>
-      normalizeSearch(r.referrerName).includes(q) ||
-      normalizeSearch(r.referredName).includes(q) ||
-      phoneMatches(r.referredPhone, q)
-    );
-  }
-  return list;
-}
-
-function renderList() {
-  const wrap = state.container?.querySelector('#ref-list');
-  if (!wrap) return;
-  clear(wrap);
-
-  const list = applyFilters();
-
-  if (list.length === 0) {
-    const isSearching = state.searchQuery.trim() !== '';
-    wrap.appendChild(el('div', { className: 'empty-state' }, [
-      el('div', { className: 'empty-state__icon' }, isSearching ? '🔍' : '🤝'),
-      el('h2', { className: 'empty-state__title' },
-        isSearching ? 'لا نتائج' : 'لا توجد إحالات'),
-      el('p', { className: 'empty-state__text' },
-        isSearching ? 'جرّب كلمة أخرى' : 'اضغط "إضافة إحالة" للبدء'),
-    ]));
-    return;
-  }
-
-  list.forEach((r) => wrap.appendChild(buildReferralCard(r)));
-}
-
 async function refreshAll() {
   try {
     await loadData();
-    renderStats();
-    renderPercentCard();
-    renderFilters();
-    renderList();
+    renderStats(ctx);
+    renderPercentCard(ctx);
+    renderFilters(ctx);
+    renderList(ctx);
   } catch (e) {
     toast.danger('فشل التحميل: ' + e.message);
     console.error(e);
@@ -507,7 +105,7 @@ export const referralsPage = {
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
       style: { marginBottom: '12px' },
-      onClick: () => openReferralForm(),
+      onClick: () => openReferralForm(ctx),
     }, '➕ إضافة إحالة'));
 
     /* نسبة المكافأة الافتراضية */
@@ -521,7 +119,7 @@ export const referralsPage = {
     });
     searchInput.addEventListener('input', () => {
       state.searchQuery = searchInput.value;
-      renderList();
+      renderList(ctx);
     });
     container.appendChild(searchInput);
 
@@ -538,7 +136,7 @@ export const referralsPage = {
   },
 
   destroy() {
-    state = {
+    Object.assign(state, {
       container: null,
       items: [],
       stats: null,
@@ -546,6 +144,6 @@ export const referralsPage = {
       searchQuery: '',
       rewards: new Map(),
       settings: null,
-    };
+    });
   },
 };
