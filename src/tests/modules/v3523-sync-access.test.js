@@ -32,7 +32,7 @@ register('v3.5.23 وصول المزامنة السحابية', async (t) => {
   } finally { host.remove(); }
 
   const sec = SYSTEM_SECTIONS.find((s) => s.id === 'cloud-sync');
-  const sysSrc = await source('pages/settings/sections-system.js');
+  const sysSrc = await source('pages/settings/section-cloud-sync.js');   /* v3.5.26: قسم المزامنة نُقل من sections-system.js */
   await t.test('3. قسم المزامنة في الإعدادات موجود ويحمل رابط صفحة المزامنة في حالتي الدخول والخروج',
     !!sec && (sysSrc.match(/data-action': 'open-cloud-page'/g) || []).length === 2 && (sysSrc.match(/href: '#\/cloud-sync'/g) || []).length === 2);
 

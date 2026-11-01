@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.25 — تقسيم التقويم والإحالات
+   الإصدار: v3.5.26 — تقسيم ملف أقسام النظام في الإعدادات
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.25';
+const CACHE_VERSION = 'v3.5.26';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -169,6 +169,14 @@ const PRECACHE_URLS = [
 
   /* --- src/pages/settings --- */
   './src/pages/settings/index.js',
+  './src/pages/settings/section-auto-messages.js',
+  './src/pages/settings/section-backup.js',
+  './src/pages/settings/section-cloud-sync.js',
+  './src/pages/settings/section-demo-data.js',
+  './src/pages/settings/section-image-compression.js',
+  './src/pages/settings/section-notifications.js',
+  './src/pages/settings/section-occasions.js',
+  './src/pages/settings/section-support.js',
   './src/pages/settings/sections-data.js',
   './src/pages/settings/sections-security.js',
   './src/pages/settings/sections-system.js',

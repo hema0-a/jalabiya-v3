@@ -278,7 +278,7 @@ register('v3.5.21 backup file encryption', async (t) => {
   });
 
   /* ======================= 4. عقود المصدر ======================= */
-  const sys = await source('src/pages/settings/sections-system.js');
+  const sys = await source('src/pages/settings/section-backup.js');   /* v3.5.26: قسم النسخ نُقل من sections-system.js */
   const ab = await source('src/services/auto-backup.js');
   if (sys === null || ab === null) { t.log('  ⏭️ عقود المصدر تتطلب خادماً (fetch)'); }
   else {
@@ -307,7 +307,7 @@ register('v3.5.21 backup file encryption', async (t) => {
       const sw = await source('sw.js');
       if (!sw) return true;
       const paths = [...sw.matchAll(/'\.\/(src\/[^']+\.js)'/g)].map((m) => m[1])
-        .filter((p) => p !== 'src/services/auto-backup.js' && p !== 'src/pages/settings/sections-system.js');
+        .filter((p) => p !== 'src/services/auto-backup.js' && p !== 'src/pages/settings/section-backup.js');
       const offenders = [];
       for (let i = 0; i < paths.length; i += 20) {
         const batch = paths.slice(i, i + 20);
