@@ -41,7 +41,7 @@ register('v3.5.1 dashboard — تخصيص اللوحة (DOM)', async (t) => {
     await dashboardPage.render(box);
     box.querySelector('.dash-sections__custom').click();
     const dlg = () => document.querySelector('.modal .dash-custom');
-    await t.test('6. نقر «تخصيص» يفتح نافذة بتسع صفوف (كتلتان + سبعة أقسام)', !!dlg() && dlg().querySelectorAll('.dash-custom__row').length === 9);
+    await t.test('6. نقر «تخصيص» يفتح نافذة بعشرة صفوف (ثلاث كتل + سبعة أقسام؛ v3.5.22 أضافت «يومك في لمحة»)', !!dlg() && dlg().querySelectorAll('.dash-custom__row').length === 10);
 
     await t.test('7. أول قسم لا يُحرَّك لأعلى وآخر قسم لا يُحرَّك لأسفل (أزرار معطّلة)',
       (() => {

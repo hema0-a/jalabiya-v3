@@ -14,8 +14,8 @@ function fakeStorage() {
 const DEFAULT_IDS = ['dash-appts', 'dash-week', 'dash-due', 'dash-sales', 'dash-finance', 'dash-orders', 'dash-recent'];
 
 register('v3.5.1 dashboard-layout — تخصيص اللوحة (منطق)', async (t) => {
-  await t.test('1. الأقسام السبعة بالترتيب الافتراضي القديم نفسه + كتلتان',
-    DASH_SECTIONS.map((s) => s.id).join() === DEFAULT_IDS.join() && DASH_BLOCKS.map((b) => b.id).join() === 'quick,kpis');
+  await t.test('1. الأقسام السبعة بالترتيب الافتراضي القديم نفسه + ثلاث كتل (v3.5.22: أُضيفت «يومك في لمحة»)',
+    DASH_SECTIONS.map((s) => s.id).join() === DEFAULT_IDS.join() && DASH_BLOCKS.map((b) => b.id).join() === 'quick,kpis,insights');
 
   await t.test('2. بلا تفضيل: كل شيء ظاهر بالترتيب الافتراضي',
     visibleSectionIds(defaultLayout()).join() === DEFAULT_IDS.join() && isVisible(defaultLayout(), 'quick') && isVisible(defaultLayout(), 'kpis'));

@@ -482,6 +482,8 @@ async function renderPage(fullRoute) {
     layout.setActivePage(id);
   } else if (id === 'tests') {
     layout.setTitle('🧪 الاختبارات');
+  } else if (id === 'cloud-sync') {
+    layout.setTitle('☁️ المزامنة السحابية');   /* v3.5.22: خارج القائمة الجانبية لكنها صفحة صالحة */
   }
 
   if (currentPage && typeof currentPage.destroy === 'function') {

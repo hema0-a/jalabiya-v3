@@ -3,6 +3,7 @@
    ==========================================================================
    - حالة Firebase + حالة الاتصال.
    - تسجيل دخول / خروج (Email + Password) مع استماع تلقائي للجلسة.
+   - [v3.5.22] «نسيت كلمة المرور؟» (رسالة استعادة إلى البريد) + «إنشاء حساب جديد» من داخل التطبيق.
    - رفع / تنزيل البيانات.
    - آخر مزامنة.
    - يعتمد على: sync/firebase-config.js + sync/auth-sync.js + sync/sync-flow.js
@@ -28,6 +29,8 @@ let state = {
   _unsubOnline: null,
   _unsubOffline: null,
   _unsubSync: null,
+  authMode: 'login',     /* 'login' | 'signup' (v3.5.22) */
+  busy: false,           /* يمنع تكرار الإرسال أثناء طلب شبكة */
 };
 
 /* ==========================================================================
@@ -97,6 +100,46 @@ async function doLogin(email, password) {
   } else {
     toast.danger(res.error || 'فشل الدخول');
   }
+}
+
+/** استعادة كلمة المرور: رسالة إلى البريد المكتوب. */
+async function doReset(email) {
+  if (state.busy) return;
+  if (!email) return toast.warning('اكتب بريدك أولاً ثم اضغط «نسيت كلمة المرور؟»');
+  state.busy = true;
+  try {
+    toast.info('جارٍ الإرسال...');
+    const res = await authSync.resetPassword(email);
+    if (res.ok) toast.success('إن كان البريد مسجَّلاً فستصلك رسالة لاستعادة كلمة المرور (راجع Spam أيضاً)');
+    else toast.danger(res.error || 'تعذّر الإرسال');
+  } finally { state.busy = false; }
+}
+
+/** إنشاء حساب جديد ثم الدخول به تلقائياً. */
+async function doSignUp(email, password, confirm) {
+  if (state.busy) return;
+  const bad = authSync.validateSignUp(email, password, confirm);
+  if (bad) return toast.warning(bad);
+  if (authSync.getOwnerUid()) {
+    const ok = await modal.confirm({
+      title: 'إنشاء حساب جديد',
+      message: 'هذا الجهاز مرتبط بحساب مزامنة حالي. إنشاء حساب جديد وتسجيل الدخول به يجعله الحساب المعتمد لاسترجاع الرقم السري، ولن ترى بيانات الحساب القديم. هل تريد المتابعة؟',
+      confirmText: 'إنشاء حساب جديد', cancelText: 'إلغاء',
+    });
+    if (!ok) return;
+  }
+  state.busy = true;
+  try {
+    toast.info('جارٍ إنشاء الحساب...');
+    const res = await authSync.signUp(email, password);
+    if (res.ok) {
+      toast.success('تم إنشاء الحساب وتسجيل الدخول');
+      state.authMode = 'login';
+      /* onAuthChange سيُحدّث state.user تلقائياً */
+    } else {
+      toast.danger(res.error || 'تعذّر إنشاء الحساب');
+    }
+  } finally { state.busy = false; }
 }
 
 async function doLogout() {
@@ -190,9 +233,53 @@ function buildLoginCard() {
   card.appendChild(btn);
 
   card.appendChild(el('div', {
-    style: { fontSize: '11px', color: '#999', marginTop: '12px', textAlign: 'center', lineHeight: '1.5' },
-  }, 'الحسابات تُنشأ من Firebase Console'));
+    style: { display: 'flex', justifyContent: 'space-between', gap: '8px', marginTop: '12px' },
+  }, [
+    el('button', {
+      className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'forgot-password',
+      onClick: () => doReset(emailInput.value.trim()),
+    }, '🔐 نسيت كلمة المرور؟'),
+    el('button', {
+      className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'show-signup',
+      onClick: () => { state.authMode = 'signup'; renderPage(); },
+    }, '➕ إنشاء حساب جديد'),
+  ]));
 
+  return card;
+}
+
+function buildSignUpCard() {
+  const card = el('div', { className: 'card', style: { padding: '16px', marginBottom: '16px' } });
+
+  card.appendChild(el('div', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', marginBottom: '12px' } },
+    '➕ إنشاء حساب جديد'));
+
+  const emailInput = el('input', {
+    className: 'input', type: 'email', placeholder: 'example@mail.com', autocomplete: 'email',
+    style: { marginBottom: '8px' },
+  });
+  const passInput = el('input', {
+    className: 'input', type: 'password', placeholder: 'كلمة المرور (6 أحرف على الأقل)', autocomplete: 'new-password',
+    style: { marginBottom: '8px' },
+  });
+  const confirmInput = el('input', {
+    className: 'input', type: 'password', placeholder: 'تأكيد كلمة المرور', autocomplete: 'new-password',
+    style: { marginBottom: '12px' },
+  });
+
+  const btn = el('button', { className: 'btn btn--primary btn--block', type: 'button', 'data-action': 'signup' }, '✅ إنشاء الحساب');
+  btn.addEventListener('click', () => doSignUp(emailInput.value.trim(), passInput.value, confirmInput.value));
+
+  card.append(emailInput, passInput, confirmInput, btn);
+  card.appendChild(el('div', {
+    style: { fontSize: '11px', color: '#999', marginTop: '10px', textAlign: 'center', lineHeight: '1.6' },
+  }, 'الحساب جديد وفارغ، وبياناتك فيه معزولة عن أي حساب آخر.'));
+  card.appendChild(el('div', { style: { marginTop: '8px', textAlign: 'center' } }, [
+    el('button', {
+      className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'show-login',
+      onClick: () => { state.authMode = 'login'; renderPage(); },
+    }, '↩️ لدي حساب — تسجيل الدخول'),
+  ]));
   return card;
 }
 
@@ -380,7 +467,7 @@ function renderPage() {
   }
 
   if (!state.user) {
-    c.appendChild(buildLoginCard());
+    c.appendChild(state.authMode === 'signup' ? buildSignUpCard() : buildLoginCard());
   } else {
     c.appendChild(buildUserCard());
     c.appendChild(buildAutoSyncCard());
@@ -441,6 +528,8 @@ export const cloudSyncPage = {
       _unsubOnline: null,
       _unsubOffline: null,
       _unsubSync: null,
+      authMode: 'login',
+      busy: false,
     };
   },
 };

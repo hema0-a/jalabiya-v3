@@ -34,6 +34,7 @@ import {
   buildWeekVisitsSection, buildRecentCustomersSection, buildChartSections,
 } from './dashboard-sections.js';
 import { buildSectionsBar, openCustomize } from './dashboard-customize.js';
+import { mountInsights } from './dashboard-insights.js'; /* v3.5.22 */
 
 let state = {
   container: null,
@@ -179,6 +180,12 @@ export const dashboardPage = {
     buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
     if (isVisible(layout, 'kpis')) container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data, actions));
+    /* v3.5.22: «يومك في لمحة» — تُملأ بعد الرسم الأول فلا تؤخّر اللوحة */
+    if (isVisible(layout, 'insights')) {
+      const insightsSlot = el('div', { 'data-role': 'insights-slot' });
+      container.appendChild(insightsSlot);
+      mountInsights(insightsSlot);
+    }
 
     /* أقسام قابلة للطي: مواعيد · عملاء الأسبوع · مستحقة · رسوم · أحدث العملاء */
     const sections = el('div', { className: 'dash-sections' });

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.21 — تشفير الملفات الخارجية (اختياري)
+   الإصدار: v3.5.22 — استعادة ميزات v2 (المواسم · الإحالات · يومك في لمحة · حساب المزامنة)
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.21';
+const CACHE_VERSION = 'v3.5.22';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -104,6 +104,7 @@ const PRECACHE_URLS = [
   './src/pages/customers.js',
   './src/pages/dashboard-actions.js',
   './src/pages/dashboard-customize.js',
+  './src/pages/dashboard-insights.js',
   './src/pages/dashboard-kpis.js',
   './src/pages/dashboard-sections.js',
   './src/pages/dashboard.js',
@@ -185,6 +186,7 @@ const PRECACHE_URLS = [
   './src/services/contacts-import.js',
   './src/services/customer-merge-exec.js',
   './src/services/customer-merge.js',
+  './src/services/daily-insights.js',
   './src/services/dashboard-layout.js',
   './src/services/data-integrity.js',
   './src/services/delivery-receipt.js',
@@ -224,6 +226,7 @@ const PRECACHE_URLS = [
   './src/services/morning-summary.js',
   './src/services/nav-groups.js',
   './src/services/notifications.js',
+  './src/services/occasion-plan.js',
   './src/services/order-media-scan.js',
   './src/services/order-media.js',
   './src/services/order-profit.js',

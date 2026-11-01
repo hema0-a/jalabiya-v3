@@ -7,6 +7,7 @@
      3) ثم باسم مطابق تماماً **إن كان وحيداً** (الاسم المكرر لا يُخمَّن).
    وعندما يُسلَّم أول طلب للمُرشَّح، وما دامت المكافأة معلقة (غير مدفوعة)،
    تصبح الإحالة «جاهزة للمكافأة» ← رسالة شكر للمُرشِّح.
+   [v3.5.22] نسبة المكافأة الافتراضية: اقتراح مكافأة = نسبة من أول طلب مُسلَّم للمُرشَّح (يعتمدها المستخدم يدوياً).
    نقي بلا IndexedDB/DOM.
    ========================================================================== */
 
@@ -83,4 +84,45 @@ export function referralVars(item, workshop = '') {
     rewardLine: reward > 0 ? 'مكافأتك: خصم ' + formatEGP(reward) + ' على طلبك القادم' : '',
     ...workshopVars(workshop),
   };
+}
+
+/* ==========================================================================
+   نسبة المكافأة الافتراضية (v3.5.22) — إعداد settings.referrals.rewardPercent
+   ========================================================================== */
+
+export const DEFAULT_REWARD_PERCENT = 5;
+
+/**
+ * تحقّق صارم من نسبة يكتبها المستخدم.
+ * @param {*} v
+ * @returns {number|null} رقم بين 0 و100 (حتى منزلتين) أو null إن كانت غير صالحة
+ */
+export function parseRewardPercent(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * النسبة الفعّالة من الإعدادات (تعود للافتراضي 5% إن كانت ناقصة أو تالفة).
+ * @param {Object} [settings]
+ * @returns {number}
+ */
+export function rewardPercentOf(settings) {
+  const v = settings && settings.referrals ? parseRewardPercent(settings.referrals.rewardPercent) : null;
+  return v === null ? DEFAULT_REWARD_PERCENT : v;
+}
+
+/**
+ * مكافأة مقترحة = نسبة من مبلغ الطلب. 0 إن لم يوجد مبلغ أو كانت النسبة صفراً.
+ * @param {{amount?:number}|null} order
+ * @param {number} percent
+ * @returns {number} مقرّبة لمنزلتين
+ */
+export function suggestedReward(order, percent) {
+  const amount = Number(order && order.amount);
+  const p = Number(percent);
+  if (!(amount > 0) || !(p > 0)) return 0;
+  return Math.round(amount * p) / 100;
 }

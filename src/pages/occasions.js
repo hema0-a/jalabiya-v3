@@ -3,6 +3,7 @@
    ==========================================================================
    - 3 بطاقات إحصائية (إجمالي / مفعّل / قادم قريباً).
    - بطاقة "المناسبة القادمة".
+   - [v3.5.22] «🔔 تنبيهات المواسم»: لكل موسم دخل فترة تنبيهه — اقتراحات تسعير + خطة استعداد (services/occasion-plan.js).
    - قائمة كاملة + ترتيب حسب الشهر/اليوم.
    - CRUD كامل.
    - البيانات تُقرأ/تُكتب من settings.occasions (لا مخزن منفصل).
@@ -14,11 +15,14 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { settings } from '../data/repos/settings.js';
 import { MONTH_NAMES } from '../core/config.js';
+import { orders } from '../data/repos/orders.js';
+import { daysUntilOccasion, occasionAlertLevel, suggestOccasionPricing, generatePreparationPlan } from '../services/occasion-plan.js';
 
 /* --- الحالة --- */
 let state = {
   container: null,
   occasions: [],
+  orders: [],
 };
 
 /* ==========================================================================
@@ -65,6 +69,8 @@ function findNext(list) {
 async function loadData() {
   const s = await settings.get();
   state.occasions = Array.isArray(s.occasions) ? [...s.occasions] : [];
+  /* الطلبات لمتوسط الأسعار فقط — فشل قراءتها لا يمنع عرض الصفحة */
+  try { state.orders = await orders.list(); } catch (e) { state.orders = []; }
 }
 
 /**
@@ -267,6 +273,51 @@ function renderNextOccasionCard() {
   return card;
 }
 
+/** المواسم المفعّلة التي دخلت فترة تنبيهها، الأقرب أولاً. */
+function alertingOccasions() {
+  return state.occasions
+    .filter((o) => o.enabled !== false)
+    .map((o) => ({ occ: o, ...daysUntilOccasion(o) }))
+    .filter((x) => x.daysLeft <= (Number(x.occ.alertDays) || 14))
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/** بطاقة «تنبيهات المواسم»: اقتراحات التسعير + خطة الاستعداد (v3.5.22). */
+function renderAlertsCard() {
+  const wrap = state.container?.querySelector('#occ-alerts');
+  if (!wrap) return;
+  clear(wrap);
+  const list = alertingOccasions();
+  if (list.length === 0) return;
+
+  const card = el('div', { className: 'card', style: { marginBottom: '12px', padding: '12px' } });
+  card.appendChild(el('div', {
+    style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', marginBottom: '10px' },
+  }, '🔔 تنبيهات المواسم'));
+
+  list.forEach(({ occ, daysLeft, date }) => {
+    const lvl = occasionAlertLevel(daysLeft);
+    const tips = suggestOccasionPricing(occ, state.orders).slice(0, 3);
+    const plan = generatePreparationPlan(occ).slice(0, 4);
+    card.appendChild(el('div', {
+      className: 'occ-alert', 'data-id': occ.id,
+      style: { background: lvl.bg, borderRight: '4px solid ' + lvl.color, padding: '10px 12px', borderRadius: '8px', marginBottom: '8px' },
+    }, [
+      el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' } }, [
+        el('span', { style: { fontWeight: '700', fontSize: '14px', color: lvl.color } }, (occ.icon || '🎉') + ' ' + occ.name),
+        el('span', { style: { fontSize: '12px', fontWeight: '700', color: lvl.color } }, lvl.label),
+      ]),
+      el('div', { style: { fontSize: '11px', color: lvl.color, margin: '2px 0 8px' } },
+        '📅 ' + date.getDate() + ' ' + MONTH_NAMES[date.getMonth()]),
+      el('div', { style: { fontSize: '11px', fontWeight: '700', color: lvl.color, marginBottom: '4px' } }, '💡 اقتراحات:'),
+      ...tips.map((t) => el('div', { style: { fontSize: '12px', color: '#444', marginBottom: '3px', lineHeight: '1.6' } }, t.icon + ' ' + t.text)),
+      el('div', { style: { fontSize: '11px', fontWeight: '700', color: lvl.color, margin: '8px 0 4px' } }, '📋 خطة الاستعداد:'),
+      ...plan.map((p) => el('div', { style: { fontSize: '12px', color: '#444', marginBottom: '3px', lineHeight: '1.6' } }, '• ' + p)),
+    ]));
+  });
+  wrap.appendChild(card);
+}
+
 function buildOccasionCard(occ) {
   const { daysLeft } = daysUntil(occ);
   const enabled = occ.enabled !== false;
@@ -354,6 +405,7 @@ function renderList() {
 async function refreshAll() {
   await loadData();
   renderStats();
+  renderAlertsCard();
   const nextCard = renderNextOccasionCard();
   const listWrap = state.container?.querySelector('#occ-list');
   if (nextCard && listWrap) {
@@ -399,6 +451,9 @@ export const occasionsPage = {
       onClick: () => openOccasionForm(),
     }, '➕ إضافة مناسبة'));
 
+    /* تنبيهات المواسم (اقتراحات + خطة) */
+    container.appendChild(el('div', { id: 'occ-alerts' }));
+
     /* قائمة */
     container.appendChild(el('div', { id: 'occ-list' }));
 
@@ -409,6 +464,7 @@ export const occasionsPage = {
     state = {
       container: null,
       occasions: [],
+      orders: [],
     };
   },
 };

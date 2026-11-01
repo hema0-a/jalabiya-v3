@@ -121,5 +121,6 @@ import './modules/v3520-data-crypto.test.js';
 import './modules/v3521-backup-encryption.test.js';
 import './modules/v3521b-secret-dialog.test.js';
 import './modules/v3521c-exif-orientation.test.js';
+import './modules/v3522-v2-features.test.js';
 
 export { runAll, register } from './registry.js';

@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.5.21',
+  version: '3.5.22',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -213,6 +213,7 @@ export const DEFAULT_SETTINGS = {
   },
   autoMessages: { enabled: true, promptOnStatus: true, templates: {}, custom: [] },
   depositPolicy: { enabled: true, minPercent: 30 },
+  referrals: { rewardPercent: 5 },
   backup: { autoBackup: true, intervalHours: 24 },
   cloudSync: { enabled: false, lastSyncAt: null },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600 },

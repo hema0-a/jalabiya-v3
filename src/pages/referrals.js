@@ -5,6 +5,8 @@
    - بحث + فلترة بالحالة.
    - CRUD كامل.
    - زر واتساب للمُرشَّح.
+   - [v3.5.22] نسبة المكافأة الافتراضية (settings.referrals.rewardPercent): تُقترح مكافأة = النسبة × أول طلب
+     مُسلَّم للمُرشَّح، ويعتمدها المستخدم بزر (لا تُكتب تلقائياً).
    - [v3.3.45] مكافآت تلقائية: عند تسليم أول طلب للعميل المُحال تظهر الإحالة «🎁 جاهزة
      للمكافأة» وزر «شكر + مكافأة» يفتح واتساب برسالة للمُرشِّح (قالب قابل للتخصيص).
    ========================================================================== */
@@ -16,7 +18,7 @@ import { referrals } from '../data/repos/referrals.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
 import { settings } from '../data/repos/settings.js';
-import { computeReferralRewards, referralVars } from '../services/referral-rewards.js';
+import { computeReferralRewards, referralVars, rewardPercentOf, parseRewardPercent, suggestedReward } from '../services/referral-rewards.js';
 import { renderTemplate, KIND } from '../services/message-templates.js';
 import { sendLogged } from '../services/auto-messages.js';
 import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
@@ -51,6 +53,42 @@ async function loadData() {
   state.settings = st || {};
   /* ربط الإحالات بالعملاء وأول طلب مُسلَّم: referralId → {state, referrer, referred, ...} */
   state.rewards = new Map(computeReferralRewards(items, custs, ords).map((x) => [x.referral.id, x]));
+}
+
+/** النسبة الافتراضية الحالية للمكافأة. */
+const currentPercent = () => rewardPercentOf(state.settings);
+
+/** نافذة تعديل نسبة المكافأة الافتراضية (تُحفظ في الإعدادات وتُرسم الصفحة من جديد). */
+function openRewardPercentForm() {
+  const input = el('input', {
+    className: 'input', type: 'number', min: '0', max: '100', step: '0.5',
+    value: String(currentPercent()),
+  });
+  const body = el('div', {}, [
+    el('p', { style: { fontSize: '13px', color: '#666', margin: '0 0 12px', lineHeight: '1.6' } },
+      'تُقترح مكافأة المُرشِّح كنسبة من أول طلب مُسلَّم للعميل المُحال. تعتمد الاقتراح بنفسك بزر واحد.'),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'النسبة (%) *'), input]),
+  ]);
+  const handle = modal.open({
+    title: '📊 نسبة المكافأة الافتراضية',
+    body,
+    actions: [
+      { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
+      {
+        text: 'حفظ', variant: 'primary', action: 'save',
+        onClick: async () => {
+          const pct = parseRewardPercent(input.value);
+          if (pct === null) return toast.warning('أدخل نسبة صحيحة بين 0 و100');
+          try {
+            await settings.update({ referrals: { rewardPercent: pct } });
+            toast.success('تم حفظ النسبة');
+            handle.close();
+            await refreshAll();
+          } catch (e) { toast.danger('فشل: ' + e.message); }
+        },
+      },
+    ],
+  });
 }
 
 /** عدد الإحالات الجاهزة للمكافأة. */
@@ -182,6 +220,14 @@ async function togglePaid(item) {
   } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 
+async function applySuggested(item, amount) {
+  try {
+    await referrals.update(item.id, { reward: amount });
+    toast.success('تم اعتماد المكافأة ' + formatEGP(amount));
+    await refreshAll();
+  } catch (e) { toast.danger('فشل: ' + e.message); }
+}
+
 /* ==========================================================================
    4. بطاقة إحالة
    ========================================================================== */
@@ -248,6 +294,21 @@ function buildReferralCard(item) {
     }, info[0] + (sentAt && rw.state === 'due' ? ' · ✔ فُتح الشكر ' + sinceText(sentAt) : '')));
   }
 
+  /* مكافأة مقترحة بالنسبة الافتراضية (لا تُكتب إلا باعتماد المستخدم) */
+  const suggested = (rw && rw.state === 'due' && !(Number(item.reward) > 0)) ? suggestedReward(rw.order, currentPercent()) : 0;
+  if (suggested > 0) {
+    card.appendChild(el('div', {
+      className: 'ref-suggest',
+      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px', background: '#FFF8E1', color: '#8A5A00', borderRadius: '6px', padding: '6px 8px', marginBottom: '8px' },
+    }, [
+      el('span', { style: { lineHeight: '1.5' } }, '💡 مكافأة مقترحة ' + formatEGP(suggested) + ' (' + currentPercent() + '% من ' + formatEGP(rw.order.amount) + ')'),
+      el('button', {
+        className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'apply-suggested',
+        onClick: () => applySuggested(item, suggested),
+      }, 'اعتماد'),
+    ]));
+  }
+
   /* الأزرار */
   card.appendChild(el('div', {
     style: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
@@ -311,6 +372,25 @@ function renderStats() {
     el('span', { className: 'stat__value', style: { fontSize: '18px', color: '#2E7D32' } },
       formatEGP(s.paid.amount)),
     el('span', { className: 'stat__label' }, 'مدفوعة — ' + s.paid.count),
+  ]));
+}
+
+function renderPercentCard() {
+  const wrap = state.container?.querySelector('#ref-percent');
+  if (!wrap) return;
+  clear(wrap);
+  wrap.appendChild(el('div', {
+    className: 'card',
+    style: { padding: '10px 12px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
+  }, [
+    el('div', { style: { fontSize: '13px', color: '#666' } }, [
+      '📊 نسبة المكافأة الافتراضية: ',
+      el('strong', { style: { color: '#1F6D57' } }, currentPercent() + '%'),
+    ]),
+    el('button', {
+      className: 'btn btn--sm btn--secondary', type: 'button', 'data-action': 'edit-percent',
+      onClick: openRewardPercentForm,
+    }, '✏️ تعديل النسبة'),
   ]));
 }
 
@@ -386,6 +466,7 @@ async function refreshAll() {
   try {
     await loadData();
     renderStats();
+    renderPercentCard();
     renderFilters();
     renderList();
   } catch (e) {
@@ -428,6 +509,9 @@ export const referralsPage = {
       style: { marginBottom: '12px' },
       onClick: () => openReferralForm(),
     }, '➕ إضافة إحالة'));
+
+    /* نسبة المكافأة الافتراضية */
+    container.appendChild(el('div', { id: 'ref-percent' }));
 
     /* بحث */
     const searchInput = el('input', {

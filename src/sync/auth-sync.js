@@ -4,6 +4,9 @@
    لا يُنفِّذ أي شيء عند الاستيراد.
    API:
      login(email, password)  → Promise<user>
+     signUp(email, password) → Promise<{ok, user?, error?}>   (v3.5.22)
+     resetPassword(email)    → Promise<{ok, error?}>          (v3.5.22)
+     validateSignUp(email, password, confirm) → string|null   (v3.5.22: رسالة الخطأ أو null)
      logout()                → Promise<void>
      current()               → Promise<user|null>
      isConfigured()          → boolean
@@ -57,6 +60,8 @@ function translateError(err) {
     'auth/email-already-in-use':  'البريد مستخدم بالفعل',
     'auth/weak-password':         'كلمة المرور ضعيفة (6 أحرف على الأقل)',
     'auth/operation-not-allowed': 'طريقة تسجيل الدخول غير مفعَّلة',
+    'auth/missing-email':         'أدخل البريد الإلكتروني',
+    'auth/missing-password':      'أدخل كلمة المرور',
   };
   return map[code] || (err && err.message ? err.message : 'خطأ غير معروف');
 }
@@ -80,6 +85,62 @@ export async function login(email, password) {
     const cred = await authMod.signInWithEmailAndPassword(auth, email, password);
     _currentUser = cred.user;
     return { ok: true, user: cred.user };
+  } catch (err) {
+    return { ok: false, error: translateError(err) };
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * تحقّق محلي من بيانات إنشاء الحساب (بلا شبكة).
+ * @param {string} email
+ * @param {string} password
+ * @param {string} confirm
+ * @returns {string|null} رسالة الخطأ بالعربية، أو null إن كانت سليمة
+ */
+export function validateSignUp(email, password, confirm) {
+  if (!email || !EMAIL_RE.test(String(email).trim())) return 'أدخل بريداً إلكترونياً صالحاً';
+  if (!password || String(password).length < 6) return 'كلمة المرور 6 أحرف على الأقل';
+  if (password !== confirm) return 'تأكيد كلمة المرور غير مطابق';
+  return null;
+}
+
+/**
+ * إنشاء حساب جديد (Email/Password). يُسجَّل الدخول به تلقائياً عند النجاح.
+ * الحساب جديد وفارغ وبياناته معزولة بمعرّفه (قواعد Firestore)، فلا يصل لبيانات غيره.
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{ok:boolean, user?:Object, error?:string}>}
+ */
+export async function signUp(email, password) {
+  if (!isConfigured()) return { ok: false, error: 'Firebase غير مُهيّأ' };
+  const cleanEmail = String(email || '').trim();
+  const bad = validateSignUp(cleanEmail, password, password);
+  if (bad) return { ok: false, error: bad };
+  try {
+    const { auth, authMod } = await ensureAuth();
+    const cred = await authMod.createUserWithEmailAndPassword(auth, cleanEmail, password);
+    _currentUser = cred.user;
+    return { ok: true, user: cred.user };
+  } catch (err) {
+    return { ok: false, error: translateError(err) };
+  }
+}
+
+/**
+ * إرسال رسالة استعادة كلمة المرور إلى البريد.
+ * @param {string} email
+ * @returns {Promise<{ok:boolean, error?:string}>}
+ */
+export async function resetPassword(email) {
+  if (!isConfigured()) return { ok: false, error: 'Firebase غير مُهيّأ' };
+  const cleanEmail = String(email || '').trim();
+  if (!cleanEmail || !EMAIL_RE.test(cleanEmail)) return { ok: false, error: 'أدخل بريداً إلكترونياً صالحاً' };
+  try {
+    const { auth, authMod } = await ensureAuth();
+    await authMod.sendPasswordResetEmail(auth, cleanEmail);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: translateError(err) };
   }

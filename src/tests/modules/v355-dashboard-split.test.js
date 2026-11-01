@@ -108,7 +108,7 @@ register('v3.5.5 dashboard — تقسيم الملفات', async (t) => {
   try {
     let applied = 0;
     customize.openCustomize(() => { applied++; });
-    await t.test('19. customize: openCustomize يفتح نافذة التخصيص بتسعة صفوف', !!dlg() && dlg().querySelectorAll('.dash-custom__row').length === 9);
+    await t.test('19. customize: openCustomize يفتح نافذة التخصيص بعشرة صفوف (v3.5.22: ثلاث كتل + سبعة أقسام)', !!dlg() && dlg().querySelectorAll('.dash-custom__row').length === 10);
     await closeDlg();
     await t.test('20. customize: الإغلاق بلا تغيير لا يستدعي onApply', applied === 0 && !dlg());
 

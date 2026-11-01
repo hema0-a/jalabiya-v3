@@ -11,8 +11,9 @@ import {
 const ORIGINAL_IDS = [
   'dashboard', 'wall', 'customers', 'orders', 'appointments', 'calendar', 'payments', 'debts', 'pickups', 'messages', 'quotes',
   'inventory', 'workers', 'expenses', 'pricing-calculator', 'portfolio', 'referrals', 'commitments', 'house-expenses', 'loans',
-  'occasions', 'season-compare', 'activity-log', 'trash', 'data-care', 'financial-center', 'kpis', 'reports', 'cloud-sync', 'settings',
+  'occasions', 'season-compare', 'activity-log', 'trash', 'data-care', 'financial-center', 'kpis', 'reports', 'settings',
 ];
+/* v3.5.22: «cloud-sync» أُزيلت من القائمة الجانبية عمداً (الصفحة باقية على #/cloud-sync) */
 
 /** تخزين وهمي في الذاكرة */
 function fakeStorage(initial = {}) {
@@ -35,9 +36,10 @@ register('v3.5.0 nav-groups — التجميع والمفضلة', async (t) => {
     new Set(NAV_GROUPS.map((g) => g.id)).size === 6 &&
     NAV_GROUPS.every((g) => g.title && g.icon && g.items.length > 0));
 
-  await t.test('2. الصفحات الثلاثون الأصلية كلها موجودة مرة واحدة بلا زيادة',
-    ALL_NAV_ITEMS.length === 30 &&
-    NAV_IDS.size === 30 &&
+  await t.test('2. الصفحات الأصلية كلها موجودة مرة واحدة بلا زيادة (ما عدا cloud-sync المُزالة عمداً من القائمة في v3.5.22)',
+    ALL_NAV_ITEMS.length === 29 &&
+    NAV_IDS.size === 29 &&
+    !NAV_IDS.has('cloud-sync') &&
     ORIGINAL_IDS.every((id) => NAV_IDS.has(id)));
 
   await t.test('3. لكل صفحة أيقونة ونص، وأيقونات الصفحات غير مكررة',
