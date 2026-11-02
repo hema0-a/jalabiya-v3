@@ -16,22 +16,23 @@ import * as img from '../../pages/settings/section-image-compression.js';
 import * as demo from '../../pages/settings/section-demo-data.js';
 import * as sup from '../../pages/settings/section-support.js';
 
+const BY_ID = Object.fromEntries(SYSTEM_SECTIONS.map((s) => [s.id, s]));
 const FILES = ['section-notifications', 'section-occasions', 'section-auto-messages', 'section-backup',
   'section-cloud-sync', 'section-image-compression', 'section-demo-data', 'section-support'];
 
 register('v3.5.26 settings/sections-system — تقسيم الملفات', async (t) => {
   await t.test('1. sections-system.js يصدّر SYSTEM_SECTIONS فقط', Object.keys(sysMod).join() === 'SYSTEM_SECTIONS');
-  await t.test('2. الأقسام التسعة بالترتيب (الثمانية الأصلية + data-care بعد النسخ منذ v3.5.27)',
-    SYSTEM_SECTIONS.map((s) => s.id).join() === 'notifications,occasions,auto-messages,backup,data-care,cloud-sync,image-compression,demo-data,support');
+  await t.test('2. الأقسام بالترتيب (الثمانية الأصلية + data-care بعد النسخ منذ v3.5.27 + menu-pages أولاً منذ v3.5.29)',
+    SYSTEM_SECTIONS.map((s) => s.id).join() === 'menu-pages,notifications,occasions,auto-messages,backup,data-care,cloud-sync,image-compression,demo-data,support');
   await t.test('3. كل ملف يصدّر قسمه فقط وهو نفس العنصر في SYSTEM_SECTIONS',
-    notif.notificationsSection === SYSTEM_SECTIONS[0] && Object.keys(notif).join() === 'notificationsSection' &&
-    occ.occasionsSection === SYSTEM_SECTIONS[1] && Object.keys(occ).join() === 'occasionsSection' &&
-    msgs.autoMessagesSection === SYSTEM_SECTIONS[2] && Object.keys(msgs).join() === 'autoMessagesSection' &&
-    bkp.backupSection === SYSTEM_SECTIONS[3] && Object.keys(bkp).join() === 'backupSection' &&
-    cloud.cloudSyncSection === SYSTEM_SECTIONS[5] && Object.keys(cloud).join() === 'cloudSyncSection' &&
-    img.imageCompressionSection === SYSTEM_SECTIONS[6] && Object.keys(img).join() === 'imageCompressionSection' &&
-    demo.demoDataSection === SYSTEM_SECTIONS[7] && Object.keys(demo).join() === 'demoDataSection' &&
-    sup.supportSection === SYSTEM_SECTIONS[8] && Object.keys(sup).join() === 'supportSection');
+    notif.notificationsSection === BY_ID['notifications'] && Object.keys(notif).join() === 'notificationsSection' &&
+    occ.occasionsSection === BY_ID['occasions'] && Object.keys(occ).join() === 'occasionsSection' &&
+    msgs.autoMessagesSection === BY_ID['auto-messages'] && Object.keys(msgs).join() === 'autoMessagesSection' &&
+    bkp.backupSection === BY_ID['backup'] && Object.keys(bkp).join() === 'backupSection' &&
+    cloud.cloudSyncSection === BY_ID['cloud-sync'] && Object.keys(cloud).join() === 'cloudSyncSection' &&
+    img.imageCompressionSection === BY_ID['image-compression'] && Object.keys(img).join() === 'imageCompressionSection' &&
+    demo.demoDataSection === BY_ID['demo-data'] && Object.keys(demo).join() === 'demoDataSection' &&
+    sup.supportSection === BY_ID['support'] && Object.keys(sup).join() === 'supportSection');
   await t.test('4. لكل قسم أيقونة وعنوان ودالة render', SYSTEM_SECTIONS.every((s) => s.icon && s.title && typeof s.render === 'function'));
 
   let n = 0;
@@ -46,7 +47,7 @@ register('v3.5.26 settings/sections-system — تقسيم الملفات', async
       body.remove();
     }
   }
-  await t.test('5. كل الأقسام (9) تُرسم بإعدادات فارغة دون استثناء وتعرض محتوى', n === SYSTEM_SECTIONS.length && n === 9);
+  await t.test('5. كل الأقسام (10) تُرسم بإعدادات فارغة دون استثناء وتعرض محتوى', n === SYSTEM_SECTIONS.length && n === 10);
 
   const texts = await Promise.all(FILES.map(async (f) => (await fetch(new URL('../../pages/settings/' + f + '.js', import.meta.url))).text()));
   await t.test('6. حراس: لا import() ديناميكي ولا innerHTML في ملفات الأقسام الثمانية', texts.every((s) => !/\bimport\s*\(/.test(s) && !/\.innerHTML\s*=/.test(s)));

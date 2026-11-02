@@ -96,6 +96,27 @@ export function sanitizeFavorites(list, validIds = NAV_IDS, max = MAX_FAVORITES)
   return out;
 }
 
+/** صفحات لا يجوز إخفاؤها أبداً (حتى لا يفقد المستخدم الوصول للرئيسية أو للإعدادات التي تُعيد الإظهار). */
+export const PROTECTED_NAV_IDS = ['dashboard', 'settings'];
+
+/**
+ * تنظيف قائمة الصفحات المخفية: نصوص، صفحات معروفة فقط، بلا المحمية، بلا تكرار.
+ * @param {*} list
+ * @param {Set<string>} [validIds]
+ * @returns {string[]}
+ */
+export function sanitizeHidden(list, validIds = NAV_IDS) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const v of list) {
+    if (typeof v !== 'string' || !validIds.has(v) || PROTECTED_NAV_IDS.includes(v) || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out;
+}
+
 /** @returns {Storage|null} */
 function defaultStorage() {
   try { return globalThis.localStorage || null; } catch (_) { return null; }

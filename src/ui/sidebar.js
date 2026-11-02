@@ -6,6 +6,7 @@
                       القسم الذي فيه الصفحة النشطة (حتى عند التنقل بالروابط أو الرجوع).
    favorites: { get(): string[], toggle(id): {favorites, added, full, max} }
                       ← زر ☆/★ بجانب كل صفحة + قسم «المفضلة» في الأعلى.
+   setHidden(ids)   ← (v3.5.29) إخفاء صفحات من القائمة (وتختفي المجموعة إن خلت) دون حذفها من الفهرس.
    كل النصوص تُدرج عبر el({ text }) (آمنة ضد XSS) — بلا innerHTML.
    ========================================================================== */
 
@@ -36,6 +37,7 @@ export function createSidebar(options = {}) {
     : (items.length > 0 ? [{ title: '', items }] : []);
 
   let currentActive = activeId;
+  let hiddenSet = new Set();   /* v3.5.29: صفحات مخفية بتفضيل المستخدم */
 
   /* فهرس الصفحات + مجموعة كل صفحة (للفتح التلقائي) */
   const itemIndex = new Map();
@@ -104,7 +106,7 @@ export function createSidebar(options = {}) {
   function readFavSet() {
     let list = [];
     try { list = favorites ? favorites.get() : []; } catch (_) { list = []; }
-    favSet = new Set(list.filter((id) => itemIndex.has(id)));
+    favSet = new Set(list.filter((id) => itemIndex.has(id) && !hiddenSet.has(id)));
     return Array.from(favSet);
   }
 
@@ -179,6 +181,22 @@ export function createSidebar(options = {}) {
 
   renderFavorites();
 
+  /** إخفاء/إظهار صفحات (يُخفي صفوفها في المجموعات والمفضلة، والمجموعة كلها إن خلت). */
+  function setHidden(ids) {
+    hiddenSet = new Set(Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : []);
+    nav.querySelectorAll('.sidebar__item').forEach((btn) => {
+      const row = btn.closest('.sidebar__row') || btn;
+      row.style.display = hiddenSet.has(btn.getAttribute('data-id')) ? 'none' : '';
+    });
+    effectiveSections.forEach((section, si) => {
+      const api = groupApis.get(section.id || ('section-' + si));
+      if (!api) return;
+      const all = (section.items || []);
+      api.node.style.display = (all.length > 0 && all.every((it) => hiddenSet.has(it.id))) ? 'none' : '';
+    });
+    renderFavorites();
+  }
+
   function setActive(id) {
     currentActive = id;
     nav.querySelectorAll('.sidebar__item').forEach((n) => {
@@ -202,5 +220,5 @@ export function createSidebar(options = {}) {
 
   const node = el('aside', { className: 'sidebar' }, children);
 
-  return { node, setActive, getActive: () => currentActive, refreshFavorites: renderFavorites };
+  return { node, setActive, getActive: () => currentActive, refreshFavorites: renderFavorites, setHidden };
 }

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   sections-system.js — أقسام النظام (9)
+   sections-system.js — أقسام النظام (10)
    ==========================================================================
    التنبيهات، المواسم والأعياد، الرسائل التلقائية، النسخ الاحتياطي، صيانة البيانات (v3.5.27)، المزامنة السحابية،
    ضغط الصور، بيانات تجريبية، الدعم.
@@ -10,6 +10,7 @@
    وجلسة المزامنة عبر authSync.onAuthChange (لا current()). هذه القواعد محفوظة في الملفات الجديدة.
    ========================================================================== */
 
+import { menuPagesSection } from './section-menu-pages.js';
 import { notificationsSection } from './section-notifications.js';
 import { occasionsSection } from './section-occasions.js';
 import { autoMessagesSection } from './section-auto-messages.js';
@@ -21,6 +22,7 @@ import { demoDataSection } from './section-demo-data.js';
 import { supportSection } from './section-support.js';
 
 export const SYSTEM_SECTIONS = [
+  menuPagesSection,
   notificationsSection,
   occasionsSection,
   autoMessagesSection,

@@ -58,15 +58,15 @@ register('v3.5.28 بحث الإعدادات + استرجاع الافتراضي'
     const input = c1.querySelector('[data-role="settings-search"]');
     const items = () => Array.from(c1.querySelectorAll('.sub-page__item'));
     const visible = () => items().filter((i) => i.style.display !== 'none').map((i) => i.getAttribute('data-section-id'));
-    await t.test('13. خانة البحث موجودة وكل الأقسام (25) ظاهرة مبدئياً', !!input && visible().length === 25);
+    await t.test('13. خانة البحث موجودة وكل الأقسام (كلها) ظاهرة مبدئياً', !!input && visible().length === ALL.length);
     input.value = 'خط'; input.dispatchEvent(new Event('input', { bubbles: true }));
-    await t.test('14. كتابة «خط» تُبقي قسم الخطوط وتُخفي غيره', visible().includes('fonts') && visible().length < 25 && !visible().includes('backup'));
+    await t.test('14. كتابة «خط» تُبقي قسم الخطوط وتُخفي غيره', visible().includes('fonts') && visible().length < ALL.length && !visible().includes('backup'));
     input.value = 'zzzzqq'; input.dispatchEvent(new Event('input', { bubbles: true }));
     await t.test('15. بلا نتائج: كل الأقسام مخفية وتظهر رسالة «لا يوجد قسم مطابق»',
       visible().length === 0 && c1.querySelector('[data-role="settings-search-empty"]').style.display !== 'none');
     input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
     await t.test('16. مسح البحث يعيد الأقسام كلها ويُخفي الرسالة',
-      visible().length === 25 && c1.querySelector('[data-role="settings-search-empty"]').style.display === 'none');
+      visible().length === ALL.length && c1.querySelector('[data-role="settings-search-empty"]').style.display === 'none');
   } finally { settingsPage.destroy(); c1.remove(); }
 
   /* --- 4) الواجهة: استرجاع قسم --- */

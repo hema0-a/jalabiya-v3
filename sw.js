@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.28 — بحث الإعدادات واسترجاع الافتراضي لكل قسم
+   الإصدار: v3.5.29 — إخفاء وإظهار صفحات القائمة الجانبية
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.28';
+const CACHE_VERSION = 'v3.5.29';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -175,6 +175,7 @@ const PRECACHE_URLS = [
   './src/pages/settings/section-data-care.js',
   './src/pages/settings/section-demo-data.js',
   './src/pages/settings/section-image-compression.js',
+  './src/pages/settings/section-menu-pages.js',
   './src/pages/settings/section-notifications.js',
   './src/pages/settings/section-occasions.js',
   './src/pages/settings/section-support.js',

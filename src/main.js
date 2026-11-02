@@ -50,7 +50,7 @@ let mountNotifications, openNotifications;
 let ensureUnlocked, installAutoLock;
 let createBackup, runRecordMigrations, installBatchMigrationHook;
 let APP_CONFIG;
-let NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite;
+let NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite, sanitizeHidden;
 try {
   /* تحميل متوازٍ: كان 19 await متتالياً (شلّال طلبات) فيتضاعف زمن الإقلاع على شبكة الجوال */
   const [
@@ -97,7 +97,7 @@ try {
   ({ ensureUnlocked, installAutoLock } = lockMod);
   ({ requestPersistence } = storageMod);
   ({ runRecordMigrations, installBatchMigrationHook } = schemaMod);
-  ({ NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite } = navMod);
+  ({ NAV_GROUPS, ALL_NAV_ITEMS, readFavorites, toggleFavorite, sanitizeHidden } = navMod);
 } catch (e) {
   showError('Failed to load core modules', e);
   throw e;
@@ -376,7 +376,10 @@ try {
 try {
   const { settings: settingsRepo } = await import('./data/repos/settings.js');
   const { applyAllSettings } = await import('./ui/display-settings.js');
-  applyAllSettings(await settingsRepo.get());
+  const savedSettings = await settingsRepo.get();
+  applyAllSettings(savedSettings);
+  /* v3.5.29: صفحات القائمة الجانبية المخفية بتفضيل المستخدم */
+  layout.sidebar.setHidden(sanitizeHidden((savedSettings.navigation || {}).hidden));
 } catch (err) {
   console.warn('[Display] فشل تطبيق إعدادات المظهر:', err);
 }
@@ -442,6 +445,11 @@ try {
 }
 
 try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
+
+/* v3.5.29: يحدّث قسم «صفحات القائمة» في الإعدادات القائمة الجانبية فوراً */
+events.on('nav:hidden', (ids) => {
+  try { layout.sidebar.setHidden(sanitizeHidden(ids)); } catch (e) { console.warn('[Nav] تعذّر تطبيق إخفاء الصفحات:', e); }
+});
 
 events.on('topbar:setBack', (handler) => {
   layout.topbar.setBackAction(typeof handler === 'function' ? handler : null);

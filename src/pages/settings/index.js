@@ -48,6 +48,8 @@ function destroyActiveSection() {
 /* --- تطبيق الإعدادات المحفوظة على الواجهة --- */
 function applySettings(s) {
   applyAllSettings(s);
+  /* v3.5.29: صفحات القائمة المخفية (يستمع main.js ويحدّث القائمة الجانبية) */
+  events.emit('nav:hidden', (s && s.navigation && s.navigation.hidden) || []);
 }
 
 /* --- الحفظ --- */

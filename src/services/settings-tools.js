@@ -30,6 +30,7 @@ export const SEARCH_KEYWORDS = {
   grouping: 'تجميع طلبات متشابهة مقاسات متقاربة',
   'pricing-calculator': 'حاسبة تسعير هامش ربح تكلفة أجرة مصاريف',
   'deposit-policy': 'عربون مقدم نسبة دفعة أولى',
+  'menu-pages': 'صفحات القائمة الجانبية إخفاء إظهار قائمة تبسيط صفحات لا أستعملها',
   notifications: 'تنبيهات إشعارات مواسم مواعيد ديون مخزون أيام قبل',
   occasions: 'مواسم أعياد مناسبات رمضان عيد',
   'auto-messages': 'رسائل واتساب قوالب تلقائية تهنئة شكر تذكير',
@@ -89,6 +90,7 @@ export const RESET_MAP = {
   'auto-messages': { autoMessages: null },
   backup: { backup: null },
   'image-compression': { imageCompression: null },
+  'menu-pages': { navigation: null },
   security: { security: null },
   'lock-screen': { lockScreen: null },
 };
@@ -131,6 +133,7 @@ export function describeReset(id) {
     'auto-messages': 'سيُمسح كل تعديل على قوالب الرسائل وكل قالب أضفتَه، وتعود الرسائل للنصوص الافتراضية.',
     security: 'ستعود خيارات القفل التلقائي ومدة الجلسة للافتراضي (الرقم السري لا يتأثر).',
     'lock-screen': 'ستعود رسالة شاشة القفل للافتراضية وتُزال خلفيتك المرفوعة.',
+    'menu-pages': 'ستظهر كل صفحات القائمة الجانبية من جديد.',
     backup: 'ستعود خيارات النسخ التلقائي للافتراضي (النسخ المحفوظة لا تُمسّ).',
   };
   return (custom[id] || 'ستعود إعدادات هذا القسم فقط إلى قيمها الافتراضية.') + '\nباقي أقسام الإعدادات وبياناتك (العملاء والطلبات…) لا تتأثر.';
