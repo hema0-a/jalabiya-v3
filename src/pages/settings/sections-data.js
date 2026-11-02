@@ -222,6 +222,15 @@ const jalabiyaTypesSection = {
     const types = currentSettings.jalabiyaTypes || [];
     const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
 
+    /* v3.5.31+: ترتيب الأنواع (يظهر الترتيب نفسه في اقتراحات الطلب والكتالوج) */
+    function moveType(idx, dir) {
+      const to = idx + dir;
+      if (to < 0 || to >= types.length) return;
+      const tmp = types[idx]; types[idx] = types[to]; types[to] = tmp;
+      saveFn({ jalabiyaTypes: types });
+      rebuild();
+    }
+
     function rebuild() {
       clear(list);
       if (types.length === 0) {
@@ -231,16 +240,39 @@ const jalabiyaTypesSection = {
         return;
       }
       types.forEach((t, idx) => {
+        const isHidden = t.hidden === true;
         list.appendChild(el('div', {
           style: {
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 10px', background: '#F6F1E6', borderRadius: '8px',
+            opacity: isHidden ? '0.5' : '1',
           },
         }, [
           el('div', { style: { flex: '1' } }, [
-            el('div', { style: { fontSize: '14px', fontWeight: '500' } }, t.name),
+            el('div', { style: { fontSize: '14px', fontWeight: '500' } }, t.name + (isHidden ? ' (مخفي)' : '')),
             t.price ? el('div', { style: { fontSize: '11px', color: '#B8863B' } }, t.price + ' ج.م' + (t.portfolioId ? ' · 🖼️' : '')) : null,
           ]),
+          el('span', { style: { display: 'flex', flexDirection: 'column' } }, [
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-up', 'aria-label': 'تحريك لأعلى',
+              disabled: idx === 0 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => moveType(idx, -1),
+            }, '▲'),
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-down', 'aria-label': 'تحريك لأسفل',
+              disabled: idx === types.length - 1 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => moveType(idx, 1),
+            }, '▼'),
+          ]),
+          el('button', {
+            className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'toggle-hidden',
+            'aria-label': isHidden ? 'إظهار النوع' : 'إخفاء النوع',
+            onClick: () => {
+              types[idx] = { ...types[idx], hidden: !isHidden };
+              saveFn({ jalabiyaTypes: types });
+              rebuild();
+            },
+          }, isHidden ? '🙈' : '👁️'),
           el('button', {
             className: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => openTypeForm(types, idx, saveFn, rebuild),

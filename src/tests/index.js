@@ -131,5 +131,6 @@ import './modules/v3528-settings-search-reset.test.js';
 import './modules/v3529-menu-pages.test.js';
 import './modules/v3530-fonts.test.js';
 import './modules/v3531-measurements.test.js';
+import './modules/v3532-types-order-hide.test.js';
 
 export { runAll, register } from './registry.js';

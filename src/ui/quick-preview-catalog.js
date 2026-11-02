@@ -30,7 +30,7 @@ export async function shareCatalog(opts = {}) {
   try { st = await settingsRepo.get(); } catch { st = {}; }
   const ws = (st && st.workshop) || {};
   const all = (Array.isArray(opts.types) ? opts.types : (st.jalabiyaTypes || []))
-    .filter((t) => t && t.name && Number(t.price) > 0);
+    .filter((t) => t && t.name && t.hidden !== true && Number(t.price) > 0);
 
   if (all.length === 0) {
     modal.open({

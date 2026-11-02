@@ -103,7 +103,7 @@ async function loadData() {
   state.grouping = groupingOptions(s);
   state.pickupDays = fabricPickupDays(s);
   /* أنواع الجلابيب من الإعدادات: اقتراح اسم + تعبئة السعر تلقائياً في بنود الطلب (v3.3.32) */
-  state.jalabiyaTypes = (Array.isArray(s && s.jalabiyaTypes) ? s.jalabiyaTypes : []).filter((t) => t && t.name);
+  state.jalabiyaTypes = (Array.isArray(s && s.jalabiyaTypes) ? s.jalabiyaTypes : []).filter((t) => t && t.name && t.hidden !== true);   /* v3.5.32: المخفي لا يُقترح */
   syncTypesDatalist(state.jalabiyaTypes);
   if (!state.grouping.enabled && state.activeView === 'grouping') state.activeView = 'list';
 
