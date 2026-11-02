@@ -10,7 +10,8 @@
    - استخدم `input` بـ debounce + `blur` — لتغطية الجوال.
    ========================================================================== */
 
-import { applyAppearance, applyFont, applyFontSize, ensureAllFonts } from '../../ui/display-settings.js';
+import { applyAppearance } from '../../ui/display-settings.js';
+import { fontsSection } from './section-fonts.js';
 import { isDarkMode, setDarkMode } from '../../ui/theme.js';
 import { isClientMode, setClientMode } from '../../ui/client-mode.js';
 import { isBottomNavEnabled, setBottomNavEnabled, NAV_CHOICES, getNavSlots, setNavSlots } from '../../ui/bottom-nav.js';
@@ -19,7 +20,7 @@ import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
 import {
-  THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES, FONT_FAMILIES, FONT_SIZES,
+  THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES,
 } from '../../core/config.js';
 
 /* ==========================================================================
@@ -395,79 +396,7 @@ const iconsSection = {
    5. الخطوط
    ========================================================================== */
 
-const fontsSection = {
-  id: 'fonts',
-  icon: '🔤',
-  title: 'الخطوط',
-  async render(body, currentSettings, saveFn) {
-    const dp = currentSettings.display || {};
-
-    ensureAllFonts();   /* لمعاينة الخطوط */
-
-    /* --- اختيار الخط --- */
-    const fontGrid = el('div', {
-      style: { display: 'flex', flexDirection: 'column', gap: '6px' },
-    });
-
-    FONT_FAMILIES.forEach((f) => {
-      const isActive = (dp.fontFamily || 'ibm-plex') === f.id;
-      const btn = el('button', {
-        type: 'button',
-        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
-        'data-font': f.id,
-        style: {
-          flexDirection: 'row', justifyContent: 'flex-start', gap: '12px',
-          padding: '10px 12px', textAlign: 'right',
-        },
-        onClick: () => {
-          /* ⚠️ حقل واحد */
-          saveFn({ display: { fontFamily: f.id } });
-          applyFont(f.id);
-          markActiveCard(fontGrid, 'font', f.id);
-        },
-      }, [
-        el('span', { style: { fontFamily: f.font, fontSize: '18px', fontWeight: '600' } }, 'أ'),
-        el('span', { style: { fontFamily: f.font, fontSize: '15px' } }, f.name),
-        el('span', { style: { fontFamily: f.font, fontSize: '13px', color: '#666' } }, 'ورشة الجلابيب'),
-      ]);
-      fontGrid.appendChild(btn);
-    });
-
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'نوع الخط'),
-      fontGrid,
-    ]));
-
-    /* --- حجم الخط --- */
-    const sizeGrid = el('div', {
-      style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' },
-    });
-
-    FONT_SIZES.forEach((sz) => {
-      const isActive = (dp.fontSize || 'normal') === sz.id;
-      const btn = el('button', {
-        type: 'button',
-        className: 'settings-theme-card' + (isActive ? ' settings-theme-card--active' : ''),
-        'data-size': sz.id,
-        onClick: () => {
-          /* ⚠️ حقل واحد */
-          saveFn({ display: { fontSize: sz.id } });
-          applyFontSize(sz.id);
-          markActiveCard(sizeGrid, 'size', sz.id);
-        },
-      }, [
-        el('span', { style: { fontSize: (16 * sz.factor) + 'px', lineHeight: '1' } }, 'أ'),
-        el('span', { className: 'settings-theme-card__name' }, sz.name),
-      ]);
-      sizeGrid.appendChild(btn);
-    });
-
-    body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'حجم الخط'),
-      sizeGrid,
-    ]));
-  },
-};
+/* [v3.5.30] نُقل القسم إلى section-fonts.js (وطُوِّر: رفع خط، خط من Google، سُمك، تباعد) */
 
 /* ==========================================================================
    6. أوضاع العرض

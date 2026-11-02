@@ -41,8 +41,8 @@ register('v3.5.28 بحث الإعدادات + استرجاع الافتراضي'
   await t.test('8. الأقسام الحساسة مستثناة: workshop/appearance/cloud-sync/data-care/demo-data/support/danger-zone',
     ['workshop', 'appearance', 'cloud-sync', 'data-care', 'demo-data', 'support', 'danger-zone'].every((id) => !canReset(id)));
   const pf = buildResetPatch('fonts', DEFAULT_SETTINGS);
-  await t.test('9. استرجاع الخطوط يمسّ fontFamily وfontSize فقط (لا الوضع الليلي)',
-    JSON.stringify(pf) === JSON.stringify({ display: { fontFamily: 'ibm-plex', fontSize: 'normal' } }));
+  await t.test('9. استرجاع الخطوط يمسّ حقول الخط فقط (النوع والحجم والسُمك والتباعد) لا الوضع الليلي',
+    JSON.stringify(pf) === JSON.stringify({ display: { fontFamily: 'ibm-plex', fontSize: 'normal', fontWeight: 'normal', lineHeight: 'normal' } }));
   const po = buildResetPatch('occasions', DEFAULT_SETTINGS);
   po.occasions.push({ id: 'x' });
   await t.test('10. patch نسخة عميقة: تعديله لا يلوّث DEFAULT_SETTINGS', !DEFAULT_SETTINGS.occasions.some((o) => o.id === 'x'));

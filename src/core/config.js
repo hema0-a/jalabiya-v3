@@ -167,6 +167,18 @@ export const FONT_SIZES = [
   { id: 'xlarge', name: 'كبير جداً', factor: 1.25 },
 ];
 
+/* --- 15ب. سُمك الخط وتباعد الأسطر (v3.5.30) --- */
+export const FONT_WEIGHTS = [
+  { id: 'normal', name: 'عادي',   weight: 400 },
+  { id: 'medium', name: 'متوسط',  weight: 500 },
+  { id: 'bold',   name: 'سميك',   weight: 600 },
+];
+export const LINE_HEIGHTS = [
+  { id: 'normal',  name: 'عادي',  value: 1.5 },
+  { id: 'relaxed', name: 'مريح',  value: 1.7 },
+  { id: 'loose',   name: 'واسع',  value: 1.9 },
+];
+
 /* --- 16. أيام الأسبوع --- */
 export const WEEKDAYS = [
   { id: 0, name: 'الأحد' },
@@ -190,6 +202,7 @@ export const DEFAULT_SETTINGS = {
   display: {
     darkMode: false, highContrast: false, compactMode: false, clientMode: false,
     fontSize: 'normal', fontFamily: 'ibm-plex',
+    fontWeight: 'normal', lineHeight: 'normal', customFonts: [],
   },
   measurementFields: [
     { id: 'shoulder', name: 'الكتف',   enabled: true, unit: 'cm' },

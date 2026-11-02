@@ -21,7 +21,7 @@ export const SEARCH_KEYWORDS = {
   appearance: 'ثيم لون ألوان رئيسي ثانوي مظهر تخصيص',
   backgrounds: 'خلفية خلفيات نمط زخرفة',
   icons: 'أيقونات ايقونات أنماط شكل الأيقونات',
-  fonts: 'خط خطوط حجم الخط كبير صغير تحميل خط',
+  fonts: 'خط خطوط حجم الخط كبير صغير تحميل خط رفع خط ملف خط جوجل سمك سميك تباعد الأسطر ارتفاع السطر',
   display: 'وضع ليلي داكن تباين عالي مضغوط وضع العميل عرض',
   measurements: 'مقاسات حقول كتف صدر وسط أرداف طول كم رقبة',
   'jalabiya-types': 'أنواع الجلابيات جلابية أسعار موديلات صور',
@@ -76,7 +76,7 @@ export function matchSections(query, sections) {
 export const RESET_MAP = {
   backgrounds: { appearance: ['backgroundPattern'] },
   icons: { appearance: ['iconStyle'] },
-  fonts: { display: ['fontFamily', 'fontSize'] },
+  fonts: { display: ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight'] },
   display: { display: ['darkMode', 'highContrast', 'compactMode', 'clientMode'] },
   measurements: { measurementFields: null },
   'jalabiya-types': { jalabiyaTypes: null },

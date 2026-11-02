@@ -9,7 +9,8 @@
    - الخطوط غير الافتراضية تُحمَّل عند الحاجة فقط من Google Fonts.
    ========================================================================== */
 
-import { FONT_FAMILIES, FONT_SIZES } from '../core/config.js';
+import { FONT_FAMILIES, FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../core/config.js';
+import { isCustomId, entryIdOf, findEntry, cssFamily, ensureCustomFont } from '../services/custom-fonts.js';
 
 const FONT_URLS = {
   cairo: 'Cairo:wght@400;500;600;700',
@@ -50,7 +51,20 @@ export function applyAppearance(ap) {
   if (ap.iconStyle === 'line') document.body.classList.add('icons-line');
 }
 
-export function applyFont(fontId) {
+/**
+ * @param {string} fontId — معرّف خط مدمج أو «custom:<id>»
+ * @param {Array} [customFonts] — settings.display.customFonts (للخطوط المضافة)
+ */
+export function applyFont(fontId, customFonts) {
+  const root = document.documentElement;
+  const entry = isCustomId(fontId) ? findEntry(customFonts, entryIdOf(fontId)) : null;
+  if (entry) {
+    root.setAttribute('data-font', 'custom');
+    root.style.setProperty('--font-family-active', "'" + cssFamily(entry) + "', 'IBM Plex Sans Arabic', system-ui, sans-serif");
+    ensureCustomFont(entry);
+    return;
+  }
+  root.style.removeProperty('--font-family-active');
   const id = FONT_FAMILIES.some((f) => f.id === fontId) ? fontId : 'ibm-plex';
   document.documentElement.setAttribute('data-font', id);
   ensureFont(id);
@@ -61,10 +75,22 @@ export function applyFontSize(sizeId) {
   document.documentElement.setAttribute('data-size', id);
 }
 
+export function applyFontWeight(wId) {
+  const id = FONT_WEIGHTS.some((w) => w.id === wId) ? wId : 'normal';
+  document.documentElement.setAttribute('data-weight', id);
+}
+
+export function applyLineHeight(lId) {
+  const id = LINE_HEIGHTS.some((l) => l.id === lId) ? lId : 'normal';
+  document.documentElement.setAttribute('data-leading', id);
+}
+
 export function applyDisplay(dp) {
   const d = dp || {};
-  applyFont(d.fontFamily);
+  applyFont(d.fontFamily, d.customFonts);
   applyFontSize(d.fontSize);
+  applyFontWeight(d.fontWeight);
+  applyLineHeight(d.lineHeight);
   document.body.classList.toggle('high-contrast', !!d.highContrast);
   document.body.classList.toggle('compact-mode', !!d.compactMode);
 }

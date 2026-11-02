@@ -103,6 +103,12 @@ html[data-font] body {
   font-family: var(--font-family-active);
 }
 
+/* [v3.5.30] سُمك الخط وتباعد الأسطر — عبر متغيرات الأساس (لا تمسّ العناوين ذات السُمك الصريح) */
+html[data-weight="medium"]  { --font-weight-regular: 500; }
+html[data-weight="bold"]    { --font-weight-regular: 600; }
+html[data-leading="relaxed"] { --line-height-normal: 1.7; }
+html[data-leading="loose"]   { --line-height-normal: 1.9; }
+
 /* ==========================================================================
    4. أحجام الخطوط (4) — عبر data-size
    ========================================================================== */
