@@ -86,6 +86,15 @@ const measurementFieldsSection = {
     const fields = currentSettings.measurementFields || [];
     const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
 
+    /* v3.5.31: ترتيب الحقول (يظهر بنفس الترتيب في نموذج العميل) */
+    function moveField(idx, dir) {
+      const to = idx + dir;
+      if (to < 0 || to >= fields.length) return;
+      const tmp = fields[idx]; fields[idx] = fields[to]; fields[to] = tmp;
+      saveFn({ measurementFields: fields });
+      rebuild();
+    }
+
     function rebuild() {
       clear(list);
       if (fields.length === 0) {
@@ -103,8 +112,20 @@ const measurementFieldsSection = {
             opacity: enabled ? '1' : '0.5',
           },
         }, [
-          el('span', { style: { flex: '1', fontSize: '14px', fontWeight: '500' } }, f.name),
+          el('span', { style: { flex: '1', fontSize: '14px', fontWeight: '500' } }, (f.required === true ? '⭐ ' : '') + f.name),
           el('span', { style: { fontSize: '11px', color: '#666' } }, f.unit || 'cm'),
+          el('span', { style: { display: 'flex', flexDirection: 'column' } }, [
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-up', 'aria-label': 'تحريك لأعلى',
+              disabled: idx === 0 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => moveField(idx, -1),
+            }, '▲'),
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-down', 'aria-label': 'تحريك لأسفل',
+              disabled: idx === fields.length - 1 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => moveField(idx, 1),
+            }, '▼'),
+          ]),
           el('button', {
             className: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => {
@@ -152,9 +173,15 @@ function openFieldForm(fields, editIdx, saveFn, rebuild) {
     value: existing.unit || 'cm',
   });
 
+  const reqInput = el('input', { type: 'checkbox', 'data-role': 'field-required' });
+  reqInput.checked = existing.required === true;
+
   const body = el('div', {}, [
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم الحقل *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الوحدة'), unitInput]),
+    el('label', { className: 'field', style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
+      reqInput, el('span', { style: { fontSize: '13px' } }, '⭐ مقاس مطلوب (لا يُحفظ العميل بدونه)'),
+    ]),
   ]);
 
   const handle = modal.open({
@@ -168,10 +195,11 @@ function openFieldForm(fields, editIdx, saveFn, rebuild) {
           const name = nameInput.value.trim();
           if (!name) return toast.warning('الاسم مطلوب');
           const unit = unitInput.value.trim() || 'cm';
+          const required = reqInput.checked;
           if (isEdit) {
-            fields[editIdx] = { ...fields[editIdx], name, unit };
+            fields[editIdx] = { ...fields[editIdx], name, unit, required };
           } else {
-            fields.push({ id: 'field_' + Date.now(), name, unit, enabled: true });
+            fields.push({ id: 'field_' + Date.now(), name, unit, enabled: true, required });
           }
           saveFn({ measurementFields: fields });
           handle.close();

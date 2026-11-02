@@ -144,6 +144,9 @@ export function openCustomerForm(ctx, existing = null) {
         onClick: async () => {
           const name = nameInput.value.trim();
           if (!name) { toast.warning('الاسم مطلوب'); return; }
+          /* v3.5.31: مقاسات مطلوبة (⭐) حددتها في الإعدادات */
+          const missing = measurements.getMissing ? measurements.getMissing() : [];
+          if (missing.length) { toast.warning('المقاس مطلوب: ' + missing.join('، ')); return; }
           const data = {
             name,
             phone: phoneInput.value.trim(),

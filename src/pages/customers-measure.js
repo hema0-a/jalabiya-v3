@@ -10,16 +10,16 @@ import { modal } from '../ui/modal.js';
 export function buildMeasurementsSection(ctx, existingMeasurements) {
   const { state } = ctx;
   const wrap = el('div', { className: 'field' });
-  wrap.appendChild(el('label', { className: 'field__label' }, '📏 المقاسات (اختياري)'));
-
   const fields = state.measurementFields;
+  const hasRequired = fields.some((f) => f.required === true);
+  wrap.appendChild(el('label', { className: 'field__label' }, hasRequired ? '📏 المقاسات (الحقول بنجمة ⭐ مطلوبة)' : '📏 المقاسات (اختياري)'));
   const values = existingMeasurements || {};
 
   if (fields.length === 0) {
     wrap.appendChild(el('div', {
       style: { fontSize: '11px', color: '#999', padding: '6px 0' },
     }, 'لا توجد حقول مقاسات مفعَّلة. أضفها من الإعدادات → حقول المقاسات.'));
-    return { node: wrap, getValues: () => ({}), setValues: () => {} };
+    return { node: wrap, getValues: () => ({}), setValues: () => {}, getMissing: () => [] };
   }
 
   const grid = el('div', {
@@ -40,7 +40,7 @@ export function buildMeasurementsSection(ctx, existingMeasurements) {
     grid.appendChild(el('div', {}, [
       el('label', {
         style: { fontSize: '11px', color: '#666', marginBottom: '3px', display: 'block' },
-      }, f.name + (f.unit ? ' (' + f.unit + ')' : '')),
+      }, (f.required === true ? '⭐ ' : '') + f.name + (f.unit ? ' (' + f.unit + ')' : '')),
       inp,
     ]));
   });
@@ -67,6 +67,12 @@ export function buildMeasurementsSection(ctx, existingMeasurements) {
       });
       return out;
     },
+    /** أسماء الحقول المطلوبة (⭐) الفارغة أو غير الموجبة — يمنع الحفظ إن لم تكن فارغة */
+    getMissing: () => fields.filter((f) => {
+      if (f.required !== true) return false;
+      const n = Number(inputs[f.id].value.trim());
+      return !(isFinite(n) && n > 0);
+    }).map((f) => f.name),
     setValues: (obj) => {
       if (!obj || typeof obj !== 'object') return;
       Object.keys(inputs).forEach((id) => {
