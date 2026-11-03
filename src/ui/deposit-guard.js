@@ -34,18 +34,17 @@ export async function depositGuard(order, toStatus) {
     let linked = [];
     try { linked = await payments.findByOrder(order.id); } catch (e) { /* المقدم فقط */ }
     const paid = orderPaidBreakdown(order, linked).paid;
-    const chk = checkDeposit(order, paid, policy);
-    if (!chk.applies || chk.ok) return true;
-
     let customer = null;
     try { customer = order.customerId ? await customers.find(order.customerId) : null; } catch (e) { /* بلا عميل */ }
+    const chk = checkDeposit(order, paid, policy, { customer });
+    if (!chk.applies || chk.ok) return true;
 
     /* زر «اطلب العربون»: القالب مفعَّل + للعميل هاتف */
     const cfg = (s && s.autoMessages) || {};
     const tpl = cfg.enabled === false ? null : getTemplateSync('deposit_request', cfg);
     const canAsk = !!(tpl && tpl.enabled && customer && customer.phone);
     const askText = canAsk
-      ? interpolate(tpl.text, buildVars(order, customer, (s && s.workshop) || {}, { paid, depositPercent: policy.minPercent }))
+      ? interpolate(tpl.text, buildVars(order, customer, (s && s.workshop) || {}, { paid, depositPercent: chk.percentRequired }))
       : '';
 
     return await new Promise((resolve) => {

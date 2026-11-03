@@ -955,6 +955,39 @@ const depositPolicySection = {
       attrs: { min: 1, max: 100 },
     }));
 
+    /* v3.5.37: خيارات متقدمة (كلها معطَّلة افتراضياً) */
+    body.appendChild(el('div', { className: 'settings-row__label', style: { marginTop: '14px' } }, 'خيارات متقدمة'));
+    body.appendChild(numberField({
+      label: 'حد أدنى بمبلغ ثابت (ج.م)',
+      hint: '0 = معطّل. يُطبَّق الأكبر بين النسبة والمبلغ (ولا يتجاوز إجمالي الطلب)',
+      value: dp.minAmount || 0, path: 'depositPolicy', field: 'minAmount', saveFn, attrs: { min: 0 },
+    }));
+    body.appendChild(numberField({
+      label: 'الطلبات الكبيرة: ابتداءً من مبلغ (ج.م)',
+      hint: '0 = معطّل. الطلب بهذا المبلغ فأكثر يستخدم النسبة الأعلى أدناه',
+      value: dp.bigOrderThreshold || 0, path: 'depositPolicy', field: 'bigOrderThreshold', saveFn, attrs: { min: 0 },
+    }));
+    body.appendChild(numberField({
+      label: 'نسبة العربون للطلبات الكبيرة (%)',
+      hint: 'تُستخدم فقط إذا حُدِّد مبلغ للطلبات الكبيرة',
+      value: dp.bigOrderPercent || 50, path: 'depositPolicy', field: 'bigOrderPercent', saveFn, attrs: { min: 1, max: 100 },
+    }));
+    body.appendChild(numberField({
+      label: 'إعفاء الطلبات الأقل من (ج.م)',
+      hint: '0 = معطّل. الطلبات الأصغر من هذا المبلغ لا يظهر لها تحذير',
+      value: dp.skipBelowAmount || 0, path: 'depositPolicy', field: 'skipBelowAmount', saveFn, attrs: { min: 0 },
+    }));
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { style: { flex: '1' } }, [
+        el('div', { className: 'settings-row__label' }, 'إعفاء عملاء VIP'),
+        el('div', { className: 'settings-row__hint' }, 'لا يظهر تحذير العربون لطلبات العملاء المميّزين ⭐'),
+      ]),
+      createToggle({
+        label: '', checked: dp.exemptVip === true,
+        onChange: (v) => { saveFn({ depositPolicy: { exemptVip: v } }); },
+      }),
+    ]));
+
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
