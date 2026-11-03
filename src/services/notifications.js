@@ -11,12 +11,13 @@ import { orders as ordersRepo } from '../data/repos/orders.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { DEFAULT_SETTINGS } from '../core/config.js';
 import { settings as settingsRepo } from '../data/repos/settings.js';
-import { filterLowStockForAlerts } from './alert-rules.js';
+import { filterLowStockForAlerts, stockAlertOptions, splitOutOfStock, stockSignature, shouldNotifyStock } from './alert-rules.js';
 import { isPastDue } from './order-timing.js';
 import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
 /* --- مفتاح تتبّع الإشعارات المُرسلة (localStorage) --- */
 const SENT_KEY = 'jalabiya_v3_notif_sent';
+const STOCK_LAST_KEY = 'jalabiya_v3_stock_alert_last';   /* v3.5.33: آخر إشعار مخزون لكل مجموعة {tag:{ts,sig}} */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // كل 30 دقيقة
 
 /* --- حالة داخلية --- */
@@ -242,16 +243,30 @@ export async function checkAndNotify() {
   /* --- 4. نواقص المخزون --- */
   try {
     const s = await settingsRepo.get().catch(() => ({}));
-    const low = filterLowStockForAlerts(await inventoryRepo.getLowStock(), s);
-    if (low.length > 0 && !wasSentToday('low-stock')) {
-      const ok = notify({
-        title: '📦 نقص مخزون',
-        body: low.length + ' صنف وصل للحد الأدنى',
-        tag: 'low-stock',
-        pageHash: '#/inventory',
-      });
-      if (ok) { markSent('low-stock'); sent++; } else skipped++;
-    } else if (low.length > 0) skipped++;
+    const opts = stockAlertOptions(s);
+    if (opts.mode === 'all') {
+      const { low, out } = splitOutOfStock(filterLowStockForAlerts(await inventoryRepo.getLowStock(), s), s);
+      let last = {};
+      try { last = JSON.parse(localStorage.getItem(STOCK_LAST_KEY)) || {}; } catch (e) { last = {}; }
+      const now = Date.now();
+      const groups = [
+        { tag: 'low-stock', list: low, title: '📦 نقص مخزون', body: low.length + ' صنف وصل للحد الأدنى' },
+        { tag: 'out-of-stock', list: out, title: '🚫 نفد من المخزون', body: out.length + ' صنف نفدت كميته' },
+      ];
+      for (const g of groups) {
+        if (g.list.length === 0) continue;
+        const sig = stockSignature(g.list);
+        const due = opts.repeat === 'daily' ? !wasSentToday(g.tag) : shouldNotifyStock(opts.repeat, last[g.tag], now, sig);
+        if (!due) { skipped++; continue; }
+        const ok = notify({ title: g.title, body: g.body, tag: g.tag, pageHash: '#/inventory' });
+        if (ok) {
+          markSent(g.tag);
+          last[g.tag] = { ts: now, sig };
+          sent++;
+        } else skipped++;
+      }
+      try { localStorage.setItem(STOCK_LAST_KEY, JSON.stringify(last)); } catch (e) { /* ignore */ }
+    }
   } catch (err) {
     console.warn('[Notifications] inventory check failed:', err);
   }

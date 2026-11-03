@@ -132,5 +132,6 @@ import './modules/v3529-menu-pages.test.js';
 import './modules/v3530-fonts.test.js';
 import './modules/v3531-measurements.test.js';
 import './modules/v3532-types-order-hide.test.js';
+import './modules/v3533-stock-alerts.test.js';
 
 export { runAll, register } from './registry.js';

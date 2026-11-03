@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.5.32',
+  version: '3.5.33',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -216,7 +216,7 @@ export const DEFAULT_SETTINGS = {
   jalabiyaTypes: [],
   occasions: [...DEFAULT_OCCASIONS],
   notifications: { seasons: true, appointments: true, inventory: true, debts: true, leadDays: 2 },
-  inventory: { minThreshold: 5, alertOnFabricLow: true, alertOnProductLow: true },
+  inventory: { minThreshold: 5, alertOnFabricLow: true, alertOnProductLow: true, alertMode: 'all', repeat: 'daily', separateOutOfStock: false },
   dailyLimit: { dailyOrderLimit: 700, fabricPickupAlertDays: 2, dayOffWeekday: 0 },
   grouping: { enabled: false, tolerance: 2, sameTypeOnly: true },
   pricingCalculator: {

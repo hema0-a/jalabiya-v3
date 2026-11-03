@@ -13,6 +13,7 @@ import { modal } from '../../ui/modal.js';
 import { shareCatalog } from '../../ui/quick-preview.js';
 import { portfolio as portfolioRepo } from '../../data/repos/portfolio.js';
 import { createToggle } from '../../ui/controls.js';
+import { stockAlertOptions, STOCK_ALERT_MODES, STOCK_REPEAT_MODES } from '../../services/alert-rules.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
 /* ==========================================================================
@@ -456,6 +457,45 @@ const inventoryLimitsSection = {
       el('div', { className: 'settings-row__label' }, 'تنبيه عند نقص المخزون'),
       t2,
     ]));
+
+    /* --- v3.5.33: تنبيه «نفد» منفصل --- */
+    const t3 = createToggle({
+      label: 'تنبيه «نفد» منفصل',
+      checked: inv.separateOutOfStock === true,
+      onChange: (v) => saveFn({ inventory: { separateOutOfStock: v } }),
+    });
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'تنبيه «نفد» منفصل (للأصناف التي وصلت للصفر)'),
+      t3,
+    ]));
+
+    /* --- v3.5.33: وضع التنبيه + تكرار التذكير (بطاقات اختيار) --- */
+    const opts = stockAlertOptions(currentSettings);
+    function choiceField(label, hint, items, key, active, field) {
+      const grid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(' + items.length + ', 1fr)', gap: '6px' } });
+      items.forEach((it) => {
+        grid.appendChild(el('button', {
+          type: 'button',
+          className: 'settings-theme-card' + (active === it.id ? ' settings-theme-card--active' : ''),
+          ['data-' + key]: it.id,
+          onClick: () => {
+            saveFn({ inventory: { [field]: it.id } });
+            grid.querySelectorAll('button[data-' + key + ']').forEach((b) => {
+              b.classList.toggle('settings-theme-card--active', b.getAttribute('data-' + key) === it.id);
+            });
+          },
+        }, [el('span', { className: 'settings-theme-card__name', style: { fontSize: '12px' } }, it.name)]));
+      });
+      return el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, label),
+        grid,
+        hint ? el('div', { className: 'settings-field__hint' }, hint) : null,
+      ]);
+    }
+    body.appendChild(choiceField('وضع التنبيه', 'مركز التنبيهات داخل التطبيق يعرض النقص دائماً؛ الإشعار يصلك على الجهاز نفسه.',
+      STOCK_ALERT_MODES, 'stock-mode', opts.mode, 'alertMode'));
+    body.appendChild(choiceField('تكرار تذكير الإشعار', 'يخص إشعار الجهاز فقط (وليس مركز التنبيهات).',
+      STOCK_REPEAT_MODES, 'stock-repeat', opts.repeat, 'repeat'));
   },
 };
 

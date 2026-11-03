@@ -21,7 +21,7 @@ import { isPastDue } from '../services/order-timing.js';
 import { assessOrderRisks } from '../services/order-risk.js';
 import { daysSinceExternalBackup } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
-import { alertToggles, filterLowStockForAlerts } from '../services/alert-rules.js';
+import { alertToggles, filterLowStockForAlerts, splitOutOfStock } from '../services/alert-rules.js';
 import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
 
@@ -164,7 +164,18 @@ export async function getNotifications() {
     }
 
     /* --- 3. نقص المخزون --- */
-    const lowStock = filterLowStockForAlerts(await inventory.getLowStock().catch(() => []), s);
+    const stockSplit = splitOutOfStock(filterLowStockForAlerts(await inventory.getLowStock().catch(() => []), s), s);
+    const lowStock = stockSplit.low;
+    if (stockSplit.out.length > 0) {
+      out.push({
+        type: 'danger',
+        icon: '🚫',
+        title: stockSplit.out.length + ' صنف نفد من المخزون',
+        subtitle: stockSplit.out.slice(0, 2).map((i) => (i.name || 'صنف')).join(' — '),
+        route: '#/inventory',
+        count: stockSplit.out.length,
+      });
+    }
     if (lowStock.length > 0) {
       out.push({
         type: 'warning',
