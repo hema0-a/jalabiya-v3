@@ -865,6 +865,50 @@ const pricingCalculatorSection = {
     ]));
     rebuildPresets();
 
+    /* --- v3.5.36: قيم افتراضية للحقول --- */
+    body.appendChild(el('div', {
+      style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(31,109,87,0.15)' },
+    }, [
+      el('h4', { style: { fontSize: '13px', color: '#123C2F', margin: '0 0 8px 0', fontWeight: '600' } }, '✍️ قيم تُملأ تلقائياً في الحاسبة'),
+    ]));
+    [
+      ['عدد الأمتار الافتراضي', 'defaultMeters', 3, 0.5],
+      ['سعر المتر الافتراضي (ج.م)', 'defaultMeterPrice', 0, 1],
+      ['سعر الساعة الافتراضي (ج.م)', 'defaultHourlyRate', 0, 1],
+      ['مصاريف غير مباشرة افتراضية (ج.م)', 'defaultOverhead', 0, 1],
+    ].forEach(([label, field, dflt, step]) => {
+      body.appendChild(numberField({
+        label, value: pc[field] != null ? pc[field] : dflt, path: 'pricingCalculator', field, saveFn,
+        attrs: { min: 0, step },
+      }));
+    });
+
+    /* --- تقريب السعر النهائي --- */
+    const roundGrid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' } });
+    [[0, 'بدون'], [5, '5 ج'], [10, '10 ج'], [50, '50 ج']].forEach(([v, name]) => {
+      roundGrid.appendChild(el('button', {
+        type: 'button',
+        className: 'settings-theme-card' + (Number(pc.roundTo || 0) === v ? ' settings-theme-card--active' : ''),
+        'data-round': String(v),
+        onClick: () => {
+          saveFn({ pricingCalculator: { roundTo: v } });
+          roundGrid.querySelectorAll('button[data-round]').forEach((b) => b.classList.toggle('settings-theme-card--active', Number(b.dataset.round) === v));
+        },
+      }, [el('span', { className: 'settings-theme-card__name' }, name)]));
+    });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'تقريب سعر البيع لأقرب'),
+      roundGrid,
+      el('div', { className: 'settings-field__hint' }, 'مثال: 1243 ج يصبح 1245 عند «5 ج». الربح يُعدَّل ليبقى السعر = التكلفة + الربح.'),
+    ]));
+
+    body.appendChild(numberField({
+      label: 'عدد الحسابات المحفوظة في السجل (10 إلى 200)',
+      hint: 'يُحذف الأقدم عند تجاوز العدد',
+      value: pc.maxHistoryItems || 50, path: 'pricingCalculator', field: 'maxHistoryItems', saveFn,
+      attrs: { min: 10, max: 200 },
+    }));
+
     /* toggles أخيرة */
     body.appendChild(el('div', {
       style: {
@@ -872,7 +916,7 @@ const pricingCalculatorSection = {
         borderTop: '1px dashed rgba(31,109,87,0.15)',
       },
     }, [
-      toggleRow('💾 حفظ سجل الحسابات', 'saveHistory', 'يحفظ آخر 50 حساب في المتصفح'),
+      toggleRow('💾 حفظ سجل الحسابات', 'saveHistory', 'يحفظ آخر حساباتك في المتصفح (العدد من الإعداد أدناه)'),
       toggleRow('📋 تفعيل زر "إنشاء طلب"', 'enableCreateOrder', 'ينشئ طلباً مباشرة من الحساب'),
     ]));
   },

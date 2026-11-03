@@ -33,6 +33,17 @@ let state = {
   history: [],
 };
 
+/** خطوات التقريب المسموحة (0 = بلا تقريب) */
+export const ROUND_STEPS = [0, 5, 10, 50];
+/** حدّا عدد الحسابات المحفوظة في السجل */
+export const HISTORY_MIN = 10;
+export const HISTORY_MAX = 200;
+/** عدد عناصر السجل الفعلي من الإعدادات (يُقصّ بين الحدّين؛ الافتراضي 50). */
+export function historyLimit(config) {
+  const n = Math.floor(Number(config && config.maxHistoryItems));
+  return n >= 1 ? Math.min(HISTORY_MAX, Math.max(HISTORY_MIN, n)) : 50;
+}
+
 /* ==========================================================================
    1. الحساب (مُصدَّرة للاختبار)
    ========================================================================== */
@@ -57,8 +68,14 @@ export function computePricing(inputs, config) {
 
   const totalCost = fabricCost + laborCost + extrasCost + overheadCost;
   const margin = num(inputs.margin);
-  const profit = totalCost * (margin / 100);
-  const sellingPrice = totalCost + profit;
+  let profit = totalCost * (margin / 100);
+  let sellingPrice = totalCost + profit;
+  /* v3.5.36: تقريب السعر النهائي لأقرب 5/10/50 (الربح يُعدَّل ليبقى السعر = التكلفة + الربح) */
+  const step = ROUND_STEPS.includes(Number(config.roundTo)) ? Number(config.roundTo) : 0;
+  if (step > 0 && sellingPrice > 0) {
+    sellingPrice = Math.round(sellingPrice / step) * step;
+    profit = sellingPrice - totalCost;
+  }
 
   return {
     fabricCost,
@@ -88,7 +105,7 @@ function loadHistory() {
 
 function saveHistory() {
   try {
-    const max = state.config.maxHistoryItems || 50;
+    const max = historyLimit(state.config);
     const trimmed = state.history.slice(0, max);
     localStorage.setItem(STORAGE_KEYS.V3_PRICING_HISTORY, JSON.stringify(trimmed));
   } catch (e) {
@@ -523,6 +540,12 @@ export const pricingCalculatorPage = {
 
     /* الهامش الافتراضي */
     state.inputs.margin = Number(state.config.defaultMargin) || 30;
+    /* v3.5.36: القيم الافتراضية للحقول (من الإعدادات) */
+    const dv = (v, d) => { const n = Number(v); return isFinite(n) && n >= 0 ? n : d; };
+    state.inputs.meters = dv(state.config.defaultMeters, 3);
+    state.inputs.meterPrice = dv(state.config.defaultMeterPrice, 0);
+    state.inputs.hourlyRate = dv(state.config.defaultHourlyRate, 0);
+    state.inputs.overhead = dv(state.config.defaultOverhead, 0);
 
     /* السجل */
     state.history = loadHistory();

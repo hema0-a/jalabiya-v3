@@ -135,5 +135,6 @@ import './modules/v3532-types-order-hide.test.js';
 import './modules/v3533-stock-alerts.test.js';
 import './modules/v3534-day-off.test.js';
 import './modules/v3535-grouping-options.test.js';
+import './modules/v3536-pricing-options.test.js';
 
 export { runAll, register } from './registry.js';

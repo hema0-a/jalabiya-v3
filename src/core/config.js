@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.5.35',
+  version: '3.5.36',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -223,6 +223,8 @@ export const DEFAULT_SETTINGS = {
     enableFabric: true, enableLabor: true, enableExtras: true, enableOverhead: true,
     defaultMargin: 30, marginPresets: [20, 30, 50, 100],
     saveHistory: true, enableCreateOrder: true, maxHistoryItems: 50,
+    /* v3.5.36: قيم افتراضية للحقول وتقريب السعر النهائي (0 = بلا تقريب) */
+    defaultMeters: 3, defaultMeterPrice: 0, defaultHourlyRate: 0, defaultOverhead: 0, roundTo: 0,
   },
   autoMessages: { enabled: true, promptOnStatus: true, templates: {}, custom: [] },
   depositPolicy: { enabled: true, minPercent: 30 },
