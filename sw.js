@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.33 — تنبيهات المخزون: وضع، نفد، تكرار
+   الإصدار: v3.5.34 — أيام الإجازة: أكثر من يوم + تواريخ محددة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.33';
+const CACHE_VERSION = 'v3.5.34';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -42,6 +42,7 @@ const PRECACHE_URLS = [
   /* --- src/core --- */
   './src/core/config.js',
   './src/core/day-math.js',
+  './src/core/day-off.js',
   './src/core/deeplink.js',
   './src/core/dom.js',
   './src/core/error-handler.js',

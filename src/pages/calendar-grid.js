@@ -9,6 +9,7 @@ import { el } from '../core/dom.js';
 import { DAY_NAMES_SHORT, MONTH_NAMES } from '../core/config.js';
 import { isPastDue } from '../services/order-timing.js';
 import { startOfNextDay } from '../core/day-math.js';
+import { isDayOff } from '../core/day-off.js';
 import { startOfDayMs, isSameDay, formatArabicDate, eventsForDay } from './calendar-utils.js';
 import { openDayModal } from './calendar-day.js';
 
@@ -111,7 +112,7 @@ function buildDayCell(ctx, day, ts) {
   const { state } = ctx;
   const now = Date.now();
   const isToday = isSameDay(ts, now);
-  const isOff = new Date(ts).getDay() === state.dayOffWeekday;
+  const isOff = isDayOff(ts, state.dayOffWeekday);
   const dayEvents = eventsForDay(state, ts);
   const orders = dayEvents.filter((e) => e.type === 'order');
   const appts = dayEvents.filter((e) => e.type === 'appointment');

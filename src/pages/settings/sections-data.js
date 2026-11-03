@@ -13,6 +13,8 @@ import { modal } from '../../ui/modal.js';
 import { shareCatalog } from '../../ui/quick-preview.js';
 import { portfolio as portfolioRepo } from '../../data/repos/portfolio.js';
 import { createToggle } from '../../ui/controls.js';
+import { resolveDayOffSettings, normalizeHolidays, expandDateRange, MAX_HOLIDAYS } from '../../core/day-off.js';
+import { dayKey } from '../../core/day-math.js';
 import { stockAlertOptions, STOCK_ALERT_MODES, STOCK_REPEAT_MODES } from '../../services/alert-rules.js';
 import { DEFAULT_SETTINGS, WEEKDAYS } from '../../core/config.js';
 
@@ -529,34 +531,113 @@ const dailyLimitSection = {
       attrs: { min: 0, max: 30 },
     }));
 
-    /* يوم الإجازة */
+    /* v3.5.34: أيام الإجازة الأسبوعية (أكثر من يوم) + إجازات بتاريخ محدد */
     body.appendChild(el('div', {
-      style: {
-        marginTop: '12px', paddingTop: '12px',
-        borderTop: '1px dashed rgba(31,109,87,0.15)',
-      },
+      style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(31,109,87,0.15)' },
     }, [
-      el('h3', {
-        style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', margin: '0 0 8px 0' },
-      }, '🏖️ يوم الإجازة الأسبوعي'),
+      el('h3', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', margin: '0 0 8px 0' } }, '🏖️ أيام الإجازة الأسبوعية'),
     ]));
 
-    const dayOffSelect = el('select', { className: 'select' });
+    const wkSel = new Set(resolveDayOffSettings(dl).weekdays);
+    const wkGrid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' } });
+    const wkNote = el('div', { className: 'settings-field__hint', 'data-role': 'dayoff-note' });
+    function wkRefresh() {
+      wkGrid.querySelectorAll('button[data-wd]').forEach((b) => {
+        b.classList.toggle('settings-theme-card--active', wkSel.has(Number(b.dataset.wd)));
+      });
+      wkNote.textContent = wkSel.size === 0
+        ? 'لا توجد إجازة أسبوعية: تُعامل كل الأيام أيام عمل.'
+        : 'إجازة كل: ' + WEEKDAYS.filter((d) => wkSel.has(d.id)).map((d) => d.name).join('، ') + ' — تُبرَز في التقويم وتُتخطّى في جدولة التسليم.';
+    }
     WEEKDAYS.forEach((d) => {
-      const o = el('option', { value: String(d.id) }, d.name);
-      if (Number(dl.dayOffWeekday ?? 0) === d.id) o.selected = true;
-      dayOffSelect.appendChild(o);
+      wkGrid.appendChild(el('button', {
+        type: 'button', className: 'settings-theme-card', 'data-wd': String(d.id),
+        onClick: () => {
+          const next = new Set(wkSel);
+          if (next.has(d.id)) next.delete(d.id); else next.add(d.id);
+          if (next.size >= 7) { toast.warning('لا يمكن أن تكون كل أيام الأسبوع إجازة'); return; }
+          wkSel.clear(); next.forEach((x) => wkSel.add(x));
+          const arr = Array.from(wkSel).sort((x, y) => x - y);
+          /* ⚠️ حقول الإجازة فقط (dayOffWeekday القديم يُحدَّث للتوافق مع الإصدارات الأقدم؛ -1 = بلا إجازة) */
+          saveFn({ dailyLimit: { dayOffWeekdays: arr, dayOffWeekday: arr.length ? arr[0] : -1 } });
+          wkRefresh();
+        },
+      }, [el('span', { className: 'settings-theme-card__name', style: { fontSize: '12px' } }, d.name)]));
     });
-    dayOffSelect.addEventListener('change', () => {
-      /* ⚠️ حقل واحد فقط */
-      saveFn({ dailyLimit: { dayOffWeekday: Number(dayOffSelect.value) } });
-    });
-
     body.appendChild(el('div', { className: 'settings-field' }, [
-      el('label', { className: 'settings-field__label' }, 'اليوم الأسبوعي للإجازة'),
-      dayOffSelect,
-      el('div', { className: 'settings-field__hint' }, 'يُبرَز في التقويم بلون مميز — ويُعطَّل في نموذج الطلبات'),
+      el('label', { className: 'settings-field__label' }, 'اختر يوماً أو أكثر (اضغط مرة أخرى لإلغائه)'),
+      wkGrid, wkNote,
     ]));
+    wkRefresh();
+
+    /* --- إجازات بتاريخ محدد (عيد، مناسبة...) --- */
+    body.appendChild(el('div', {
+      style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(31,109,87,0.15)' },
+    }, [
+      el('h3', { style: { fontSize: '14px', fontWeight: '600', color: '#123C2F', margin: '0 0 8px 0' } }, '📅 إجازات بتاريخ محدد'),
+    ]));
+    let holidays = normalizeHolidays(dl.holidays);
+    const hList = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' } });
+    const todayKey = dayKey(Date.now());
+    function saveHolidays() { saveFn({ dailyLimit: { holidays } }); }
+    function hRebuild() {
+      clear(hList);
+      if (holidays.length === 0) {
+        hList.appendChild(el('div', { style: { fontSize: '13px', color: '#2E8B6F', textAlign: 'center', padding: '8px' } }, 'لا توجد إجازات بتاريخ محدد'));
+        return;
+      }
+      holidays.forEach((h) => {
+        const [y, m, d] = h.date.split('-').map(Number);
+        const past = h.date < todayKey;
+        hList.appendChild(el('div', {
+          'data-holiday': h.date,
+          style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#F6F1E6', borderRadius: '8px', opacity: past ? '0.5' : '1' },
+        }, [
+          el('div', { style: { flex: '1' } }, [
+            el('div', { style: { fontSize: '14px', fontWeight: '500' } }, h.date + ' — ' + (WEEKDAYS.find((w) => w.id === new Date(y, m - 1, d).getDay()) || {}).name),
+            h.name || past ? el('div', { style: { fontSize: '11px', color: '#666' } }, (h.name || '') + (past ? (h.name ? ' · ' : '') + 'منتهية' : '')) : null,
+          ]),
+          el('button', {
+            className: 'btn btn--sm btn--danger', type: 'button', 'data-action': 'remove-holiday', 'aria-label': 'حذف الإجازة',
+            onClick: () => { holidays = holidays.filter((x) => x.date !== h.date); saveHolidays(); hRebuild(); },
+          }, '🗑️'),
+        ]));
+      });
+      if (holidays.some((h) => h.date < todayKey)) {
+        hList.appendChild(el('button', {
+          className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'clean-holidays',
+          onClick: () => { holidays = holidays.filter((x) => x.date >= todayKey); saveHolidays(); hRebuild(); },
+        }, '🧹 حذف الإجازات المنتهية'));
+      }
+    }
+    body.appendChild(hList);
+    const hFrom = el('input', { className: 'input', type: 'date', 'data-role': 'holiday-from' });
+    const hTo = el('input', { className: 'input', type: 'date', 'data-role': 'holiday-to' });
+    const hName = el('input', { className: 'input', type: 'text', placeholder: 'الاسم (اختياري) مثل: عيد الفطر', maxlength: '30', 'data-role': 'holiday-name' });
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'من تاريخ'), hFrom,
+      el('label', { className: 'settings-field__label', style: { marginTop: '6px' } }, 'إلى تاريخ (اتركه فارغاً ليوم واحد)'), hTo,
+      el('div', { style: { height: '6px' } }), hName,
+      el('button', {
+        className: 'btn btn--primary btn--block', type: 'button', style: { marginTop: '8px' }, 'data-action': 'add-holiday',
+        onClick: () => {
+          if (hTo.value && hFrom.value && hTo.value < hFrom.value) { toast.warning('تاريخ النهاية قبل البداية'); return; }
+          const days = expandDateRange(hFrom.value, hTo.value);
+          if (days.length === 0) { toast.warning('اختر تاريخ بداية صالحاً'); return; }
+          const name = hName.value;
+          const have = new Set(holidays.map((x) => x.date));
+          const fresh = days.filter((k) => !have.has(k));
+          if (fresh.length === 0) { toast.info('هذه الأيام مضافة بالفعل'); return; }
+          if (holidays.length + fresh.length > MAX_HOLIDAYS) { toast.warning('الحد الأقصى ' + MAX_HOLIDAYS + ' يوم إجازة'); return; }
+          holidays = normalizeHolidays(holidays.concat(fresh.map((k) => ({ date: k, name }))));
+          saveHolidays(); hRebuild();
+          hFrom.value = ''; hTo.value = ''; hName.value = '';
+          toast.success('أُضيف ' + fresh.length + ' يوم إجازة');
+        },
+      }, '➕ إضافة إجازة'),
+      el('div', { className: 'settings-field__hint' }, 'تُتخطّى هذه الأيام في جدولة التسليم وتظهر في التقويم وشريط السعة كإجازة. الإضافة حتى 31 يوماً في المرة.'),
+    ]));
+    hRebuild();
 
     body.appendChild(el('div', {
       style: {
@@ -564,7 +645,7 @@ const dailyLimitSection = {
         background: '#F1F8E9', borderRadius: '8px', lineHeight: '1.6',
         marginTop: '8px',
       },
-    }, '💡 الحد اليومي يظهر في صفحة الطلبات (تنبيه). يوم الإجازة يُطبَّق على التقويم + اقتراح مواعيد التسليم.'));
+    }, '💡 الحد اليومي يظهر في صفحة الطلبات (تنبيه). أيام الإجازة تُطبَّق على التقويم + اقتراح مواعيد التسليم.'));
   },
 };
 

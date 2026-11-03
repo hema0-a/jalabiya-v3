@@ -15,8 +15,8 @@
 import { clear } from '../core/dom.js';
 import { settings } from '../data/repos/settings.js';
 import { getCalendarEvents, getOverdueOrdersCount } from '../services/calendar-events.js';
-import { DEFAULT_SETTINGS } from '../core/config.js';
 import { monthStartMs, monthEndMs } from './calendar-utils.js';
+import { resolveDayOffSettings } from '../core/day-off.js';
 import { renderHeader, renderFilters, renderStats, renderGrid, renderLegend } from './calendar-grid.js';
 import { renderUpcoming } from './calendar-day.js';
 
@@ -108,9 +108,8 @@ export const calendarPage = {
     /* قراءة الإعدادات */
     try {
       const s = await settings.get();
-      state.dayOffWeekday = (s.dailyLimit && s.dailyLimit.dayOffWeekday != null)
-        ? Number(s.dailyLimit.dayOffWeekday)
-        : (DEFAULT_SETTINGS.dailyLimit.dayOffWeekday ?? 0);
+      /* v3.5.34: مواصفة الإجازة (أيام أسبوعية متعددة + تواريخ محددة) */
+      state.dayOffWeekday = resolveDayOffSettings(s.dailyLimit);
     } catch {
       state.dayOffWeekday = 0;
     }

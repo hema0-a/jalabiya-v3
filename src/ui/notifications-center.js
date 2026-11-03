@@ -24,6 +24,7 @@ import { formatEGP, formatDate, formatTime } from '../core/utils.js';
 import { alertToggles, filterLowStockForAlerts, splitOutOfStock } from '../services/alert-rules.js';
 import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
+import { resolveDayOffSettings } from '../core/day-off.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -108,7 +109,7 @@ export async function getNotifications() {
     /* طلبات في موعدها لكن مؤشراتها تقول إنها ستتأخر (v3.3.47) */
     const risks = assessOrderRisks(allOrders, {
       dailyOrderLimit: Number(s && s.dailyLimit && s.dailyLimit.dailyOrderLimit) || 0,
-      dayOffWeekday: Number((s && s.dailyLimit && s.dailyLimit.dayOffWeekday) ?? 0),
+      dayOffWeekday: resolveDayOffSettings(s && s.dailyLimit),
     }, now);
     if (risks.length > 0) {
       out.push({

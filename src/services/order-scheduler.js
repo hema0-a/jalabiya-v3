@@ -13,6 +13,7 @@
    ========================================================================== */
 
 import { toTimestamp, dayKey, dayDiff, addDaysNoon, weekdayOf } from '../core/day-math.js';
+import { dayOffOf, isDayOff } from '../core/day-off.js';
 
 const DAY_MS = 86400000;
 const MAX_SPREAD_DAYS = 366;
@@ -72,7 +73,7 @@ function legacyAllocate(amountP, dueTs, limitP, dayOff) {
   const out = [];
   let back = 0;
   const workDayBack = () => {
-    while (weekdayOf(addDaysNoon(dueTs, -back)) === dayOff) back++;
+    while (isDayOff(addDaysNoon(dueTs, -back), dayOff)) back++;
     return dayKey(addDaysNoon(dueTs, -back));
   };
   out.push({ key: workDayBack(), piasters: r });
@@ -100,7 +101,7 @@ export function buildDayLedger(orders, opts = {}) {
   const excludeId = opts.excludeId || null;
   const includeDelivered = opts.includeDelivered === true;
   const limitP = toPiasters(opts.dailyLimit);
-  const dayOff = Number(opts.dayOffWeekday ?? 0);
+  const dayOff = dayOffOf(opts.dayOffWeekday);
   const ledger = new Map();
   for (const o of orders || []) {
     if (!o) continue;
@@ -128,7 +129,7 @@ export function getOrderParts(order, opts = {}) {
   const dueTs = toTimestamp(order && order.dueDate);
   if (Number.isNaN(dueTs)) return [];
   const parts = planParts(order, dueTs) ||
-    legacyAllocate(toPiasters(order.amount), dueTs, toPiasters(opts.dailyLimit), Number(opts.dayOffWeekday ?? 0));
+    legacyAllocate(toPiasters(order.amount), dueTs, toPiasters(opts.dailyLimit), dayOffOf(opts.dayOffWeekday));
   return parts.map((p) => ({ day: p.key, amount: p.piasters / 100 })).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
 }
 
@@ -214,7 +215,7 @@ function minDaysOf(config) {
  *   null إن لم تتسع السعة في النطاق المسموح.
  */
 export function planOrder(orders, config = {}) {
-  const dayOff = Number(config.dayOffWeekday ?? 0);
+  const dayOff = dayOffOf(config.dayOffWeekday);
   const limitP = toPiasters(config.dailyOrderLimit);
   const amountP = toPiasters(config.orderAmount);
   if (limitP <= 0 || amountP <= 0) return null;
@@ -254,7 +255,7 @@ export function planOrder(orders, config = {}) {
     for (let k = 0; k < 400; k++) {
       const ts = addDaysNoon(endRaw, -k);
       if (dayDiff(startTs, ts) < 0) break;
-      if (weekdayOf(ts) === dayOff) continue;
+      if (isDayOff(ts, dayOff)) continue;
       back.push(ts);
     }
     if (back.length === 0) return null;
@@ -282,7 +283,7 @@ export function planOrder(orders, config = {}) {
   const parts = [];
   for (let i = 0; i < bound; i++) {
     const ts = addDaysNoon(now, minDays + i);
-    if (weekdayOf(ts) === dayOff) continue;
+    if (isDayOff(ts, dayOff)) continue;
     const free = freeOf(ts);
     if (free <= 0) continue;
     const take = Math.min(remaining, free);
@@ -316,7 +317,7 @@ export function planOrder(orders, config = {}) {
  *   overLimit = الطلب أكبر من الحد اليومي (لا يتسع في يوم واحد).
  */
 export function suggestDueDate(orders, config = {}) {
-  const dayOff = Number(config.dayOffWeekday ?? 0);
+  const dayOff = dayOffOf(config.dayOffWeekday);
   const limitP = toPiasters(config.dailyOrderLimit);
   const amountP = toPiasters(config.orderAmount);
   const minDays = minDaysOf(config);
@@ -328,7 +329,7 @@ export function suggestDueDate(orders, config = {}) {
   if (limitP <= 0 || amountP <= 0) {
     for (let i = 0; i < maxDays; i++) {
       const ts = addDaysNoon(now, minDays + i);
-      if (weekdayOf(ts) === dayOff) continue;
+      if (isDayOff(ts, dayOff)) continue;
       return buildResult(ts, ts, 1, false, 0, 0, []);
     }
     return fallback(startTs, 'لا يوجد يوم متاح قريباً', false, 1);

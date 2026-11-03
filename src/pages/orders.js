@@ -24,6 +24,7 @@ import { createCollapsible } from '../ui/collapsible.js'; // يُستخدم من
 import { assessOrderRisks } from '../services/order-risk.js';
 import { getTotalWorkTime, getActiveSession, formatDuration } from '../services/order-timing.js';
 import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
+import { resolveDayOffSettings } from '../core/day-off.js';
 import { sessionsOf } from './orders/logic.js';
 import { syncTypesDatalist } from './orders/item-rows.js';
 import { renderStats, renderTopBanners } from './orders-summary.js';
@@ -109,7 +110,7 @@ async function loadData() {
 
   if (s && s.dailyLimit) {
     state.scheduleConfig = {
-      dayOffWeekday: Number(s.dailyLimit.dayOffWeekday ?? 0),
+      dayOffWeekday: resolveDayOffSettings(s.dailyLimit),
       dailyOrderLimit: Number(s.dailyLimit.dailyOrderLimit) || 0,
     };
   }
