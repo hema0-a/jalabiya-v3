@@ -94,5 +94,10 @@ export function groupingOptions(settings) {
     enabled: g.enabled === true,
     sameTypeOnly: g.sameTypeOnly !== false,
     tolerance: Math.max(0, num(g.tolerance, DEFAULT_SETTINGS.grouping.tolerance)),
+    /* v3.5.35 */
+    sameCustomer: g.sameCustomer !== false,
+    sizeMatch: g.sizeMatch !== false,
+    minShared: Math.min(5, Math.max(1, Math.floor(num(g.minShared, 2)) || 2)),
+    fields: Array.isArray(g.fields) ? g.fields.filter((x) => typeof x === 'string' && x) : [],
   };
 }

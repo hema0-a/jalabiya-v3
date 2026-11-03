@@ -91,16 +91,19 @@ function renderGrouping(ctx) {
 
   const active = state.orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
   const opts = state.grouping;
-  const groups = groupOrders(active, { sameTypeOnly: opts.sameTypeOnly });
-  const clusters = opts.tolerance > 0
-    ? clusterBySize(active, state.customerMap, opts.tolerance, orderType, opts.sameTypeOnly)
+  /* v3.5.35: كل نوع تجميع يُوقَف على حدة، وللمقاسات حد أدنى للمشترك وحقول مختارة */
+  const groups = opts.sameCustomer === false ? [] : groupOrders(active, { sameTypeOnly: opts.sameTypeOnly });
+  const clusters = opts.tolerance > 0 && opts.sizeMatch !== false
+    ? clusterBySize(active, state.customerMap, opts.tolerance, orderType, opts.sameTypeOnly, { minShared: opts.minShared, fields: opts.fields })
     : [];
 
   if (groups.length === 0 && clusters.length === 0) {
     wrap.appendChild(el('div', { className: 'empty-state' }, [
       el('div', { className: 'empty-state__icon' }, '🎯'),
       el('h2', { className: 'empty-state__title' }, 'لا توجد مجموعات'),
-      el('p', { className: 'empty-state__text' }, 'لم يتم العثور على طلبات متشابهة.'),
+      el('p', { className: 'empty-state__text' }, opts.sameCustomer === false && opts.sizeMatch === false
+        ? 'نوعا التجميع موقوفان من الإعدادات ← تجميع الطلبات المتشابهة.'
+        : 'لم يتم العثور على طلبات متشابهة.'),
     ]));
     return;
   }

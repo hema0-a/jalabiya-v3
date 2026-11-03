@@ -690,6 +690,62 @@ const groupingSection = {
       typeToggle,
     ]));
 
+    /* --- v3.5.35: خيارات أدق للتجميع --- */
+    const sc = createToggle({
+      label: 'طلبات نفس العميل',
+      checked: gr.sameCustomer !== false,
+      onChange: (v) => saveFn({ grouping: { sameCustomer: v } }),
+    });
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'عرض مجموعات «طلبات نفس العميل»'),
+      sc,
+    ]));
+    const sm = createToggle({
+      label: 'مقاسات متقاربة',
+      checked: gr.sizeMatch !== false,
+      onChange: (v) => saveFn({ grouping: { sizeMatch: v } }),
+    });
+    body.appendChild(el('div', { className: 'settings-row' }, [
+      el('div', { className: 'settings-row__label' }, 'عرض مجموعات «عملاء بمقاسات متقاربة»'),
+      sm,
+    ]));
+
+    body.appendChild(numberField({
+      label: 'أقل عدد من المقاسات المشتركة (1 إلى 5)',
+      hint: 'لا يُعدّ عميلان متقاربين إلا إذا اشتركا في هذا العدد على الأقل من المقاسات المسجَّلة. الأقل = تجميع أوسع بأدلة أضعف.',
+      value: gr.minShared || 2,
+      path: 'grouping',
+      field: 'minShared',
+      saveFn,
+      attrs: { min: 1, max: 5 },
+    }));
+
+    const fieldOpts = (Array.isArray(currentSettings.measurementFields) ? currentSettings.measurementFields : []).filter((f) => f && f.id && f.enabled !== false);
+    if (fieldOpts.length > 0) {
+      const sel = new Set(Array.isArray(gr.fields) ? gr.fields : []);
+      const fGrid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' } });
+      const fNote = el('div', { className: 'settings-field__hint', 'data-role': 'grouping-fields-note' });
+      const refresh = () => {
+        fGrid.querySelectorAll('button[data-gf]').forEach((b) => b.classList.toggle('settings-theme-card--active', sel.has(b.dataset.gf)));
+        fNote.textContent = sel.size === 0 ? 'لم تختر شيئاً: تُقارن كل المقاسات.' : 'تُقارن هذه المقاسات فقط (' + sel.size + ').';
+      };
+      fieldOpts.forEach((f) => {
+        fGrid.appendChild(el('button', {
+          type: 'button', className: 'settings-theme-card', 'data-gf': f.id,
+          onClick: () => {
+            if (sel.has(f.id)) sel.delete(f.id); else sel.add(f.id);
+            saveFn({ grouping: { fields: Array.from(sel) } });
+            refresh();
+          },
+        }, [el('span', { className: 'settings-theme-card__name', style: { fontSize: '12px' } }, f.name)]));
+      });
+      body.appendChild(el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, 'المقاسات التي تُقارَن'),
+        fGrid, fNote,
+      ]));
+      refresh();
+    }
+
     body.appendChild(el('div', {
       style: {
         fontSize: '12px', color: '#2E8B6F', padding: '10px',
