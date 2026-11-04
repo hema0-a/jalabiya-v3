@@ -12,12 +12,12 @@
 import { settings } from '../data/repos/settings.js';
 import { normalizePhone } from '../core/utils.js';
 import {
-  listTemplates, getTemplateSync, isEnabledCfg, interpolate, buildVars,
+  listTemplates, getTemplateSync, isEnabledCfg, interpolate, buildVars, frameMessage,
 } from './message-templates.js';
 import { logMessage, lastSent } from './message-log.js';
 
 export {
-  DEFAULT_TEMPLATES, VARIABLES, MAX_TEMPLATE_LENGTH, buildVars, interpolate,
+  DEFAULT_TEMPLATES, VARIABLES, MAX_TEMPLATE_LENGTH, buildVars, interpolate, frameMessage,
   findUnknownVariables, sampleVars, variablesFor, listTemplates, getTemplateSync, renderTemplate,
 } from './message-templates.js';
 
@@ -25,10 +25,17 @@ export {
    1. جلب القوالب
    ========================================================================== */
 
+/* ترويسة/تذييل الرسائل (v3.5.40): نسخة متزامنة تُحدَّث عند قراءة الإعدادات أو حفظها من قسم الإعدادات */
+let framingCfg = null;
+export function setMessageFraming(cfg) { framingCfg = cfg && typeof cfg === 'object' ? { header: cfg.header, footer: cfg.footer } : null; }
+settings.get().then((s) => setMessageFraming(s && s.autoMessages)).catch(() => { /* بلا ترويسة */ });
+
 async function readCfg() {
   try {
     const s = await settings.get();
-    return (s && s.autoMessages) || {};
+    const c = (s && s.autoMessages) || {};
+    setMessageFraming(c);
+    return c;
   } catch { return {}; }
 }
 
@@ -95,7 +102,7 @@ export function sendWhatsApp(phone, text) {
  * @returns {boolean}
  */
 export function sendLogged(phone, text, meta) {
-  const ok = sendWhatsApp(phone, text);
+  const ok = sendWhatsApp(phone, framingCfg ? frameMessage(text, framingCfg) : text);
   if (ok && meta && meta.kind) {
     try { logMessage(meta); } catch (e) { /* السجل لا يُفشل الإرسال */ }
   }

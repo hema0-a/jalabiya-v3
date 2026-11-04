@@ -173,6 +173,30 @@ function normalizeCfg(cfg) {
   };
 }
 
+/* ---------- v3.5.40: حالات الاقتراح + ترويسة/تذييل ---------- */
+/** القوالب التي يُقترح لها زر «إشعار العميل» بعد تغيير الحالة (معرّفات القوالب). */
+export const PROMPT_TEMPLATE_IDS = ['new_order', 'start_work', 'ready', 'thanks'];
+export const MAX_FRAME_LENGTH = 200;
+
+/** هل يُقترح إشعار لهذا القالب؟ null/غير مصفوفة = كلها (السلوك السابق). */
+export function promptAllowed(cfg, templateId) {
+  const list = cfg && Array.isArray(cfg.promptStatuses) ? cfg.promptStatuses : null;
+  return !list || list.includes(templateId);
+}
+
+const frameText = (v) => (typeof v === 'string' ? v.trim().slice(0, MAX_FRAME_LENGTH) : '');
+
+/** يضيف الترويسة والتذييل (إن وُجدا) للنص؛ لا يكرّرهما إن كانا موجودين مسبقاً. */
+export function frameMessage(text, cfg) {
+  const t = typeof text === 'string' ? text : '';
+  const h = frameText(cfg && cfg.header);
+  const f = frameText(cfg && cfg.footer);
+  let out = t;
+  if (h && !out.startsWith(h)) out = h + '\n\n' + out;
+  if (f && !out.endsWith(f)) out = out + '\n\n' + f;
+  return out;
+}
+
 /** هل الرسائل التلقائية مُفعَّلة؟ (المفتاح الرئيسي) */
 export function isEnabledCfg(cfg) {
   return normalizeCfg(cfg).enabled;

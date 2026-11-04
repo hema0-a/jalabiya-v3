@@ -14,7 +14,7 @@ import { settings } from '../data/repos/settings.js';
 import { customers } from '../data/repos/customers.js';
 import { payments } from '../data/repos/payments.js';
 import { orderPaidBreakdown } from './payments-view.js';
-import { getTemplateSync, interpolate, buildVars } from './message-templates.js';
+import { getTemplateSync, interpolate, buildVars, promptAllowed } from './message-templates.js';
 import { sendLogged } from './auto-messages.js';
 import { toast } from '../ui/toast.js';
 
@@ -42,6 +42,7 @@ export async function notifyActionFor(order, templateId) {
     const s = await settings.get();
     const cfg = (s && s.autoMessages) || {};
     if (cfg.enabled === false || cfg.promptOnStatus === false) return null;
+    if (!promptAllowed(cfg, templateId)) return null;
 
     const tpl = getTemplateSync(templateId, cfg);
     if (!tpl || !tpl.enabled) return null;

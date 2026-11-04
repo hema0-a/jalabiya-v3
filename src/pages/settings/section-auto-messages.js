@@ -19,7 +19,10 @@ import {
   findUnknownVariables,
   sampleVars,
   newCustomId,
+  PROMPT_TEMPLATE_IDS,
+  MAX_FRAME_LENGTH,
 } from '../../services/message-templates.js';
+import { setMessageFraming } from '../../services/auto-messages.js';
 
 /* ==========================================================================
    3. الرسائل التلقائية
@@ -109,6 +112,56 @@ export const autoMessagesSection = {
         onChange: (v) => { saveFn({ autoMessages: { promptOnStatus: v } }); },
       }),
     ]));
+    /* --- v3.5.40: حالات الاقتراح المستقلة --- */
+    const PROMPT_LABELS = { new_order: '🆕 طلب جديد', start_work: '🧵 قيد التنفيذ', ready: '✅ جاهز', thanks: '🎁 تسليم' };
+    let chosen = Array.isArray(am.promptStatuses) ? am.promptStatuses.filter((x) => PROMPT_TEMPLATE_IDS.includes(x)) : PROMPT_TEMPLATE_IDS.slice();
+    const chips = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' } });
+    function paintChips() {
+      clear(chips);
+      PROMPT_TEMPLATE_IDS.forEach((id) => {
+        const on = chosen.includes(id);
+        chips.appendChild(el('button', {
+          type: 'button', className: 'btn btn--sm ' + (on ? 'btn--primary' : 'btn--ghost'),
+          'data-prompt': id, 'aria-pressed': on ? 'true' : 'false',
+          onClick: () => {
+            chosen = on ? chosen.filter((x) => x !== id) : PROMPT_TEMPLATE_IDS.filter((x) => x === id || chosen.includes(x));
+            /* كل الحالات مختارة = null (الافتراضي) */
+            saveFn({ autoMessages: { promptStatuses: chosen.length === PROMPT_TEMPLATE_IDS.length ? null : chosen.slice() } });
+            paintChips();
+          },
+        }, (on ? '✓ ' : '') + PROMPT_LABELS[id]));
+      });
+    }
+    paintChips();
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'الحالات التي يُقترح لها إشعار العميل'),
+      el('div', { className: 'settings-row__hint' }, 'تعمل مع مفتاح الاقتراح أعلاه. إلغاء حالة = لا يظهر زر الإشعار بعدها'),
+      chips,
+    ]));
+
+    /* --- v3.5.40: ترويسة وتذييل لكل رسالة (تُضاف عند الإرسال) --- */
+    function frameField(label, key, placeholder) {
+      const ta = el('textarea', { className: 'input', rows: '2', maxlength: String(MAX_FRAME_LENGTH), placeholder, 'data-frame': key });
+      ta.value = typeof am[key] === 'string' ? am[key] : '';
+      let last = ta.value;
+      const save = () => {
+        if (ta.value === last) return;
+        last = ta.value;
+        const v = ta.value.trim().slice(0, MAX_FRAME_LENGTH);
+        saveFn({ autoMessages: { [key]: v } });
+        setMessageFraming({ header: key === 'header' ? v : (am.header || ''), footer: key === 'footer' ? v : (am.footer || '') });
+      };
+      ta.addEventListener('blur', save);
+      ta.addEventListener('change', save);
+      return el('div', { className: 'settings-field' }, [
+        el('label', { className: 'settings-field__label' }, label), ta,
+      ]);
+    }
+    body.appendChild(frameField('ترويسة الرسائل (اختياري)', 'header', 'مثال: السلام عليكم ورحمة الله 🌸'));
+    body.appendChild(frameField('تذييل الرسائل (اختياري)', 'footer', 'مثال: ورشة الأمل — للاستفسار 0100…'));
+    body.appendChild(el('div', { className: 'settings-row__hint', style: { marginBottom: '8px' } },
+      'تُضاف الترويسة قبل نص كل رسالة والتذييل بعده عند الإرسال عبر واتساب (حتى ' + MAX_FRAME_LENGTH + ' حرفاً)؛ المعاينات أدناه تعرض النص الأصلي فقط.'));
+
     body.appendChild(cards);
 
     /* --- بطاقة بطاقة قالب أساسي --- */
@@ -122,9 +175,11 @@ export const autoMessagesSection = {
         },
       });
       const badge = el('span', { className: 'badge badge--info', style: { marginInlineStart: '6px', fontSize: '10px' } }, 'مخصّص');
+      let restoreBtn = null;
       function refresh() {
         previewEl.textContent = interpolate(st.text, vars);
         badge.style.display = st.text.trim() !== tpl.text ? '' : 'none';
+        if (restoreBtn) restoreBtn.style.display = st.text.trim() !== tpl.text ? '' : 'none';
         previewEl.style.opacity = st.enabled ? '1' : '0.5';
       }
       const controls = [];
@@ -134,6 +189,11 @@ export const autoMessagesSection = {
           onChange: (v) => { st.enabled = v; refresh(); persistTemplates(); },
         }));
       }
+      controls.push(el('button', {
+        className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'restore-template',
+        onClick: () => { st.text = tpl.text; refresh(); persistTemplates(); },
+      }, '↩️ الأصلي'));
+      restoreBtn = controls[controls.length - 1];
       controls.push(el('button', {
         className: 'btn btn--sm btn--ghost', type: 'button',
         onClick: () => openTemplateEditor(tpl, st.text, (newText) => { st.text = newText; refresh(); persistTemplates(); }),
