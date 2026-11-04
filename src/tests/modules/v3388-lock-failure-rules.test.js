@@ -95,7 +95,7 @@ register('v3.3.88 code rules guard (innerHTML / document.write / import())', asy
   await t.test('3. document.write حصراً في invoice-print.js (نافذة الطباعة — استثناء معروف وموثَّق)' + (dw.join() === 'src/services/invoice-print.js' ? '' : ' — وُجد في: ' + dw.join(', ')),
     dw.length === 1 && dw[0] === 'src/services/invoice-print.js');
   const dyn = hits(/\bimport\s*\(/);
-  const allowedDynamic = new Set(['src/main.js', 'src/sync/firebase-config.js', 'src/sync/auth-sync.js', 'src/sync/firestore-sync.js']);
+  const allowedDynamic = new Set(['src/main.js', 'src/sync/firebase-config.js', 'src/sync/auth-sync.js', 'src/sync/firestore-sync.js', 'src/sync/push-sync.js']);   /* v3.6.0: push-sync يحمّل firebase-messaging كسولاً */
   const badDyn = dyn.filter((p) => !allowedDynamic.has(p));
   await t.test('4. الاستيراد الديناميكي حصراً في main.js وملفات Firebase (القاعدة: static imports)' + (badDyn.length ? ' — مخالفات: ' + badDyn.join(', ') : ''),
     badDyn.length === 0);

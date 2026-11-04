@@ -623,3 +623,21 @@ try {
 } catch (err) {
   console.warn('[Notifications] فشل التشغيل:', err);
 }
+
+/* 📲 Push حقيقي (v3.6.0): تحديث ملخص الخادمة تلقائياً + استقبال رسائل الـ Service Worker.
+   كسول وبلا أثر إن لم تُفعَّل الميزة (لا Firebase ولا شبكة قبل التفعيل). */
+try {
+  import('./sync/push-sync.js').then((m) => {
+    if (m.getLocalStatus().registered) m.start();
+  }).catch((err) => console.warn('[Push] فشل التشغيل:', err));
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e && e.data;
+      if (!d) return;
+      if (d.type === 'PUSH_NAVIGATE' && /^#\/[a-z0-9\/_-]*$/i.test(String(d.hash || ''))) location.hash = d.hash;
+      if (d.type === 'PUSH_RECEIVED' && toast) toast.info('🔔 ' + (d.title || '') + (d.body ? ' — ' + d.body : ''));
+    });
+  }
+} catch (err) {
+  console.warn('[Push] فشل التشغيل:', err);
+}

@@ -12,7 +12,8 @@ import { DATA_SECTIONS } from '../../pages/settings/sections-data.js';
 import { SECURITY_SECTIONS } from '../../pages/settings/sections-security.js';
 import { SEARCH_KEYWORDS, RESET_MAP, matchSections, canReset, buildResetPatch, describeReset } from '../../services/settings-tools.js';
 
-const ALL = [...WORKSHOP_SECTIONS, ...DATA_SECTIONS, ...SYSTEM_SECTIONS, ...SECURITY_SECTIONS];
+import { pushSection } from '../../pages/settings/section-push.js';
+const ALL = [...WORKSHOP_SECTIONS, ...DATA_SECTIONS, ...SYSTEM_SECTIONS, pushSection, ...SECURITY_SECTIONS];   /* v3.6.0: + قسم Push */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function waitFor(fn, ms = 3000) {
   const t0 = Date.now();

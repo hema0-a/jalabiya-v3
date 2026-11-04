@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.5.41 — النسخ الاحتياطي: خيارات متقدمة
+   الإصدار: v3.6.0 — النسخ الاحتياطي: خيارات متقدمة
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.5.41';
+const CACHE_VERSION = 'v3.6.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -181,6 +181,7 @@ const PRECACHE_URLS = [
   './src/pages/settings/section-menu-pages.js',
   './src/pages/settings/section-notifications.js',
   './src/pages/settings/section-occasions.js',
+  './src/pages/settings/section-push.js',
   './src/pages/settings/section-support.js',
   './src/pages/settings/sections-data.js',
   './src/pages/settings/sections-security.js',
@@ -265,6 +266,7 @@ const PRECACHE_URLS = [
   './src/services/payments-view.js',
   './src/services/perf-probe.js',
   './src/services/pickup-reminders.js',
+  './src/services/push-digest.js',
   './src/services/quotes.js',
   './src/services/receivables.js',
   './src/services/referral-rewards.js',
@@ -288,6 +290,7 @@ const PRECACHE_URLS = [
   './src/sync/firestore-sync.js',
   './src/sync/min-version.js',
   './src/sync/offline-queue.js',
+  './src/sync/push-sync.js',
   './src/sync/record-merge.js',
   './src/sync/settings-sync.js',
   './src/sync/sync-flow.js',
@@ -455,4 +458,63 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+/* ==========================================================================
+   5. PUSH — إشعارات حقيقية (FCM) تصل والتطبيق مقفول (v3.6.0)
+   ==========================================================================
+   الخادمة ترسل رسائل data فقط: { title, body, url, tag }.
+   - لو التطبيق مفتوح ومرئي: لا نعرض إشعار نظام (مركز التنبيهات داخل التطبيق يغطي) ونُبلغ الصفحة.
+   - النقر: يركّز نافذة مفتوحة أو يفتح التطبيق على الصفحة المطلوبة (hash فقط).
+   ========================================================================== */
+function parsePushPayload(event) {
+  let p = {};
+  try { p = event.data ? event.data.json() : {}; } catch (e) {
+    try { p = { notification: { body: event.data.text() } }; } catch (e2) { p = {}; }
+  }
+  const d = (p && p.data) || {};
+  const n = (p && p.notification) || {};
+  return {
+    title: String(d.title || n.title || 'ورشة الجلابيب').slice(0, 120),
+    body: String(d.body || n.body || '').slice(0, 400),
+    url: /^#\/[a-z0-9\/_-]*$/i.test(String(d.url || '')) ? String(d.url) : '#/dashboard',
+    tag: String(d.tag || 'jalabiya-push').slice(0, 60),
+  };
+}
+
+self.addEventListener('push', (event) => {
+  const msg = parsePushPayload(event);
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const visible = wins.some((w) => w.visibilityState === 'visible');
+    if (visible) {
+      wins.forEach((w) => { try { w.postMessage({ type: 'PUSH_RECEIVED', title: msg.title, body: msg.body }); } catch (e) { /* ignore */ } });
+      return;
+    }
+    await self.registration.showNotification(msg.title, {
+      body: msg.body,
+      tag: msg.tag,
+      renotify: false,
+      icon: './assets/icons/icon-192.png',
+      badge: './assets/icons/icon-192.png',
+      dir: 'rtl',
+      lang: 'ar',
+      data: { url: msg.url },
+    });
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const hash = (event.notification.data && event.notification.data.url) || '#/dashboard';
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const w of wins) {
+      if ('focus' in w) {
+        try { w.postMessage({ type: 'PUSH_NAVIGATE', hash }); } catch (e) { /* ignore */ }
+        return w.focus();
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow('./' + hash);
+  })());
 });

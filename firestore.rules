@@ -19,6 +19,16 @@ service cloud.firestore {
             || (request.resource.data.writerBuild is int && request.resource.data.writerBuild >= 3003087));
     }
 
+    // إشعارات Push (v3.6.0): users_v3/{uid}/push/{main | testRequest | state}
+    //   main        ← يكتبه التطبيق (رموز الأجهزة + ملخص + خيارات) ويقرأه صاحبه
+    //   testRequest ← يكتبه التطبيق لطلب إشعار تجريبي (تعالجه Cloud Function)
+    //   state       ← تكتبه الخادمة فقط (Admin SDK يتجاوز القواعد)؛ للمالك قراءة فقط
+    match /users_v3/{uid}/push/{docId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && (docId == 'main' || docId == 'testRequest');
+    }
+
     // أي مسار آخر مرفوض
     match /{document=**} {
       allow read, write: if false;

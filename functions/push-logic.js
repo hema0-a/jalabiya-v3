@@ -1,0 +1,119 @@
+'use strict';
+/* ==========================================================================
+   push-logic.js — منطق نقيّ لبناء نص الإشعار (يُختبر بـ node --test بلا Firebase)
+   ========================================================================== */
+
+const pad = (n) => String(n).padStart(2, '0');
+
+/** الوقت المحلي في منطقة زمنية: { ymd, minutes } */
+function localParts(nowMs, tz) {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  const p = {};
+  for (const x of f.formatToParts(new Date(nowMs))) p[x.type] = x.value;
+  return {
+    ymd: p.year + '-' + p.month + '-' + p.day,
+    day: Number(p.day),
+    minutes: Number(p.hour) * 60 + Number(p.minute),
+    daysInMonth: new Date(Number(p.year), Number(p.month), 0).getDate(),
+  };
+}
+
+const toMin = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+
+/** فرق الأيام بين ymd و ymd (الثاني − الأول). */
+function diffDays(a, b) {
+  const pa = a.split('-').map(Number); const pb = b.split('-').map(Number);
+  return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
+}
+
+/** داخل ساعات الهدوء؟ (يدعم العبور لمنتصف الليل) */
+function inQuiet(q, minutes) {
+  if (!q) return false;
+  const a = toMin(q.from); const b = toMin(q.to);
+  if (a === b) return false;
+  return a < b ? (minutes >= a && minutes < b) : (minutes >= a || minutes < b);
+}
+
+/**
+ * هل حان وقت الإرسال لهذه الورشة الآن؟
+ * الجدولة كل 15 دقيقة: نرسل في أول نافذة بعد الوقت المختار (حتى 3 ساعات تأخير)
+ * مرة واحدة يومياً، وبعد انتهاء ساعات الهدوء إن وقع الوقت داخلها.
+ */
+function isDue(prefs, state, nowMs) {
+  if (!prefs || prefs.enabled !== true) return false;
+  const tz = prefs.tz || 'Africa/Cairo';
+  const lp = localParts(nowMs, tz);
+  if (state && state.lastSentDay === lp.ymd) return false;
+  const target = toMin(prefs.time || '08:00');
+  if (lp.minutes < target || lp.minutes > target + 180) return false;
+  if (inQuiet(prefs.quiet, lp.minutes)) return false;
+  return true;
+}
+
+/**
+ * بناء أسطر الإشعار من الملخص.
+ * @returns {{lines:string[], title:string, body:string, url:string, ids:string[]}}
+ */
+function buildMessage(digest, prefs, state, nowMs) {
+  const tz = (prefs && prefs.tz) || 'Africa/Cairo';
+  const lp = localParts(nowMs, tz);
+  const days = Number(prefs.daysBefore) || 0;
+  const notified = (state && state.notified) || {};
+  const orders = (digest && digest.orders) || [];
+
+  const overdue = []; const today = []; const soon = []; const ready = [];
+  for (const o of orders) {
+    if (o.d) {
+      const diff = diffDays(lp.ymd, o.d);
+      if (diff < 0 && o.r !== 1) overdue.push(o);
+      else if (diff === 0) today.push(o);
+      else if (diff > 0 && diff <= days && notified[o.i] !== o.d) soon.push(o);
+    }
+    if (o.r === 1) ready.push(o);
+  }
+
+  const lines = []; const ids = [];
+  const nm = (o) => o.c || null;
+  if (today.length) {
+    lines.push(today.length === 1 && nm(today[0])
+      ? '⏰ تسليم اليوم: ' + nm(today[0])
+      : '⏰ ' + today.length + ' طلب يُسلَّم اليوم');
+  }
+  if (soon.length) {
+    soon.forEach((o) => ids.push(o.i));
+    lines.push(soon.length === 1 && nm(soon[0])
+      ? '🔔 ' + nm(soon[0]) + ' — تسليمه بعد ' + diffDays(lp.ymd, soon[0].d) + ' يوم'
+      : '🔔 ' + soon.length + ' طلب موعده خلال ' + days + ' يوم');
+  }
+  if (prefs.overdue !== false && overdue.length) lines.push('🚨 ' + overdue.length + ' طلب متأخر');
+  if (prefs.ready !== false && ready.length) lines.push('✅ ' + ready.length + ' جاهز لم يُستلم');
+  if (prefs.stock !== false && digest && (digest.out > 0 || digest.low > 0)) {
+    lines.push('📦 ' + (digest.out ? digest.out + ' نفد' : '') + (digest.out && digest.low ? ' و' : '') + (digest.low ? digest.low + ' ناقص' : '') + ' في المخزون');
+  }
+  if (prefs.commitments !== false && digest && Array.isArray(digest.cm)) {
+    const win = Number(prefs.commitmentsDays);
+    const span = Number.isFinite(win) ? win : 3;
+    const due = digest.cm.filter((c) => {
+      const d = Math.min(c.day, lp.daysInMonth) - lp.day;
+      return d >= 0 && d <= span;
+    });
+    if (due.length) {
+      lines.push(due.length === 1 && due[0].t
+        ? '💳 ' + due[0].t + ' يستحق ' + (Math.min(due[0].day, lp.daysInMonth) === lp.day ? 'اليوم' : 'قريباً')
+        : '💳 ' + due.length + ' التزام يستحق قريباً');
+    }
+  }
+
+  const url = today.length || overdue.length || soon.length ? '#/orders' : (lines.length ? '#/dashboard' : '#/dashboard');
+  return {
+    lines, ids, url,
+    title: lines.length > 1 ? '🧵 نشرة اليوم (' + lines.length + ')' : '🧵 ورشة الجلابيب',
+    body: lines.join('\n'),
+    today: lp.ymd,
+  };
+}
+
+module.exports = { localParts, diffDays, inQuiet, isDue, buildMessage, toMin };

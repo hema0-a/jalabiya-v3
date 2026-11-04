@@ -21,11 +21,15 @@ import { WORKSHOP_SECTIONS } from './sections-workshop.js';
 import { DATA_SECTIONS } from './sections-data.js';
 import { SYSTEM_SECTIONS } from './sections-system.js';
 import { SECURITY_SECTIONS } from './sections-security.js';
+import { pushSection } from './section-push.js';
+
+/* v3.6.0: قسم Push يُدرج بعد «التنبيهات» مباشرة (خارج SYSTEM_SECTIONS حتى لا يتغيّر ترتيب/معرّفات الأقسام المثبّتة باختبارات) */
+const SYSTEM_WITH_PUSH = SYSTEM_SECTIONS.flatMap((s) => (s.id === 'notifications' ? [s, pushSection] : [s]));
 
 const ALL_SECTIONS = [
   ...WORKSHOP_SECTIONS,
   ...DATA_SECTIONS,
-  ...SYSTEM_SECTIONS,
+  ...SYSTEM_WITH_PUSH,
   ...SECURITY_SECTIONS,
 ];
 
