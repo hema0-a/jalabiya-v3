@@ -10,8 +10,7 @@ import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { createToggle } from '../../ui/controls.js';
 import { DEFAULT_SETTINGS } from '../../core/config.js';
-import { formatDate, localDateInput } from '../../core/utils.js';
-import * as db from '../../data/idb.js';
+import { formatDate } from '../../core/utils.js';
 import {
   createBackup,
   listBackups,
@@ -21,17 +20,18 @@ import {
   exportBackupToFile,
   shareLatestBackup,
   daysSinceExternalBackup,
-  buildBackupFile,
+  setBackupPinned,
+  backupOptions,
+  manualBackupLabel,
+  BACKUP_MIN_KEEP,
+  BACKUP_MAX_KEEP,
+  MAX_PINNED,
+  MAX_BACKUP_LABEL,
+  INTERVAL_MIN_HOURS,
+  INTERVAL_MAX_HOURS,
 } from '../../services/auto-backup.js';
-import { askSecret, showRecoveryKey } from '../../ui/secret-dialog.js';
-import {
-  getFileEncryptionInfo,
-  createFileEncryptionSetup,
-  disableFileEncryption,
-  prepareExportEncryptor,
-  decryptImportedText,
-  describeCryptoError,
-} from '../../services/backup-crypto.js';
+import { askSecretFor, buildEncryptionBlock, exportAllData, importAllData } from './section-backup-io.js';
+import { prepareExportEncryptor } from '../../services/backup-crypto.js';
 
 /* ==========================================================================
    4. النسخ الاحتياطي
@@ -61,25 +61,68 @@ export const backupSection = {
     ]));
 
     const intervalSelect = el('select', { className: 'select' });
-    [
-      ['6', 'كل 6 ساعات'],
-      ['12', 'كل 12 ساعة'],
-      ['24', 'كل يوم'],
-      ['48', 'كل يومين'],
-      ['168', 'كل أسبوع'],
-    ].forEach(([v, l]) => {
+    const PRESETS = [['6', 'كل 6 ساعات'], ['12', 'كل 12 ساعة'], ['24', 'كل يوم'], ['48', 'كل يومين'], ['168', 'كل أسبوع']];
+    const curHours = backupOptions({ backup: bk }).intervalHours;
+    const isPreset = PRESETS.some(([v]) => v === String(curHours));
+    PRESETS.forEach(([v, l]) => {
       const o = el('option', { value: v }, l);
-      if (String(bk.intervalHours || 24) === v) o.selected = true;
+      if (String(curHours) === v) o.selected = true;
       intervalSelect.appendChild(o);
     });
+    const customOpt = el('option', { value: 'custom' }, 'مخصّص (بالساعات)…');
+    if (!isPreset) customOpt.selected = true;
+    intervalSelect.appendChild(customOpt);
+    const customHours = el('input', {
+      className: 'input', type: 'number', min: String(INTERVAL_MIN_HOURS), max: String(INTERVAL_MAX_HOURS),
+      value: String(curHours), 'data-role': 'custom-hours', 'aria-label': 'عدد الساعات',
+      style: { marginTop: '6px', display: isPreset ? 'none' : '' },
+    });
+    const saveCustomHours = () => {
+      const n = Math.min(INTERVAL_MAX_HOURS, Math.max(INTERVAL_MIN_HOURS, Math.floor(Number(customHours.value) || 24)));
+      customHours.value = String(n);
+      saveFn({ backup: { intervalHours: n } });
+    };
+    customHours.addEventListener('change', saveCustomHours);
+    customHours.addEventListener('blur', saveCustomHours);
     intervalSelect.addEventListener('change', () => {
+      if (intervalSelect.value === 'custom') { customHours.style.display = ''; saveCustomHours(); return; }
+      customHours.style.display = 'none';
       saveFn({ backup: { intervalHours: Number(intervalSelect.value) } });
     });
 
     body.appendChild(el('div', { className: 'settings-field' }, [
       el('label', { className: 'settings-field__label' }, 'فترة النسخ التلقائي'),
       intervalSelect,
+      customHours,
     ]));
+
+    /* v3.5.41: عدد النسخ المحفوظة (فارغ = 7) */
+    const keepInput = el('input', {
+      className: 'input', type: 'number', min: String(BACKUP_MIN_KEEP), max: String(BACKUP_MAX_KEEP),
+      value: bk.maxBackups == null ? '' : String(bk.maxBackups), placeholder: 'الافتراضي: 7', 'data-role': 'max-backups',
+    });
+    let keepLast = keepInput.value;
+    const saveKeep = () => {
+      if (keepInput.value === keepLast) return;
+      keepLast = keepInput.value;
+      saveFn({ backup: { maxBackups: keepInput.value === '' ? null : Number(keepInput.value) } });
+    };
+    keepInput.addEventListener('change', saveKeep);
+    keepInput.addEventListener('blur', saveKeep);
+    body.appendChild(el('div', { className: 'settings-field' }, [
+      el('label', { className: 'settings-field__label' }, 'عدد النسخ المحفوظة'),
+      el('div', { className: 'settings-row__hint' },
+        'من ' + BACKUP_MIN_KEEP + ' إلى ' + BACKUP_MAX_KEEP + ' (فارغ = 7). الأقدم يُحذف تلقائياً، والنسخ المثبَّتة 📌 لا تُحذف ولا تُحسب'),
+      keepInput,
+    ]));
+
+    /* v3.5.41: اسم النسخة اليدوية */
+    const nameInput = el('input', {
+      className: 'input', type: 'text', maxlength: String(MAX_BACKUP_LABEL),
+      placeholder: 'اسم النسخة اليدوية (اختياري) — مثال: قبل الموسم', 'data-role': 'backup-name',
+      style: { marginTop: '8px' },
+    });
+    body.appendChild(nameInput);
 
     const createBtn = el('button', {
       className: 'btn btn--primary btn--block', type: 'button',
@@ -88,7 +131,8 @@ export const backupSection = {
         createBtn.disabled = true;
         createBtn.textContent = '⏳ جارٍ الإنشاء...';
         try {
-          const res = await createBackup({ label: 'نسخة يدوية' });
+          const res = await createBackup({ label: manualBackupLabel(nameInput.value) });
+          if (res.ok) nameInput.value = '';
           if (res.ok) {
             toast.success('تم إنشاء نسخة (' + res.sizeKB + ' KB)');
             await renderBackupsList();
@@ -165,10 +209,20 @@ export const backupSection = {
 
         row.appendChild(el('div', { style: { flex: '1', minWidth: '0' } }, [
           el('div', { style: { fontSize: '13px', fontWeight: '600', color: '#123C2F' } },
-            '💾 ' + (b.label || 'نسخة')),
+            (b.pinned ? '📌 ' : '💾 ') + (b.label || 'نسخة')),
           el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
             '📅 ' + formatDate(b.createdAt) + ' · 📦 ' + (b.sizeKB || 0) + ' KB'),
         ]));
+
+        row.appendChild(el('button', {
+          className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'pin-backup', 'aria-pressed': b.pinned ? 'true' : 'false',
+          title: b.pinned ? 'إلغاء التثبيت' : 'تثبيت (لا تُحذف تلقائياً — حتى ' + MAX_PINNED + ')',
+          onClick: async () => {
+            const r = await setBackupPinned(b.id, !b.pinned);
+            if (!r.ok) toast.warning(r.error || 'تعذّر التثبيت');
+            await renderBackupsList();
+          },
+        }, b.pinned ? '📌' : '📍'));
 
         row.appendChild(el('button', {
           className: 'btn btn--sm btn--ghost', type: 'button', title: 'تحميل كملف',
@@ -225,7 +279,7 @@ export const backupSection = {
           onClick: async () => {
             const ok = await modal.confirm({
               title: 'حذف كل النسخ',
-              message: 'سيتم حذف ' + backups.length + ' نسخة. لا يمكن التراجع!',
+              message: 'سيتم حذف ' + backups.length + ' نسخة' + (backups.some((x) => x.pinned) ? ' (بما فيها المثبَّتة 📌)' : '') + '. لا يمكن التراجع!',
               confirmText: 'حذف الكل', cancelText: 'إلغاء', danger: true,
             });
             if (!ok) return;
@@ -266,157 +320,3 @@ export const backupSection = {
     body.appendChild(importInput);
   },
 };
-
-/** نافذة السرّ حسب الغرض (تصدير/استيراد) — تُمرَّر كـask لدوال backup-crypto. */
-function askSecretFor({ purpose, verify }) {
-  const isExport = purpose === 'export';
-  return askSecret({
-    title: isExport ? '🔐 تشفير الملف' : '🔐 ملف مشفّر',
-    message: isExport
-      ? 'أدخل عبارة المرور (أو مفتاح الاسترجاع) لتشفير الملف قبل خروجه من الجهاز.'
-      : 'هذا الملف مشفّر. أدخل عبارة المرور أو مفتاح الاسترجاع لفتحه.',
-    confirmText: isExport ? 'تشفير ومتابعة' : 'فتح الملف',
-    verify,
-  });
-}
-
-/** كتلة الإعدادات: تفعيل/تعطيل تشفير الملفات الخارجية (مفتاح التشغيل على هذا الجهاز). */
-function buildEncryptionBlock() {
-  const wrap = el('div', { style: { marginTop: '14px', padding: '10px', background: '#F6F1E6', borderRadius: '8px' } });
-
-  const draw = () => {
-    clear(wrap);
-    const info = getFileEncryptionInfo();
-    wrap.appendChild(el('div', {
-      style: { fontSize: '13px', fontWeight: '600', color: '#123C2F', marginBottom: '4px' },
-    }, '🔐 تشفير الملفات الخارجية'));
-    wrap.appendChild(el('div', {
-      style: { fontSize: '12px', color: '#555', lineHeight: '1.7', marginBottom: '8px' },
-    }, 'يشفّر الملفات التي تخرج من الجهاز (مشاركة النسخة عبر واتساب أو درايف، وتنزيل الملفات) بعبارة مرور تختارها. '
-      + 'النسخ داخل التطبيق والمزامنة السحابية لا تتأثر. التفعيل لهذا الجهاز فقط. '
-      + 'فقدان العبارة ومفتاح الاسترجاع معاً يعني فقدان الملفات المشفّرة نهائياً.'));
-
-    if (info.enabled) {
-      wrap.appendChild(el('div', {
-        style: { fontSize: '12px', color: '#2E8B6F', marginBottom: '8px' },
-      }, '🔒 مفعّل' + (info.enabledAt ? ' منذ ' + formatDate(info.enabledAt) : '')));
-      wrap.appendChild(el('button', {
-        className: 'btn btn--ghost btn--block', type: 'button', style: { color: '#C62828' },
-        onClick: async () => {
-          const ok = await modal.confirm({
-            title: 'تعطيل التشفير',
-            message: 'بعد التعطيل ستخرج الملفات صريحة غير مشفّرة. الملفات المشفّرة السابقة تبقى تُفتح بعبارتك أو بمفتاح الاسترجاع. متابعة؟',
-            confirmText: 'متابعة', cancelText: 'إلغاء', danger: true,
-          });
-          if (!ok) return;
-          const done = await askSecret({
-            title: 'تأكيد التعطيل',
-            message: 'أدخل عبارة المرور (أو مفتاح الاسترجاع) لتأكيد التعطيل.',
-            confirmText: 'تعطيل',
-            verify: (secret) => disableFileEncryption(secret),
-          });
-          if (done) { toast.success('تم تعطيل تشفير الملفات'); draw(); }
-        },
-      }, 'تعطيل التشفير'));
-    } else {
-      wrap.appendChild(el('button', {
-        className: 'btn btn--secondary btn--block', type: 'button',
-        onClick: async () => {
-          const setup = await askSecret({
-            title: '🔐 تفعيل تشفير الملفات',
-            message: 'اختر عبارة مرور (8 أحرف على الأقل). لا تُخزَّن في أي مكان ولا يمكن استرجاعها، وستحتاجها لفتح أي ملف مشفّر. '
-              + 'وهي ليست الرقم السري للتطبيق.',
-            confirm: true, confirmText: 'متابعة',
-            verify: (pass) => createFileEncryptionSetup(pass),
-          });
-          if (!setup) return;
-          /* لا يتفعّل شيء حتى يؤكد المستخدم حفظ مفتاح الاسترجاع */
-          if (!(await showRecoveryKey(setup.recoveryKey))) return;
-          try { setup.commit(); toast.success('تم تفعيل تشفير الملفات'); }
-          catch (e) { toast.danger('فشل: ' + describeCryptoError(e)); }
-          draw();
-        },
-      }, 'تفعيل تشفير الملفات'));
-    }
-  };
-
-  draw();
-  return wrap;
-}
-
-async function exportAllData() {
-  try {
-    /* تشفير الملفات مفعّل ⟵ يُطلب السرّ أولاً؛ الإلغاء ⟵ لا تنزيل (لا ملف صريح أبداً) */
-    const ctx = await prepareExportEncryptor(askSecretFor);
-    if (!ctx) return;
-    const stores = [
-      'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
-      'appointments', 'settings', 'portfolio', 'commitments',
-      'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia',
-    ];
-    const data = { version: 10, exportedAt: Date.now(), stores: {} };
-    for (const s of stores) data.stores[s] = await db.getAll(s);
-
-    const file = await buildBackupFile(JSON.stringify(data, null, 2), 'jalabiya-backup-' + localDateInput() + '.json', ctx.encrypt);
-    const blob = new Blob([file.text], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    /* الرابط يجب أن يكون في الـ DOM ولا يُلغى فوراً وإلا يفشل التنزيل في Safari/بعض متصفحات الجوال */
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast.success('تم تنزيل النسخة');
-  } catch (err) {
-    toast.danger('فشل: ' + err.message);
-  }
-}
-
-async function importAllData(file) {
-  const ok = await modal.confirm({
-    title: 'استيراد بيانات',
-    message: 'سيتم دمج البيانات مع الحالية. متابعة؟',
-    confirmText: 'استيراد', cancelText: 'إلغاء', danger: true,
-  });
-  if (!ok) return;
-
-  try {
-    /* ملف مشفّر ⟵ يُتعرَّف عليه ويُطلب سرّه؛ الإلغاء ⟵ لا استيراد */
-    const text = await decryptImportedText(await file.text(), askSecretFor);
-    if (text === null) return;
-    const data = JSON.parse(text);
-    if (!data || !data.stores || typeof data.stores !== 'object') throw new Error('ملف غير صالح');
-
-    /* مخازن مسموحة فقط (نفس قائمة التصدير) — لا نكتب في backups/trash ولا في اسم عشوائي */
-    const ALLOWED = [
-      'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
-      'appointments', 'settings', 'portfolio', 'commitments',
-      'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia',
-    ];
-    const plan = {};
-    let skipped = 0;
-    for (const [sn, recs] of Object.entries(data.stores)) {
-      if (!ALLOWED.includes(sn) || !Array.isArray(recs)) continue;
-      const valid = recs.filter((r) => r && typeof r === 'object' && r.id != null);
-      skipped += recs.length - valid.length;
-      plan[sn] = { clear: false, records: valid };
-    }
-    if (Object.keys(plan).length === 0) throw new Error('لا توجد بيانات صالحة في الملف');
-
-    /* نسخة أمان قبل الدمج */
-    const safety = await createBackup({ label: 'قبل الاستيراد' });
-    if (!safety.ok) throw new Error('تعذّر إنشاء نسخة أمان: ' + (safety.error || ''));
-
-    /* كتابة ذرّية: كلها أو لا شيء */
-    const counts = await db.writeBatch(plan);
-    const total = Object.values(counts).reduce((a, n) => a + n, 0);
-    if (skipped > 0) toast.warning('تم تجاهل ' + skipped + ' سجل غير صالح');
-    toast.success('تم استيراد ' + total + ' عنصر');
-  } catch (err) {
-    toast.danger('فشل: ' + err.message);
-  }
-}

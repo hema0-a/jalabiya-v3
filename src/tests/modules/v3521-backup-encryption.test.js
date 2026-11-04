@@ -278,7 +278,9 @@ register('v3.5.21 backup file encryption', async (t) => {
   });
 
   /* ======================= 4. عقود المصدر ======================= */
-  const sys = await source('src/pages/settings/section-backup.js');   /* v3.5.26: قسم النسخ نُقل من sections-system.js */
+  const sysMain = await source('src/pages/settings/section-backup.js');   /* v3.5.26: قسم النسخ نُقل من sections-system.js */
+  const sysIo = await source('src/pages/settings/section-backup-io.js');   /* v3.5.41: مساعدات التصدير/الاستيراد نُقلت لملف مجاور */
+  const sys = sysMain === null || sysIo === null ? null : sysMain + '\n' + sysIo;
   const ab = await source('src/services/auto-backup.js');
   if (sys === null || ab === null) { t.log('  ⏭️ عقود المصدر تتطلب خادماً (fetch)'); }
   else {

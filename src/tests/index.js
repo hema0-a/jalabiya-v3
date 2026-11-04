@@ -140,5 +140,6 @@ import './modules/v3537-deposit-options.test.js';
 import './modules/v3538-notification-options.test.js';
 import './modules/v3539-occasions.test.js';
 import './modules/v3540-auto-messages-options.test.js';
+import './modules/v3541-backup-options.test.js';
 
 export { runAll, register } from './registry.js';

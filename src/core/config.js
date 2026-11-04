@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.5.40',
+  version: '3.5.41',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -237,7 +237,7 @@ export const DEFAULT_SETTINGS = {
   referrals: { rewardPercent: 5 },
   /* v3.5.29: صفحات مخفية من القائمة الجانبية (تفضيل محلي لهذا الجهاز؛ ليس ضمن مفاتيح المزامنة) */
   navigation: { hidden: [] },
-  backup: { autoBackup: true, intervalHours: 24 },
+  backup: { autoBackup: true, intervalHours: 24, maxBackups: null },
   cloudSync: { enabled: false, lastSyncAt: null },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600 },
   security: {

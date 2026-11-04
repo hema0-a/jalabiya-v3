@@ -54,5 +54,5 @@ register('v3.5.26 settings/sections-system — تقسيم الملفات', async
   await t.test('7. حراس: لا ملف قسم يستورد sections-system.js (لا دوران)', texts.every((s) => !/sections-system\.js/.test(s.replace(/\/\*[\s\S]*?\*\//g, ''))));
   await t.test('8. حراس: لا ملف يتجاوز 450 سطراً', texts.every((s) => s.split('\n').length <= 450));
   await t.test('9. حراس: قسم النسخ يحتفظ بمسارات التصدير الثلاثة المشفّرة (عقد v3.5.21)',
-    (texts[3].match(/prepareExportEncryptor\(askSecretFor\)/g) || []).length === 3);
+    ((texts[3] + await (await fetch(new URL('../../pages/settings/section-backup-io.js', import.meta.url))).text()).match(/prepareExportEncryptor\(askSecretFor\)/g) || []).length === 3);   /* v3.5.41: بعضها في section-backup-io.js */
 });

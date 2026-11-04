@@ -135,30 +135,89 @@ export async function createBackup(options = {}) {
   }
 }
 
+/* ---------- v3.5.41: خيارات النسخ (الافتراضي = السلوك السابق تماماً) ---------- */
+export const BACKUP_MIN_KEEP = 3;
+export const BACKUP_MAX_KEEP = 20;
+export const MAX_PINNED = 3;
+export const INTERVAL_MIN_HOURS = 1;
+export const INTERVAL_MAX_HOURS = 720;
+export const MAX_BACKUP_LABEL = 40;
+
+const clampInt = (v, def, min, max) => {
+  if (v === null || v === undefined || v === '') return def;
+  const n = Number(v);
+  return isFinite(n) ? Math.min(max, Math.max(min, Math.floor(n))) : def;
+};
+
+/** خيارات النسخ بقيم آمنة: فترة بالساعات (1–720، الافتراضي 24) وعدد النسخ المحفوظة (3–20، الافتراضي 7). */
+export function backupOptions(settingsObj) {
+  const bk = (settingsObj && settingsObj.backup) || {};
+  return {
+    autoBackup: bk.autoBackup !== false,
+    intervalHours: Number(bk.intervalHours) > 0 ? clampInt(bk.intervalHours, 24, INTERVAL_MIN_HOURS, INTERVAL_MAX_HOURS) : 24,
+    maxBackups: clampInt(bk.maxBackups, LIMITS.maxBackups || 7, BACKUP_MIN_KEEP, BACKUP_MAX_KEEP),
+  };
+}
+
+/** اسم النسخة اليدوية: منظَّف ومقصوص، وإلا الاسم الافتراضي. */
+export function manualBackupLabel(name) {
+  const s = typeof name === 'string' ? name.replace(/\s+/g, ' ').trim().slice(0, MAX_BACKUP_LABEL) : '';
+  return s || 'نسخة يدوية';
+}
+
+/**
+ * معرّفات النسخ الواجب حذفها (دالة نقية). المثبَّتة لا تُحذف ولا تُحسب ضمن الحد.
+ * @param {Array<{id,createdAt,sizeKB,pinned}>} list
+ * @param {number} max — عدد غير المثبَّتة المحفوظة
+ * @param {number} [maxTotalKB]
+ */
+export function selectPruneIds(list, max, maxTotalKB = 40 * 1024) {
+  const sorted = (Array.isArray(list) ? list : []).filter((b) => b && b.pinned !== true)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  /* كل نسخة تحمل الصور كاملة: عند كبر الحجم الكلي نُبقي أقل عدداً (لا أقل من 3) حتى لا تمتلئ مساحة المتصفح */
+  let keep = Math.min(sorted.length, max);
+  let total = sorted.slice(0, keep).reduce((n, b) => n + (Number(b.sizeKB) || 0), 0);
+  while (keep > 3 && total > maxTotalKB) {
+    keep--;
+    total -= Number(sorted[keep].sizeKB) || 0;
+  }
+  return sorted.slice(keep).map((b) => b.id);
+}
+
 /**
  * حذف النسخ القديمة بحيث لا يتجاوز الحد.
  * @returns {Promise<number>} — عدد المحذوفات
  */
 async function pruneOldBackups() {
   const all = await idb.getAll(STORES.BACKUPS);
-  const max = LIMITS.maxBackups || 7;
-  const sorted = all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-  /* كل نسخة تحمل الصور كاملة: عند كبر الحجم الكلي نُبقي أقل عدداً (لا أقل من 3) حتى لا تمتلئ مساحة المتصفح */
-  const MAX_TOTAL_KB = 40 * 1024;
-  let keep = Math.min(sorted.length, max);
-  let total = sorted.slice(0, keep).reduce((n, b) => n + (Number(b.sizeKB) || 0), 0);
-  while (keep > 3 && total > MAX_TOTAL_KB) {
-    keep--;
-    total -= Number(sorted[keep].sizeKB) || 0;
+  let max = LIMITS.maxBackups || 7;
+  try { max = backupOptions(await settings.get()).maxBackups; } catch (e) { /* الافتراضي */ }
+  const ids = selectPruneIds(all, max);
+  for (const id of ids) {
+    await idb.remove(STORES.BACKUPS, id);
   }
-  if (sorted.length <= keep) return 0;
-  const excess = sorted.slice(keep);
+  return ids.length;
+}
 
-  for (const b of excess) {
-    await idb.remove(STORES.BACKUPS, b.id);
+/**
+ * تثبيت نسخة (لا تُحذف تلقائياً) أو إلغاء تثبيتها. حد أقصى MAX_PINNED.
+ * @returns {Promise<{ok:boolean, error?:string}>}
+ */
+export async function setBackupPinned(id, pinned) {
+  try {
+    const rec = await idb.get(STORES.BACKUPS, id);
+    if (!rec) return { ok: false, error: 'النسخة غير موجودة' };
+    if (pinned && rec.pinned !== true) {
+      const all = await idb.getAll(STORES.BACKUPS);
+      if (all.filter((b) => b.pinned === true).length >= MAX_PINNED) {
+        return { ok: false, error: 'الحد الأقصى ' + MAX_PINNED + ' نسخ مثبَّتة — ألغِ تثبيت إحداها أولاً' };
+      }
+    }
+    await idb.put(STORES.BACKUPS, { ...rec, pinned: pinned === true });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
   }
-  return excess.length;
 }
 
 /* ==========================================================================
@@ -193,7 +252,7 @@ export async function runAutoBackupIfDue() {
       return { ran: false, reason: 'disabled' };
     }
 
-    const intervalHours = Number(bk.intervalHours) || 24;
+    const intervalHours = backupOptions(s).intervalHours;
     const last = getLastAutoBackupAt();
     const now = Date.now();
     const diffHours = last ? (now - last) / 3600000 : Infinity;
@@ -238,6 +297,7 @@ export async function listBackups() {
         label: b.label || 'نسخة',
         sizeKB: b.sizeKB || 0,
         counts: b.counts || {},
+        pinned: b.pinned === true,
       }));
   } catch {
     return [];
