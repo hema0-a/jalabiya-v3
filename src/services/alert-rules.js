@@ -22,6 +22,49 @@ export function alertToggles(settings) {
   };
 }
 
+/* ---------- v3.5.38: خيارات التنبيهات المتقدمة (الافتراضي = السلوك السابق تماماً) ---------- */
+const pickInt = (v, def, min, max) => {
+  if (v === null || v === undefined || v === '') return def;
+  const n = Number(v);
+  if (!isFinite(n)) return def;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+};
+const pickTime = (v, def) => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : def);
+
+export function notificationOptions(settings) {
+  const n = (settings && settings.notifications) || {};
+  const base = alertToggles(settings);
+  const debtMin = Number(n.debtMinAmount);
+  return {
+    dueSoonDays: pickInt(n.dueSoonDays, Math.max(3, base.leadDays), 1, 60),
+    seasonsDays: pickInt(n.seasonsDays, 14, 1, 60),
+    commitmentsDays: pickInt(n.commitmentsDays, 5, 1, 28),
+    appointmentsDays: pickInt(n.appointmentsDays, 0, 0, 14),
+    debtMinAmount: isFinite(debtMin) && debtMin > 0 ? Math.round(debtMin * 100) / 100 : 0,
+    overdue: n.overdue !== false,
+    overdueGraceDays: pickInt(n.overdueGraceDays, 0, 0, 30),
+    quietEnabled: n.quietEnabled === true,
+    quietFrom: pickTime(n.quietFrom, '22:00'),
+    quietTo: pickTime(n.quietTo, '07:00'),
+  };
+}
+
+/** هل الوقت الآن ضمن ساعات الهدوء؟ (تدعم المرور بمنتصف الليل؛ من = إلى ⇒ لا هدوء) */
+export function isQuietNow(opts, date = new Date()) {
+  if (!opts || opts.quietEnabled !== true) return false;
+  const toMin = (s) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+  const f = toMin(pickTime(opts.quietFrom, '22:00'));
+  const t = toMin(pickTime(opts.quietTo, '07:00'));
+  const m = date.getHours() * 60 + date.getMinutes();
+  if (f === t) return false;
+  return f < t ? (m >= f && m < t) : (m >= f || m < t);
+}
+
+/** وقت الفحص للتأخر: يُرجَع للوراء بعدد أيام السماح (0 = كما كان). */
+export function overdueNow(now, graceDays) {
+  return now - (Number(graceDays) > 0 ? Number(graceDays) : 0) * 86400000;
+}
+
 /**
  * أصناف نقص المخزون التي يجب التنبيه عليها:
  * مفتاح «تنبيهات المخزون» العام + «نقص القماش» لفئة قماش + «نقص المخزون» لباقي الفئات.

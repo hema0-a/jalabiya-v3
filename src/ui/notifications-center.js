@@ -21,7 +21,7 @@ import { isPastDue } from '../services/order-timing.js';
 import { assessOrderRisks } from '../services/order-risk.js';
 import { daysSinceExternalBackup } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
-import { alertToggles, filterLowStockForAlerts, splitOutOfStock } from '../services/alert-rules.js';
+import { alertToggles, filterLowStockForAlerts, splitOutOfStock, notificationOptions, overdueNow } from '../services/alert-rules.js';
 import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
@@ -32,9 +32,6 @@ import { resolveDayOffSettings } from '../core/day-off.js';
 
 const REFRESH_INTERVAL_MS = 60 * 1000; /* كل دقيقة */
 const DAY_MS = 86400000;
-const DUE_SOON_DAYS = 3;
-const COMMITMENT_SOON_DAYS = 5;
-const OCCASION_SOON_DAYS = 14;
 
 /* ==========================================================================
    2. الحالة الداخلية
@@ -59,15 +56,16 @@ export async function getNotifications() {
     /* إعدادات التنبيهات (v3.3.32: كانت تُحفظ ولا تُقرأ) */
     const s = await settings.get().catch(() => ({}));
     const tg = alertToggles(s);
+    const no = notificationOptions(s);
 
     /* --- 1. الطلبات --- */
     const allOrders = await orders.list().catch(() => []);
     const now = Date.now();
-    const soonDays = Math.max(DUE_SOON_DAYS, tg.leadDays);
+    const soonDays = no.dueSoonDays;
     const soonMs = now + soonDays * DAY_MS;
 
-    const overdue = allOrders.filter((o) =>
-      isPastDue(o.dueDate, now) &&
+    const overdue = !no.overdue ? [] : allOrders.filter((o) =>
+      isPastDue(o.dueDate, overdueNow(now, no.overdueGraceDays)) &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
     const dueSoon = allOrders.filter((o) =>
@@ -150,12 +148,17 @@ export async function getNotifications() {
     }
 
     /* --- 2. مواعيد اليوم --- */
-    const todayAppts = tg.appointments ? await appointments.getToday().catch(() => []) : [];
+    let todayAppts = tg.appointments ? await appointments.getToday().catch(() => []) : [];
+    if (tg.appointments && no.appointmentsDays > 0) {
+      const up = await appointments.getUpcoming(no.appointmentsDays).catch(() => []);
+      const seen = new Set(todayAppts.map((a) => a.id));
+      todayAppts = todayAppts.concat(up.filter((a) => !seen.has(a.id)));
+    }
     if (todayAppts.length > 0) {
       out.push({
         type: 'info',
         icon: '📅',
-        title: todayAppts.length + ' موعد اليوم',
+        title: todayAppts.length + (no.appointmentsDays > 0 ? ' موعد قريب' : ' موعد اليوم'),
         subtitle: todayAppts.slice(0, 2).map((a) =>
           (a.title || 'موعد') + ' · ' + formatTime(a.date)
         ).join(' — '),
@@ -197,7 +200,7 @@ export async function getNotifications() {
     const soonCommitments = activeCommitments.filter((c) => {
       if (!c.dueDay) return false;
       const diff = c.dueDay - todayDay;
-      return diff >= 0 && diff <= COMMITMENT_SOON_DAYS;
+      return diff >= 0 && diff <= no.commitmentsDays;
     });
 
     if (soonCommitments.length > 0) {
@@ -224,7 +227,7 @@ export async function getNotifications() {
       const startOfToday = new Date(y, today.getMonth(), today.getDate());
       if (target < startOfToday) target = new Date(y + 1, m, d);
       const days = Math.round((target - startOfToday) / DAY_MS);
-      return days >= 0 && days <= OCCASION_SOON_DAYS;
+      return days >= 0 && days <= no.seasonsDays;
     });
 
     if (upcomingOccasions.length > 0) {
@@ -244,14 +247,18 @@ export async function getNotifications() {
     if (tg.debts) {
       const pays = await payments.list().catch(() => []);
       const rec = computeReceivables(allOrders, pays, custList, now);
-      if (rec.totals.customersOverdue > 0) {
+      /* حد أدنى للمديونية (0 = كل من عليه متأخر، كما كان) */
+      const big = no.debtMinAmount > 0 ? rec.customers.filter((c) => c.overdue >= no.debtMinAmount) : null;
+      const dCount = big ? big.length : rec.totals.customersOverdue;
+      const dSum = big ? big.reduce((x, c) => x + c.overdue, 0) : rec.totals.overdue;
+      if (dCount > 0) {
         out.push({
           type: 'warning',
           icon: '🧾',
-          title: rec.totals.customersOverdue + ' عميل عليه مستحقات متأخرة',
-          subtitle: 'الإجمالي ' + formatEGP(rec.totals.overdue),
+          title: dCount + ' عميل عليه مستحقات متأخرة',
+          subtitle: 'الإجمالي ' + formatEGP(dSum),
           route: '#/debts',
-          count: rec.totals.customersOverdue,
+          count: dCount,
         });
       }
     }

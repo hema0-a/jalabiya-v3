@@ -11,7 +11,7 @@ import { orders as ordersRepo } from '../data/repos/orders.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { DEFAULT_SETTINGS } from '../core/config.js';
 import { settings as settingsRepo } from '../data/repos/settings.js';
-import { filterLowStockForAlerts, stockAlertOptions, splitOutOfStock, stockSignature, shouldNotifyStock } from './alert-rules.js';
+import { filterLowStockForAlerts, stockAlertOptions, splitOutOfStock, stockSignature, shouldNotifyStock, notificationOptions, isQuietNow, overdueNow } from './alert-rules.js';
 import { isPastDue } from './order-timing.js';
 import { startOfDay, startOfNextDay } from '../core/day-math.js';
 
@@ -187,12 +187,17 @@ export async function checkAndNotify() {
   let sent = 0;
   let skipped = 0;
 
+  /* ساعات الهدوء (v3.5.38): لا إشعارات جهاز الآن؛ تُرسَل في الفحص التالي بعد الانتهاء */
+  let nopts = notificationOptions({});
+  try { nopts = notificationOptions(await settingsRepo.get().catch(() => ({}))); } catch (e) { /* افتراضي */ }
+  if (isQuietNow(nopts)) return { sent: 0, skipped: 0, quiet: true };
+
   /* --- 1. الطلبات المتأخرة --- */
   try {
     const all = await ordersRepo.list();
     const now = Date.now();
-    const overdue = all.filter((o) =>
-      isPastDue(o.dueDate, now) &&
+    const overdue = !nopts.overdue ? [] : all.filter((o) =>
+      isPastDue(o.dueDate, overdueNow(now, nopts.overdueGraceDays)) &&
       o.status !== 'delivered' && o.status !== 'cancelled'
     );
 
