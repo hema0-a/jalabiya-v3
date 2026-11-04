@@ -65,6 +65,50 @@ export function overdueNow(now, graceDays) {
   return now - (Number(graceDays) > 0 ? Number(graceDays) : 0) * 86400000;
 }
 
+/* ---------- v3.5.39: المناسبات (مدة كل مناسبة + الفرز) ---------- */
+const OCC_DAY_MS = 86400000;
+
+/** أيام التنبيه لمناسبة: قيمتها الخاصة (1–90) وإلا القيمة العامة. */
+export function occasionAlertDays(occ, fallback) {
+  const n = Number(occ && occ.alertDays);
+  return isFinite(n) && n >= 1 ? Math.min(90, Math.floor(n)) : fallback;
+}
+
+/** عدد الأيام حتى المناسبة القادمة (0 = اليوم)؛ null إن كان التاريخ غير صالح. */
+export function occasionDaysUntil(occ, now = Date.now()) {
+  const m = Number(occ && occ.month) - 1;
+  const d = Number(occ && occ.day);
+  if (!(m >= 0 && m <= 11) || !(d >= 1 && d <= 31)) return null;
+  const t0 = new Date(now);
+  const y = t0.getFullYear();
+  const start = new Date(y, t0.getMonth(), t0.getDate());
+  let target = new Date(y, m, d);
+  if (target < start) target = new Date(y + 1, m, d);
+  return Math.round((target - start) / OCC_DAY_MS);
+}
+
+/** المناسبات المفعّلة الداخلة في نافذة تنبيهها، الأقرب أولاً. */
+export function upcomingOccasions(occasions, now = Date.now(), fallbackDays = 14) {
+  const out = [];
+  for (const occ of Array.isArray(occasions) ? occasions : []) {
+    if (!occ || occ.enabled === false) continue;
+    const days = occasionDaysUntil(occ, now);
+    if (days === null) continue;
+    if (days <= occasionAlertDays(occ, fallbackDays)) out.push({ occ, days });
+  }
+  return out.sort((a, b) => a.days - b.days);
+}
+
+/** ترتيب المناسبات بالأقرب تاريخاً (المعطّلة وغير الصالحة أخيراً، والتعادل يحفظ الترتيب). */
+export function sortOccasionsByDate(occasions, now = Date.now()) {
+  const list = Array.isArray(occasions) ? occasions : [];
+  const key = (o) => {
+    const d = occasionDaysUntil(o, now);
+    return (o && o.enabled === false ? 1000 : 0) + (d === null ? 5000 : d);
+  };
+  return list.map((o, i) => ({ o, i, k: key(o) })).sort((a, b) => (a.k - b.k) || (a.i - b.i)).map((x) => x.o);
+}
+
 /**
  * أصناف نقص المخزون التي يجب التنبيه عليها:
  * مفتاح «تنبيهات المخزون» العام + «نقص القماش» لفئة قماش + «نقص المخزون» لباقي الفئات.

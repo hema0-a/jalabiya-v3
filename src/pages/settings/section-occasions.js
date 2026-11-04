@@ -9,6 +9,7 @@ import { el, clear } from '../../core/dom.js';
 import { toast } from '../../ui/toast.js';
 import { modal } from '../../ui/modal.js';
 import { DEFAULT_OCCASIONS } from '../../core/config.js';
+import { occasionDaysUntil, sortOccasionsByDate } from '../../services/alert-rules.js';
 
 /* ==========================================================================
    2. المواسم والأعياد
@@ -21,6 +22,19 @@ export const occasionsSection = {
   async render(body, currentSettings, saveFn) {
     const occasions = currentSettings.occasions || [...DEFAULT_OCCASIONS];
     const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+
+    function commit() { saveFn({ occasions: [...occasions] }); rebuild(); }
+    function move(idx, dir) {
+      const j = idx + dir;
+      if (j < 0 || j >= occasions.length) return;
+      [occasions[idx], occasions[j]] = [occasions[j], occasions[idx]];
+      commit();
+    }
+    function sortByDate() {
+      const sorted = sortOccasionsByDate(occasions);
+      occasions.splice(0, occasions.length, ...sorted);
+      commit();
+    }
 
     function rebuild() {
       clear(list);
@@ -43,7 +57,20 @@ export const occasionsSection = {
           el('div', { style: { flex: '1' } }, [
             el('div', { style: { fontSize: '14px', fontWeight: '500' } }, o.name),
             el('div', { style: { fontSize: '11px', color: '#666' } },
-              'الشهر ' + o.month + ' — اليوم ' + o.day + ' — تنبيه قبل ' + o.alertDays + ' يوم'),
+              'الشهر ' + o.month + ' — اليوم ' + o.day + ' — تنبيه قبل ' + o.alertDays + ' يوم'
+              + (occasionDaysUntil(o) === null ? '' : ' — بعد ' + occasionDaysUntil(o) + ' يوم')),
+          ]),
+          el('span', { style: { display: 'flex', flexDirection: 'column' } }, [
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-up', 'aria-label': 'تحريك لأعلى',
+              disabled: idx === 0 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => move(idx, -1),
+            }, '▲'),
+            el('button', {
+              className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'move-down', 'aria-label': 'تحريك لأسفل',
+              disabled: idx === occasions.length - 1 ? 'disabled' : null, style: { padding: '0 8px', minHeight: '22px', lineHeight: '1' },
+              onClick: () => move(idx, 1),
+            }, '▼'),
           ]),
           el('button', {
             className: 'btn btn--sm btn--ghost', type: 'button',
@@ -69,6 +96,13 @@ export const occasionsSection = {
       });
     }
 
+    body.appendChild(el('button', {
+      className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'sort-date',
+      style: { marginBottom: '8px' },
+      onClick: sortByDate,
+    }, '🗓️ ترتيب حسب الأقرب تاريخاً'));
+    body.appendChild(el('div', { className: 'settings-row__hint', style: { marginBottom: '8px' } },
+      'التنبيه في مركز الإشعارات يحترم «تنبيه قبل» الخاص بكل مناسبة؛ والمدة العامة في قسم التنبيهات احتياطية.'));
     body.appendChild(list);
     body.appendChild(el('button', {
       className: 'btn btn--primary btn--block', type: 'button',

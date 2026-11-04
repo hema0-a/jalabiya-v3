@@ -21,7 +21,7 @@ import { isPastDue } from '../services/order-timing.js';
 import { assessOrderRisks } from '../services/order-risk.js';
 import { daysSinceExternalBackup } from '../services/auto-backup.js';
 import { formatEGP, formatDate, formatTime } from '../core/utils.js';
-import { alertToggles, filterLowStockForAlerts, splitOutOfStock, notificationOptions, overdueNow } from '../services/alert-rules.js';
+import { alertToggles, filterLowStockForAlerts, splitOutOfStock, notificationOptions, overdueNow, upcomingOccasions } from '../services/alert-rules.js';
 import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
@@ -218,28 +218,19 @@ export async function getNotifications() {
 
     /* --- 5. المناسبات القريبة --- */
     const occasions = tg.seasons && Array.isArray(s.occasions) ? s.occasions : [];
-    const upcomingOccasions = occasions.filter((o) => {
-      if (o.enabled === false) return false;
-      const y = today.getFullYear();
-      const m = Number(o.month) - 1;
-      const d = Number(o.day);
-      let target = new Date(y, m, d);
-      const startOfToday = new Date(y, today.getMonth(), today.getDate());
-      if (target < startOfToday) target = new Date(y + 1, m, d);
-      const days = Math.round((target - startOfToday) / DAY_MS);
-      return days >= 0 && days <= no.seasonsDays;
-    });
+    /* v3.5.39: لكل مناسبة مدة تنبيهها الخاصة؛ «تنبيه المناسبات» العام احتياطي لمن لا مدة لها. الأقرب أولاً */
+    const upcomingOccasionsList = upcomingOccasions(occasions, Date.now(), no.seasonsDays).map((x) => x.occ);
 
-    if (upcomingOccasions.length > 0) {
+    if (upcomingOccasionsList.length > 0) {
       out.push({
         type: 'info',
         icon: '🎉',
-        title: upcomingOccasions.length + ' مناسبة قريبة',
-        subtitle: upcomingOccasions.slice(0, 2).map((o) =>
+        title: upcomingOccasionsList.length + ' مناسبة قريبة',
+        subtitle: upcomingOccasionsList.slice(0, 2).map((o) =>
           (o.icon || '🎉') + ' ' + (o.name || 'مناسبة')
         ).join(' — '),
         route: '#/occasions',
-        count: upcomingOccasions.length,
+        count: upcomingOccasionsList.length,
       });
     }
 
