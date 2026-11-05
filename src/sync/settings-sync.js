@@ -18,7 +18,7 @@ import { markDirty } from './dirty-state.js';
 
 export const SETTINGS_SYNC_KEYS = [
   'workshop', 'measurementFields', 'jalabiyaTypes', 'occasions', 'inventory',
-  'dailyLimit', 'grouping', 'pricingCalculator', 'autoMessages', 'depositPolicy',
+  'dailyLimit', 'grouping', 'pricingCalculator', 'autoMessages', 'depositPolicy', 'fabricCalc',
 ];
 const EXCLUDE_FIELDS = { workshop: ['logo'] };
 const META_KEY = 'sync_settings_meta';

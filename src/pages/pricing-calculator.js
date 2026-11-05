@@ -15,6 +15,7 @@ import {
   DEFAULT_SETTINGS, STORAGE_KEYS,
 } from '../core/config.js';
 import { formatEGP, formatDate } from '../core/utils.js';
+import { openFabricCalcDialog } from '../ui/fabric-calc-dialog.js';
 
 /* --- حالة الصفحة --- */
 let state = {
@@ -180,6 +181,17 @@ function buildFabricFields() {
     el('h3', { className: 'card__title' }, '🧵 تكاليف القماش والخامات'),
   ]));
   wrap.appendChild(numberField('pc-meters', 'الأمتار المطلوبة', state.inputs.meters, '3', '0.5'));
+  /* v3.7.0: حاسبة استهلاك القماش بقوالب الأنواع؛ «استخدم» يملأ الأمتار ويُحدّث الحساب فوراً */
+  wrap.appendChild(el('button', {
+    className: 'btn btn--sm btn--ghost', type: 'button', 'data-action': 'fabric-calc', style: { marginBottom: '8px' },
+    onClick: () => openFabricCalcDialog({
+      meterPrice: Number(state.inputs.meterPrice) || 0,
+      onApply: (m) => {
+        const inp = state.container && state.container.querySelector('#pc-meters');
+        if (inp) { inp.value = String(m); inp.dispatchEvent(new Event('input', { bubbles: true })); }
+      },
+    }),
+  }, '🧮 احسب استهلاك القماش لطول العميل'));
   wrap.appendChild(numberField('pc-meter-price', 'سعر المتر (ج.م)', state.inputs.meterPrice, '0'));
   wrap.appendChild(numberField('pc-extras', 'تكاليف إضافية (خيوط، أزرار، إلخ)', state.inputs.extras, '0'));
   return wrap;

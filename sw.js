@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.6.1 — ضغط الصور: الإعدادات تُطبَّق فعلاً
+   الإصدار: v3.7.0 — الحاسبات: استهلاك القماش و«ماذا لو؟»
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.6.1';
+const CACHE_VERSION = 'v3.7.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -218,6 +218,7 @@ const PRECACHE_URLS = [
   './src/services/deposit-policy.js',
   './src/services/diagnostics.js',
   './src/services/draft-manager.js',
+  './src/services/fabric-calc.js',
   './src/services/financial-calculator.js',
   './src/services/financial-export.js',
   './src/services/house-expenses-export.js',
@@ -281,6 +282,7 @@ const PRECACHE_URLS = [
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
   './src/services/week-visits.js',
+  './src/services/whatif.js',
 
   /* --- src/sync --- */
   './src/sync/auth-sync.js',
@@ -313,6 +315,7 @@ const PRECACHE_URLS = [
   './src/ui/deposit-guard.js',
   './src/ui/display-settings.js',
   './src/ui/fab.js',
+  './src/ui/fabric-calc-dialog.js',
   './src/ui/form-builder.js',
   './src/ui/layout.js',
   './src/ui/ledger-shadow-card.js',
@@ -346,6 +349,7 @@ const PRECACHE_URLS = [
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
   './src/ui/update-banner.js',
+  './src/ui/whatif-card.js',
 
   /* --- src/workers --- */
   './src/workers/image-worker.js',
