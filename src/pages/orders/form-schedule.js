@@ -8,6 +8,7 @@ import { describeChosenDay } from '../../services/capacity-strip.js';
 import { buildCapacityStripView } from '../../ui/capacity-strip-view.js';
 import { computeTotals } from './logic.js';
 import { checkDueDate } from '../../services/input-checks.js';
+import { buildLeadTimeStrip } from '../../ui/lead-time-strip.js';
 
 export function buildSchedule(ctx, existing, f, flags) {
   const { state } = ctx;
@@ -83,6 +84,16 @@ export function buildSchedule(ctx, existing, f, flags) {
     capStrip.refresh();
   });
 
+  /* v3.8.2: المدة المعتادة لكل صنف (من الطلبات المنتهية) + اقتراح موعد آمن */
+  const leadStrip = buildLeadTimeStrip({
+    getOrders: () => capOrders,
+    getNames: () => Array.from(itemsContainer.children).map((r) => { try { return r._getValues().name; } catch (e) { return ''; } }),
+    onPick: (ts) => {
+      dueDateInput.value = localDateInput(ts);
+      dueDateInput.dispatchEvent(new Event('change', { bubbles: true }));   /* يحفظ المسودة + يُظهر ملاحظة اليوم */
+    },
+  });
+
   const suggestBtn = el('button', {
     className: 'btn btn--sm btn--secondary btn--block', type: 'button',
     title: 'اقتراح أقرب موعد تسليم يناسب الحد اليومي',
@@ -118,8 +129,8 @@ export function buildSchedule(ctx, existing, f, flags) {
   }, '✨ اقتراح أقرب موعد متاح');
 
   /* تحديث الشريط بعد فتح النموذج بقراءة حديثة (لا يعطّل فتح النموذج) */
-  refreshCapOrders().then(() => { try { capStrip.refresh(); } catch (e) { /* النموذج أُغلق */ } });
-  Object.assign(f, { dueHint, setHint, capStrip, suggestBtn, refreshCapOrders });
+  refreshCapOrders().then(() => { try { capStrip.refresh(); leadStrip.refresh(); } catch (e) { /* النموذج أُغلق */ } });
+  Object.assign(f, { dueHint, setHint, capStrip, leadStrip, suggestBtn, refreshCapOrders });
 }
 
 export async function buildWorkPlan({ orders, amount, dueDate, limit, dayOffWeekday, excludeOrderId }) {

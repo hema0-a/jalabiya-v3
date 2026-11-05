@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.8.1 — الحاسبات: استهلاك القماش و«ماذا لو؟»
+   الإصدار: v3.8.2 — الحاسبات: استهلاك القماش و«ماذا لو؟»
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.8.1';
+const CACHE_VERSION = 'v3.8.2';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -240,6 +240,7 @@ const PRECACHE_URLS = [
   './src/services/invoice-print.js',
   './src/services/item-catalog.js',
   './src/services/kpis-calculator.js',
+  './src/services/lead-time.js',
   './src/services/ledger-apply.js',
   './src/services/ledger-authority.js',
   './src/services/ledger-conflicts.js',
@@ -321,6 +322,7 @@ const PRECACHE_URLS = [
   './src/ui/form-builder.js',
   './src/ui/input-hints.js',
   './src/ui/layout.js',
+  './src/ui/lead-time-strip.js',
   './src/ui/ledger-shadow-card.js',
   './src/ui/lock-failure.js',
   './src/ui/lock-screen.js',

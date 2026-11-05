@@ -48,7 +48,7 @@ export function openOrderForm(ctx, existing = null) {
   buildItems(ctx, existing, f);
   buildSchedule(ctx, existing, f, flags);
 
-  const { capStrip, itemsContainer, feesContainer, discountTypeSelect, discountValueInput, depositInput, costInput } = f;
+  const { capStrip, leadStrip, itemsContainer, feesContainer, discountTypeSelect, discountValueInput, depositInput, costInput } = f;
   const { customerSelect, statusSelect, receivedDateInput, notesInput, imagePicker, urgentField, addItemBtn, addFeeBtn, suggestBtn, dueDateInput, dueHint } = f;
 
   /* --- ملخص الحساب --- */
@@ -59,6 +59,7 @@ export function openOrderForm(ctx, existing = null) {
 
   function recalc() {
     capStrip.refresh();
+    leadStrip.refresh();
     const items = Array.from(itemsContainer.children).map((r) => r._getValues());
     const fees = Array.from(feesContainer.children).map((r) => r._getValues());
     const t = computeTotals(items, discountTypeSelect.value, discountValueInput.value, fees);
@@ -142,7 +143,7 @@ export function openOrderForm(ctx, existing = null) {
     ]),
     el('div', { className: 'field' }, [
       el('label', { className: 'field__label' }, '📅 تاريخ التسليم'),
-      dueDateInput, suggestBtn, dueHint, capStrip,
+      dueDateInput, suggestBtn, dueHint, leadStrip, capStrip,
     ]),
     depositField,
     extras,
