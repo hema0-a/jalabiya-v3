@@ -144,5 +144,6 @@ import './modules/v3541-backup-options.test.js';
 import './modules/v360-push.test.js';
 import './modules/v361-image-options.test.js';
 import './modules/v370-calculators.test.js';
+import './modules/v380-production-board.test.js';
 
 export { runAll, register } from './registry.js';

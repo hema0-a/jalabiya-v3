@@ -9,6 +9,7 @@ import { workers } from '../data/repos/workers.js';
 import { formatEGP, normalizeSearch } from '../core/utils.js';
 import { filterWorkers } from './workers-logic.js';
 import { buildWorkerCard, buildPaymentRow } from './workers-cards.js';
+import { mountProductionBoard } from '../ui/production-board.js';
 
 /* ==========================================================================
    9. الرسم
@@ -67,6 +68,7 @@ function renderTabs(ctx) {
 
   const tabs = [
     { id: 'workers',  icon: '👷', label: 'العمال' },
+    { id: 'board',    icon: '📊', label: 'الإنتاج' },
     { id: 'payments', icon: '💵', label: 'الدفعات' },
   ];
 
@@ -124,6 +126,13 @@ export function renderList(ctx) {
   const lc = state.container?.querySelector('#workers-list');
   if (!lc) return;
   clear(lc);
+
+  /* v3.8.0: لوحة الإنتاج (تحمّل بياناتها بنفسها) */
+  if (state.activeTab === 'board') {
+    if (state.board) { try { state.board.destroy(); } catch (e) { /* اختياري */ } }
+    state.board = mountProductionBoard(lc);
+    return;
+  }
 
   if (state.activeTab === 'payments') {
     const filtered = applySearch(state, state.payments.map((p) => ({
