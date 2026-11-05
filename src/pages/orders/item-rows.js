@@ -9,6 +9,8 @@ import { el } from '../../core/dom.js';
 import { uid, formatEGP, toNonNegative } from '../../core/utils.js';
 import { findInCatalog } from '../../services/item-catalog.js';
 import { EXTRA_FEE_TYPES } from './logic.js';
+import { attachHint } from '../../ui/input-hints.js';
+import { checkPrice, checkQty } from '../../services/input-checks.js';
 
 export const TYPES_DL_ID = 'jalabiya-types-dl';
 
@@ -50,6 +52,13 @@ export function buildItemRow(item, onRemove, catalog = []) {
     const v = toNonNegative(priceIn.value) * (toNonNegative(qtyIn.value) || 1);
     totalEl.textContent = v > 0 ? 'إجمالي البند: ' + formatEGP(v) : '';
   };
+  /* v3.8.1: مدقّق ذكي إرشادي — السعر مقابل سعر الصنف المعتاد، والكمية */
+  const priceHint = attachHint(priceIn, (v) => {
+    const known = nameIn.value.trim() ? findInCatalog(catalog, nameIn.value) : null;
+    return checkPrice(v, { reference: known && known.price });
+  });
+  attachHint(qtyIn, checkQty);
+  nameIn.addEventListener('change', () => priceHint.refresh());
   priceIn.addEventListener('input', updateTotal);
   qtyIn.addEventListener('input', updateTotal);
   updateTotal();

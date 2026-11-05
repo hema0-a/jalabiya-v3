@@ -145,5 +145,6 @@ import './modules/v360-push.test.js';
 import './modules/v361-image-options.test.js';
 import './modules/v370-calculators.test.js';
 import './modules/v380-production-board.test.js';
+import './modules/v381-input-checks.test.js';
 
 export { runAll, register } from './registry.js';

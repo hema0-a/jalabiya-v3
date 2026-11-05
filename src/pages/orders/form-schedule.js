@@ -7,6 +7,7 @@ import { suggestDueDate, planOrder } from '../../services/order-scheduler.js';
 import { describeChosenDay } from '../../services/capacity-strip.js';
 import { buildCapacityStripView } from '../../ui/capacity-strip-view.js';
 import { computeTotals } from './logic.js';
+import { checkDueDate } from '../../services/input-checks.js';
 
 export function buildSchedule(ctx, existing, f, flags) {
   const { state } = ctx;
@@ -73,7 +74,12 @@ export function buildSchedule(ctx, existing, f, flags) {
     const ts = dueTsOf();
     if (ts == null) { capStrip.refresh(); return; }
     const d = describeChosenDay(capOrders, capConfig(), ts);
-    if (d.level !== 'none') setHint([d.text], d.level !== 'ok');
+    /* v3.8.1: تنبيه ذكي لموعد في الماضي أو بعيد جداً (إرشادي) */
+    const dd = checkDueDate(ts, Date.now());
+    const lines = []; let warn = false;
+    if (dd) { lines.push(dd.msg); warn = dd.level === 'warn' || dd.level === 'danger'; }
+    if (d.level !== 'none') { lines.push(d.text); warn = warn || d.level !== 'ok'; }
+    if (lines.length) setHint(lines, warn);
     capStrip.refresh();
   });
 

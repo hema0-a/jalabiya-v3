@@ -12,6 +12,8 @@ import { modal, confirmIfStale } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { createOrderImagePicker } from '../ui/order-image-picker.js';
 import { findSimilarCustomers, phoneKey } from '../services/customer-merge.js';
+import { attachHint } from '../ui/input-hints.js';
+import { checkPhone, checkName } from '../services/input-checks.js';
 import * as draft from '../services/draft-manager.js';
 import { buildMeasurementsSection } from './customers-measure.js';
 
@@ -115,6 +117,9 @@ export function openCustomerForm(ctx, existing = null) {
       (reason === 'phone' ? '⚠️ نفس الرقم: ' : 'ℹ️ نفس الاسم: ') + customer.name + (customer.phone ? ' (' + customer.phone + ')' : ''))));
     dupHint.style.display = m.length ? '' : 'none';
   };
+  /* v3.8.1: مدقّق الهاتف المصري والاسم — إرشادي فقط */
+  attachHint(phoneInput, checkPhone);
+  attachHint(nameInput, checkName);
   nameInput.addEventListener('input', updateDupHint);
   phoneInput.addEventListener('input', updateDupHint);
   updateDupHint();
