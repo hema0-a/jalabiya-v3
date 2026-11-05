@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.8.2 — الحاسبات: استهلاك القماش و«ماذا لو؟»
+   الإصدار: v3.9.0 — الحاسبات: استهلاك القماش و«ماذا لو؟»
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.8.2';
+const CACHE_VERSION = 'v3.9.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -213,6 +213,7 @@ const PRECACHE_URLS = [
   './src/services/daily-insights.js',
   './src/services/dashboard-layout.js',
   './src/services/data-integrity.js',
+  './src/services/debt-plan.js',
   './src/services/delivery-receipt.js',
   './src/services/demo-data.js',
   './src/services/deposit-policy.js',
@@ -314,6 +315,7 @@ const PRECACHE_URLS = [
   './src/ui/customer-menu.js',
   './src/ui/customer-picker.js',
   './src/ui/dashboard-charts.js',
+  './src/ui/debt-plan-card.js',
   './src/ui/delivery-receipt-dialog.js',
   './src/ui/deposit-guard.js',
   './src/ui/display-settings.js',

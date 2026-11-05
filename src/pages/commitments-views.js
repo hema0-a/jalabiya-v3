@@ -12,6 +12,7 @@ import { COMMITMENT_CATEGORIES } from '../core/config.js';
 import { formatEGP, normalizeSearch } from '../core/utils.js';
 import { filterCommitments, filterGoals } from './commitments-logic.js';
 import { buildCommitmentCard, buildGoalCard } from './commitments-cards.js';
+import { buildDebtPlanCard } from '../ui/debt-plan-card.js';
 
 /* ==========================================================================
    1. التبويبات
@@ -288,6 +289,7 @@ export function renderPage(ctx) {
   if (state.activeTab === 'commitments') {
     c.appendChild(renderStats(ctx));
     c.appendChild(renderHealth(ctx));
+    c.appendChild(buildDebtPlanCard());   /* v3.9.0: عدّاد التحرر + استراتيجية السداد */
     const alerts = renderAlerts(ctx);
     if (alerts) c.appendChild(alerts);
 

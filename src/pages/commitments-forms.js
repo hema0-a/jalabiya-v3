@@ -14,6 +14,7 @@ import { savingsGoals } from '../data/repos/savings-goals.js';
 import { invalidateCache } from '../services/commitments-calculator.js';
 import { COMMITMENT_CATEGORIES, COMMITMENT_FREQUENCIES } from '../core/config.js';
 import { formatEGP, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
+import { endMonthFromRemaining, remainingMonths, MAX_REMAINING } from '../services/debt-plan.js';
 
 /* ==========================================================================
    1. نموذج الالتزام
@@ -51,6 +52,14 @@ export function openCommitmentForm(ctx, existing = null) {
     value: isEdit && existing.dueDay ? String(existing.dueDay) : '',
   });
 
+  /* v3.9.0: الأقساط المتبقية (اختياري) — تُحفظ كشهر آخر قسط فتتناقص وحدها */
+  const remRaw = isEdit ? remainingMonths(existing) : null;
+  const remainingInput = el('input', {
+    className: 'input', type: 'number', min: '1', max: String(MAX_REMAINING), step: '1', inputmode: 'numeric',
+    placeholder: 'مثال: 12 (اختياري — للأقساط والقروض)', 'data-role': 'remaining-input',
+    value: remRaw ? String(remRaw) : '',
+  });
+
   const notesInput = el('textarea', { className: 'textarea', placeholder: 'ملاحظات...' });
   if (isEdit) notesInput.value = existing.notes || '';
 
@@ -68,6 +77,7 @@ export function openCommitmentForm(ctx, existing = null) {
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ *'), amountInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الدورية'), freqSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'يوم الاستحقاق'), dueInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '⏳ الأقساط المتبقية (شاملة هذا الشهر)'), remainingInput]),
     el('div', { className: 'field' }, [activeToggle]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
@@ -91,6 +101,7 @@ export function openCommitmentForm(ctx, existing = null) {
             amount,
             frequency: freqSelect.value,
             dueDay: dueVal ? Math.max(1, Math.min(31, Number(dueVal))) : null,
+            endMonth: endMonthFromRemaining(remainingInput.value) || null,
             notes: notesInput.value.trim(),
             active: activeCheckbox.checked,
           };
