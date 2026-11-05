@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.6.0 — النسخ الاحتياطي: خيارات متقدمة
+   الإصدار: v3.6.1 — ضغط الصور: الإعدادات تُطبَّق فعلاً
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.6.0';
+const CACHE_VERSION = 'v3.6.1';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -223,6 +223,7 @@ const PRECACHE_URLS = [
   './src/services/house-expenses-export.js',
   './src/services/image-compress-core.js',
   './src/services/image-compressor.js',
+  './src/services/image-options.js',
   './src/services/image-worker-client.js',
   './src/services/invoice-image-order.js',
   './src/services/invoice-image-output.js',

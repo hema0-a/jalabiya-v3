@@ -142,5 +142,6 @@ import './modules/v3539-occasions.test.js';
 import './modules/v3540-auto-messages-options.test.js';
 import './modules/v3541-backup-options.test.js';
 import './modules/v360-push.test.js';
+import './modules/v361-image-options.test.js';
 
 export { runAll, register } from './registry.js';

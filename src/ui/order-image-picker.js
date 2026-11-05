@@ -11,6 +11,8 @@
 import { el, clear } from '../core/dom.js';
 import { toast } from './toast.js';
 import { compress } from '../services/image-compressor.js';
+import { settings as settingsRepo } from '../data/repos/settings.js';
+import { imageCompressionOptions } from '../services/image-options.js';
 
 /**
  * خيارات الضغط الفعلية للمنتقي: المُمرَّر ثم الافتراضي (جودة 0.82 · 300KB · 1200px — كما قبل 3.5.19).
@@ -137,7 +139,12 @@ export function createOrderImagePicker(options = {}) {
     statusEl.style.color = '#F57C00';
 
     try {
-      const result = await compress(file, resolvePickerCompression(options));
+      let opts = resolvePickerCompression(options);
+      /* v3.6.1: إعدادات «ضغط الصور» تُطبَّق إن فُعِّلت، ولا تمسّ منتقياً حدّد حجمه صراحةً (كصورة العميل) */
+      if (options.maxSizeKB == null && options.maxDimensionPx == null) {
+        try { opts = imageCompressionOptions('orders', await settingsRepo.get(), opts); } catch (e) { /* الافتراضي */ }
+      }
+      const result = await compress(file, opts);
 
       currentValue = result.dataUrl;
       updatePreview();

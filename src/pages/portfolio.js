@@ -14,6 +14,8 @@ import { portfolio } from '../data/repos/portfolio.js';
 import { trash } from '../data/repos/trash.js';
 import { customers } from '../data/repos/customers.js';
 import { compress, generateThumbnail, hashImage } from '../services/image-compressor.js';
+import { settings as settingsRepo } from '../data/repos/settings.js';
+import { imageCompressionOptions } from '../services/image-options.js';
 import { PORTFOLIO_CATEGORIES, LIMITS } from '../core/config.js';
 import { formatEGP, formatDate, toNonNegative, normalizeSearch } from '../core/utils.js';
 import { previewPortfolio } from '../ui/quick-preview.js';
@@ -117,7 +119,9 @@ function openAddForm() {
         return;
       }
 
-      const result = await compress(file);
+      let copts = {};
+      try { copts = imageCompressionOptions('portfolio', await settingsRepo.get(), {}); } catch (e) { /* الافتراضي */ }
+      const result = await compress(file, copts);
       const thumb = await generateThumbnail(file);
       compressedData = result.dataUrl;
       thumbnailData = thumb;

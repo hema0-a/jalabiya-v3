@@ -51,7 +51,8 @@ register('v3.5.19 mobile images', async (t) => {
 
   await t.test('4. المنتقي يضغط عبر resolvePickerCompression(options) ولا قيم صلبة 1200/300 داخل المعالج', () => {
     const code = stripComments(picker);
-    return /compress\(file,\s*resolvePickerCompression\(options\)\)/.test(code)
+    /* v3.6.1: الخيارات تُحسب بـresolvePickerCompression(options) ثم قد تُستبدل بإعدادات «ضغط الصور» عند تفعيلها */
+    return /let opts = resolvePickerCompression\(options\);/.test(code) && /compress\(file,\s*opts\)/.test(code)
       && !/maxDimensionPx:\s*1200,\s*\n\s*\}\)/.test(code);
   });
 
