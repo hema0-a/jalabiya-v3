@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.10.0',
+  version: '3.10.1',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -193,6 +193,8 @@ export const WEEKDAYS = [
 /* --- 17. الإعدادات الافتراضية --- */
 export const DEFAULT_SETTINGS = {
   workshop: { name: '', logo: '', address: '', phone: '', whatsapp: '', pickupHours: '' },
+  /* v3.10.1: وضع الكشك (شاشة عرض للزبائن) — تفضيل لهذا الجهاز */
+  kiosk: { message: '', showStats: true, showPortfolio: true, showContact: true },
   /* الولاء (v3.3.51): نقطة لكل earnEvery ج.م من الطلب المسلَّم، وقيمة النقطة عند الاستبدال pointValue ج.م */
   loyalty: { enabled: true, earnEvery: 20, pointValue: 1 },
   appearance: {
@@ -301,6 +303,7 @@ export const STORAGE_KEYS = {
   V3_PIN_SALT: 'jalabiya_v3_pin_salt',
   /* v3.10.0: أرقام الموظفين والقفل المالي + الدور الحالي (على هذا الجهاز فقط، لا تُزامَن) */
   V3_ROLE: 'jalabiya_v3_role',
+  V3_KIOSK: 'jalabiya_v3_kiosk_active',
   V3_MGR_HASH: 'jalabiya_v3_mgr_hash',
   V3_MGR_SALT: 'jalabiya_v3_mgr_salt',
   V3_RECV_HASH: 'jalabiya_v3_recv_hash',

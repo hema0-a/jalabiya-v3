@@ -19,6 +19,7 @@ import { toLatinDigits } from '../../core/utils.js';
 import * as biometric from '../../security/biometric.js';
 import * as db from '../../data/idb.js';
 import { buildRolesPanel } from '../../ui/roles-settings.js';
+import { buildKioskPanel } from '../../ui/kiosk-settings.js';
 
 /* ==========================================================================
    1. الأمان
@@ -129,6 +130,7 @@ const securitySection = {
 
     /* --- أرقام الموظفين والقفل المالي (v3.10.0) --- */
     if (auth.hasPin()) body.appendChild(buildRolesPanel());
+    if (auth.hasPin()) body.appendChild(buildKioskPanel());
 
     /* --- حالة القفل --- */
     if (auth.isLocked()) {

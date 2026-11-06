@@ -111,6 +111,8 @@ try { roleGuard = await import('./ui/role-guard.js'); } catch (e) { showError('F
 try {
   await ensureUnlocked();
   installAutoLock();
+  /* v3.10.1: استعادة وضع الكشك إن كان مفعّلاً قبل إعادة التشغيل */
+  try { if (localStorage.getItem('jalabiya_v3_kiosk_active') === '1') (await import('./ui/kiosk.js')).restoreKiosk(); } catch (e) { console.warn('[Kiosk]', e); }
 } catch (e) {
   console.error('[Lock] تعذّر تشغيل شاشة القفل:', e);
   /* إن كان هناك PIN: لا نفتح البيانات عند الفشل (fail-closed) ولا نترك شاشة بيضاء —

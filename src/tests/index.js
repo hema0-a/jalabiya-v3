@@ -151,5 +151,6 @@ import './modules/v390-debt-plan.test.js';
 import './modules/v391-wellbeing.test.js';
 import './modules/v392-investment.test.js';
 import './modules/v3100-roles.test.js';
+import './modules/v3101-kiosk.test.js';
 
 export { runAll, register } from './registry.js';
