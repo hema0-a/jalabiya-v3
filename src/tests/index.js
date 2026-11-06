@@ -149,5 +149,6 @@ import './modules/v381-input-checks.test.js';
 import './modules/v382-lead-time.test.js';
 import './modules/v390-debt-plan.test.js';
 import './modules/v391-wellbeing.test.js';
+import './modules/v392-investment.test.js';
 
 export { runAll, register } from './registry.js';

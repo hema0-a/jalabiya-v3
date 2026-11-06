@@ -18,6 +18,7 @@ import { expenses as expensesRepo } from '../data/repos/expenses.js';
 import { customers as customersRepo } from '../data/repos/customers.js';
 import { formatEGP } from '../core/utils.js';
 import { buildWhatIfCard } from '../ui/whatif-card.js';
+import { buildInvestmentCard } from '../ui/investment-card.js';
 
 /* --- الحالة --- */
 let state = {
@@ -498,6 +499,7 @@ function renderPage() {
   c.appendChild(renderForecast());
   c.appendChild(renderTips());
   c.appendChild(buildWhatIfCard());
+  c.appendChild(buildInvestmentCard());
 }
 
 /* ==========================================================================

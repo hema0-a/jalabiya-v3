@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.9.1',
+  version: '3.9.2',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -243,6 +243,8 @@ export const DEFAULT_SETTINGS = {
   fabricCalc: { templates: [], wastePercent: 0, roundTo: 0 },
   /* v3.9.1: الرفاهية المالية — نسبة تحدي الشهر وما تجاهلته من اقتراحات الالتزام المستتر */
   wellbeing: { challengePct: 5, dismissedHidden: [] },
+  /* v3.9.2: خطة الاستثمار — جيوب + سحوبات + توزيعات + سجل صافي الثروة */
+  investment: { pockets: [], withdrawals: [], distributions: [], netWorthHistory: [] },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600, enabled: false, applyOrders: true, applyPortfolio: true },
   security: {
     autoLock: true, lockAfterMinutes: 5, sessionDurationHours: 24, logLoginAttempts: true,
