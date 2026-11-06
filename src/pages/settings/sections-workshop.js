@@ -19,6 +19,7 @@ import { isMorningEnabled, setMorningEnabled } from '../../ui/morning-summary.js
 import { el } from '../../core/dom.js';
 import { createToggle, createColorPicker } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
+import { applySilentBudget } from '../../ui/silent-budget.js';
 import {
   THEMES, DEFAULT_SETTINGS, BACKGROUNDS, ICON_STYLES,
 } from '../../core/config.js';
@@ -415,12 +416,14 @@ const displaySection = {
       clientMode: isClientMode(),
       highContrast: !!dp.highContrast,
       compactMode: !!dp.compactMode,
+      silentBudget: !!dp.silentBudget,
     };
     const APPLY = {
       darkMode: (v) => setDarkMode(v),
       clientMode: (v) => setClientMode(v),
       highContrast: (v) => document.body.classList.toggle('high-contrast', v),
       compactMode: (v) => document.body.classList.toggle('compact-mode', v),
+      silentBudget: (v) => { applySilentBudget(v); },
     };
 
     function toggleRow(label, key, hint = '') {
@@ -446,6 +449,7 @@ const displaySection = {
     body.appendChild(toggleRow('الوضع الليلي 🌙', 'darkMode', 'يُطبَّق فوراً'));
     body.appendChild(toggleRow('التباين العالي 🔲', 'highContrast', 'نصوص أغمق وحدود أوضح'));
     body.appendChild(toggleRow('الوضع المضغوط 📏', 'compactMode', 'مسافات أقل لعرض بيانات أكثر'));
+    body.appendChild(toggleRow('الميزانية الصامتة 🎨', 'silentBudget', 'توهّج هادئ أعلى الشاشة: أخضر/أصفر/أحمر حسب سرعة سداد التزاماتك (بلا أرقام)'));
     body.appendChild(toggleRow('وضع العميل 👁️', 'clientMode', 'إخفاء الأرقام والإحصائيات'));
     /* شريط التنقّل السفلي: تفضيل لهذا الجهاز فقط (لا يُزامَن) */
     body.appendChild(el('div', { className: 'settings-row', 'data-setting': 'bottom-nav' }, [

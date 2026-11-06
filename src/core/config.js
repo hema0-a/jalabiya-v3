@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.9.0',
+  version: '3.9.1',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -200,7 +200,7 @@ export const DEFAULT_SETTINGS = {
     backgroundColor: '#F6F1E6', backgroundPattern: 'none', iconStyle: 'default',
   },
   display: {
-    darkMode: false, highContrast: false, compactMode: false, clientMode: false,
+    darkMode: false, highContrast: false, compactMode: false, clientMode: false, silentBudget: false,
     fontSize: 'normal', fontFamily: 'ibm-plex',
     fontWeight: 'normal', lineHeight: 'normal', customFonts: [],
   },
@@ -241,6 +241,8 @@ export const DEFAULT_SETTINGS = {
   cloudSync: { enabled: false, lastSyncAt: null },
   /* v3.7.0: حاسبة استهلاك القماش (قوالب أنواع القطع + هالك + تقريب) */
   fabricCalc: { templates: [], wastePercent: 0, roundTo: 0 },
+  /* v3.9.1: الرفاهية المالية — نسبة تحدي الشهر وما تجاهلته من اقتراحات الالتزام المستتر */
+  wellbeing: { challengePct: 5, dismissedHidden: [] },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600, enabled: false, applyOrders: true, applyPortfolio: true },
   security: {
     autoLock: true, lockAfterMinutes: 5, sessionDurationHours: 24, logLoginAttempts: true,

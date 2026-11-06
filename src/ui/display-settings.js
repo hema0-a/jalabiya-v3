@@ -10,6 +10,7 @@
    ========================================================================== */
 
 import { FONT_FAMILIES, FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../core/config.js';
+import { applySilentBudget } from './silent-budget.js';
 import { isCustomId, entryIdOf, findEntry, cssFamily, ensureCustomFont } from '../services/custom-fonts.js';
 
 const FONT_URLS = {
@@ -93,6 +94,7 @@ export function applyDisplay(dp) {
   applyLineHeight(d.lineHeight);
   document.body.classList.toggle('high-contrast', !!d.highContrast);
   document.body.classList.toggle('compact-mode', !!d.compactMode);
+  applySilentBudget(!!d.silentBudget);   /* v3.9.1: غير متزامن، ولا يعطّل التطبيق إن فشل */
 }
 
 export function applyAllSettings(s) {

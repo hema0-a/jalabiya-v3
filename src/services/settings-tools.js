@@ -78,7 +78,7 @@ export const RESET_MAP = {
   backgrounds: { appearance: ['backgroundPattern'] },
   icons: { appearance: ['iconStyle'] },
   fonts: { display: ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight'] },
-  display: { display: ['darkMode', 'highContrast', 'compactMode', 'clientMode'] },
+  display: { display: ['darkMode', 'highContrast', 'compactMode', 'clientMode', 'silentBudget'] },
   measurements: { measurementFields: null },
   'jalabiya-types': { jalabiyaTypes: null },
   'inventory-limits': { inventory: null },

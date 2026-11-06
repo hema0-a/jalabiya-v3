@@ -19,6 +19,7 @@ import {
 } from '../core/config.js';
 import { formatEGP, formatDate, localDateInput, parseDateInput, normalizeSearch } from '../core/utils.js';
 import { dayDiff } from '../core/day-math.js';
+import { buildChallengeCard, buildHiddenCommitmentsCard } from '../ui/wellbeing-cards.js';
 
 /* --- الحالة --- */
 let state = {
@@ -427,6 +428,10 @@ function renderPage() {
 
   /* إحصائيات */
   c.appendChild(renderStats());
+
+  /* v3.9.1: تحدي الشهر + كشف الالتزام المستتر */
+  c.appendChild(buildChallengeCard());
+  c.appendChild(buildHiddenCommitmentsCard());
 
   /* تنبيه بيانات قليلة */
   const notice = renderLowDataNotice();

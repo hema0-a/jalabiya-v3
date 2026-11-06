@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.9.0 — الحاسبات: استهلاك القماش و«ماذا لو؟»
+   الإصدار: v3.9.1 — الحاسبات: استهلاك القماش و«ماذا لو؟»
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.9.0';
+const CACHE_VERSION = 'v3.9.1';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -286,6 +286,7 @@ const PRECACHE_URLS = [
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
   './src/services/week-visits.js',
+  './src/services/wellbeing.js',
   './src/services/whatif.js',
 
   /* --- src/sync --- */
@@ -348,6 +349,7 @@ const PRECACHE_URLS = [
   './src/ui/secret-dialog.js',
   './src/ui/sidebar.js',
   './src/ui/signature-pad.js',
+  './src/ui/silent-budget.js',
   './src/ui/sub-page.js',
   './src/ui/swipe.js',
   './src/ui/sync-indicator.js',
@@ -357,6 +359,7 @@ const PRECACHE_URLS = [
   './src/ui/topbar.js',
   './src/ui/universal-search.js',
   './src/ui/update-banner.js',
+  './src/ui/wellbeing-cards.js',
   './src/ui/whatif-card.js',
 
   /* --- src/workers --- */
