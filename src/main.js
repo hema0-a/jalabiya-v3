@@ -103,6 +103,10 @@ try {
   throw e;
 }
 
+/* v3.10.0: حارس الأدوار (تحميل مبكر لأنه يسبق أول رسم) */
+let roleGuard;
+try { roleGuard = await import('./ui/role-guard.js'); } catch (e) { showError('Failed to load role guard', e); throw e; }
+
 /* 🔒 شاشة القفل: لا تُرسم أي بيانات قبل إدخال الرقم السري (إن كان مُعيَّناً) */
 try {
   await ensureUnlocked();
@@ -144,6 +148,14 @@ try {
   installBatchMigrationHook();   /* وبعد كل مزامنة/استعادة/استيراد */
 } catch (e) {
   console.warn('[RecordSchema] تعذّر تشغيل الترحيل:', e);
+}
+
+/* v3.10.0: القائمة = ما أخفاه المستخدم + ما يمنعه الدور */
+let userHiddenNav = [];
+function applySidebarHidden() {
+  const ids = new Set(sanitizeHidden(userHiddenNav));
+  roleGuard.roleHiddenPages(ALL_ITEMS.map((i) => i.id)).forEach((id) => ids.add(id));
+  layout.sidebar.setHidden([...ids]);
 }
 
 async function loadPageModule(pageId) {
@@ -379,7 +391,8 @@ try {
   const savedSettings = await settingsRepo.get();
   applyAllSettings(savedSettings);
   /* v3.5.29: صفحات القائمة الجانبية المخفية بتفضيل المستخدم */
-  layout.sidebar.setHidden(sanitizeHidden((savedSettings.navigation || {}).hidden));
+  userHiddenNav = (savedSettings.navigation || {}).hidden;
+  applySidebarHidden();
 } catch (err) {
   console.warn('[Display] فشل تطبيق إعدادات المظهر:', err);
 }
@@ -448,7 +461,14 @@ try { applyClientMode(); } catch (e) { console.warn('[ClientMode]', e); }
 
 /* v3.5.29: يحدّث قسم «صفحات القائمة» في الإعدادات القائمة الجانبية فوراً */
 events.on('nav:hidden', (ids) => {
-  try { layout.sidebar.setHidden(sanitizeHidden(ids)); } catch (e) { console.warn('[Nav] تعذّر تطبيق إخفاء الصفحات:', e); }
+  userHiddenNav = ids;
+  try { applySidebarHidden(); } catch (e) { console.warn('[Nav] تعذّر تطبيق إخفاء الصفحات:', e); }
+});
+
+/* v3.10.0: تغيّر الدور (فتح بقفل آخر) ⟵ حدّث القائمة وأعد فحص الصفحة الحالية */
+events.on('role:changed', () => {
+  try { applySidebarHidden(); } catch (e) { console.warn('[Nav] تعذّر تطبيق قيود الدور:', e); }
+  renderPage(getHashPage());
 });
 
 events.on('topbar:setBack', (handler) => {
@@ -493,6 +513,12 @@ let _renderToken = 0;
 async function renderPage(fullRoute) {
   const token = ++_renderToken;   /* يمنع أن تكتب صفحة قديمة فوق صفحة أحدث */
   const id = getBaseRoute(fullRoute);
+  /* v3.10.0: حارس الدور والقفل المالي قبل أي رسم */
+  try {
+    const gate = await roleGuard.guardRoute(id);
+    if (token !== _renderToken) return;
+    if (!gate.allow) { location.replace('#/' + gate.redirect); return; }
+  } catch (e) { console.error('[RoleGuard]', e); }
   if (id === 'data-care') {
     /* v3.5.27: «صيانة البيانات» صارت قسماً في الإعدادات؛ الروابط القديمة (مفضلة/إشارات مرجعية) تُعاد توجيهها */
     location.replace('#/settings/data-care');

@@ -8,6 +8,9 @@
 
 import { STORAGE_KEYS } from '../core/config.js';
 
+/* v3.10.0: مفاتيح أرقام الموظفين والقفل المالي والدور — تُمسح مع رقم المالك (لا قفل بلا مالك) */
+const ROLE_KEYS = ['V3_ROLE', 'V3_MGR_HASH', 'V3_MGR_SALT', 'V3_RECV_HASH', 'V3_RECV_SALT', 'V3_FIN_HASH', 'V3_FIN_SALT', 'V3_FIN_UNTIL', 'V3_FIN_FAILS', 'V3_FIN_LOCK_UNTIL'];
+
 /* --- عدد بايتات الملح --- */
 const SALT_BYTES = 16;
 
@@ -134,6 +137,7 @@ export async function setPin(pin) {
 export function clearPin() {
   localStorage.removeItem(STORAGE_KEYS.V3_PIN_HASH);
   localStorage.removeItem(STORAGE_KEYS.V3_PIN_SALT);
+  ROLE_KEYS.forEach((k) => localStorage.removeItem(STORAGE_KEYS[k]));
 }
 
 /* --- تصدير داخلي للاختبار --- */

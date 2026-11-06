@@ -25,6 +25,7 @@ import { clearSyncIdentity } from '../sync/sync-identity.js';
 import { recoverPinWithCloud } from '../security/pin-recovery.js';
 import { activity } from '../data/repos/activity.js';
 import { toast } from './toast.js';
+import { matchStaffPin, setRole } from '../security/role-pins.js';
 
 const PIN_LENGTH = 4;
 const IDLE_CHECK_MS = 15 * 1000;
@@ -309,7 +310,8 @@ export function showLock() {
     setAppHidden(true);
 
     await new Promise((resolve) => {
-      const finish = () => {
+      const finish = (role) => {
+        setRole(role || 'owner');      /* v3.10.0: الدور قبل رفع القفل كي تُبنى الواجهة به */
         const hours = Number(cfg.security && cfg.security.sessionDurationHours)
           || DEFAULT_SETTINGS.security.sessionDurationHours;
         auth.setSession(hours);
@@ -321,9 +323,17 @@ export function showLock() {
         resolve();
       };
       const ui = buildOverlay(cfg, async (pin) => {
+        /* v3.10.0: رقم مدير/استقبال؟ (لا يُجرَّب أثناء قفل المحاولات؛ الفشل يمرّ على مسار المالك فيُحتسب) */
+        const staff = auth.isLocked() ? null : await matchStaffPin(pin);
+        if (staff) {
+          auth._resetAttempts();
+          auth.setSession(Number(cfg.security && cfg.security.sessionDurationHours) || undefined);
+          finish(staff);
+          return { success: true, role: staff };
+        }
         const res = await auth.unlock(pin);
         if (res.success) {
-          finish();
+          finish('owner');
         } else if (res.reason === 'wrong-pin') {
           logAttempt(false, cfg);
         } else if (res.reason === 'no-pin') {

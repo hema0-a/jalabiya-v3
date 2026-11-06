@@ -18,6 +18,7 @@ import { auth } from '../../security/auth.js';
 import { toLatinDigits } from '../../core/utils.js';
 import * as biometric from '../../security/biometric.js';
 import * as db from '../../data/idb.js';
+import { buildRolesPanel } from '../../ui/roles-settings.js';
 
 /* ==========================================================================
    1. الأمان
@@ -125,6 +126,9 @@ const securitySection = {
       el('div', { className: 'settings-row__label' }, 'تسجيل محاولات الدخول'),
       logToggle,
     ]));
+
+    /* --- أرقام الموظفين والقفل المالي (v3.10.0) --- */
+    if (auth.hasPin()) body.appendChild(buildRolesPanel());
 
     /* --- حالة القفل --- */
     if (auth.isLocked()) {

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.9.2 — الحاسبات: استهلاك القماش و«ماذا لو؟»
+   الإصدار: v3.10.0 — الصلاحيات: أدوار الموظفين والقفل المالي
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.9.2';
+const CACHE_VERSION = 'v3.10.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -194,6 +194,7 @@ const PRECACHE_URLS = [
   './src/security/data-crypto.js',
   './src/security/pin-crypto.js',
   './src/security/pin-recovery.js',
+  './src/security/role-pins.js',
 
   /* --- src/services --- */
   './src/services/alert-rules.js',
@@ -277,6 +278,7 @@ const PRECACHE_URLS = [
   './src/services/quotes.js',
   './src/services/receivables.js',
   './src/services/referral-rewards.js',
+  './src/services/roles.js',
   './src/services/season-compare.js',
   './src/services/settings-tools.js',
   './src/services/signature-pref.js',
@@ -348,6 +350,8 @@ const PRECACHE_URLS = [
   './src/ui/quick-preview-order.js',
   './src/ui/quick-preview.js',
   './src/ui/report-issue.js',
+  './src/ui/role-guard.js',
+  './src/ui/roles-settings.js',
   './src/ui/secret-dialog.js',
   './src/ui/sidebar.js',
   './src/ui/signature-pad.js',
