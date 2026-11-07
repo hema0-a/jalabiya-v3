@@ -38,8 +38,8 @@ register('v3.5.0 nav-groups — التجميع والمفضلة', async (t) => {
     NAV_GROUPS.every((g) => g.title && g.icon && g.items.length > 0));
 
   await t.test('2. الصفحات الأصلية كلها موجودة مرة واحدة بلا زيادة (ما عدا cloud-sync وdata-care المُزالتين عمداً من القائمة: v3.5.22 وv3.5.27)',
-    ALL_NAV_ITEMS.length === 28 &&
-    NAV_IDS.size === 28 &&
+    ALL_NAV_ITEMS.length === 29 &&   /* +الموردون (v3.12.0) */
+    NAV_IDS.size === 29 &&
     !NAV_IDS.has('cloud-sync') && !NAV_IDS.has('data-care') &&
     ORIGINAL_IDS.every((id) => NAV_IDS.has(id)));
 
@@ -47,8 +47,8 @@ register('v3.5.0 nav-groups — التجميع والمفضلة', async (t) => {
     ALL_NAV_ITEMS.every((i) => i.id && i.icon && i.label) &&
     new Set(ALL_NAV_ITEMS.map((i) => i.icon)).size === ALL_NAV_ITEMS.length);
 
-  await t.test('4. لا مجموعة أكبر من 6 صفحات (القصد: قصر القوائم)',
-    NAV_GROUPS.every((g) => g.items.length <= 6));
+  await t.test('4. لا مجموعة أكبر من 7 صفحات (القصد: قصر القوائم؛ كانت 6 حتى v3.12.0 ثم أُضيف الموردون لمجموعة الورشة)',
+    NAV_GROUPS.every((g) => g.items.length <= 7));
 
   await t.test('5. groupIdOf: صفحة معروفة ← مجموعتها، ومجهولة ← null',
     groupIdOf('payments') === 'money' && groupIdOf('settings') === 'system' && groupIdOf('dashboard') === 'daily' &&

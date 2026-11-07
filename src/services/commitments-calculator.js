@@ -13,6 +13,7 @@ import { commitmentPayments } from '../data/repos/commitment-payments.js';
 import { savingsGoals } from '../data/repos/savings-goals.js';
 import { COMMITMENT_FREQUENCIES, COMMITMENT_CATEGORIES } from '../core/config.js';
 import { getWriteVersion } from '../data/idb.js';
+import { filterForHardMonth } from './daily-need.js';
 
 /* ==========================================================================
    1. Cache
@@ -301,10 +302,18 @@ export function getHealthScore(stats) {
  * @param {Array} commitmentsList
  * @returns {Array<{type:string, icon:string, text:string}>}
  */
-export function getSmartAlerts(stats, commitmentsList) {
+export function getSmartAlerts(stats, commitmentsList, opts = {}) {
   const alerts = [];
   const today = new Date();
   const todayDay = today.getDate();
+
+  /* v3.11.0: «وضع الشهر الصعب» — الالتزامات الضرورية فقط في التنبيهات (بلا خيار ⟵ السلوك السابق تماماً) */
+  const hard = !!(opts && opts.hardMonth);
+  if (hard) {
+    commitmentsList = filterForHardMonth(commitmentsList, true);
+    const od = commitmentsList.filter((c) => c.active !== false && c.dueDay && c.dueDay < todayDay && Number(c.remaining) > 0).length;
+    stats = { ...stats, overdueCount: od };
+  }
 
   /* متأخرات */
   if (stats.overdueCount > 0) {
@@ -347,7 +356,7 @@ export function getSmartAlerts(stats, commitmentsList) {
 
   /* إيجابي: أداء جيد */
   const total = stats.commitmentsCount;
-  if (total > 0 && stats.paidCount === total && stats.overdueCount === 0) {
+  if (!hard && total > 0 && stats.paidCount === total && stats.overdueCount === 0) {
     alerts.push({
       type: 'success',
       icon: '🟢',

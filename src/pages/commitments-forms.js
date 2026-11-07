@@ -15,6 +15,7 @@ import { invalidateCache } from '../services/commitments-calculator.js';
 import { COMMITMENT_CATEGORIES, COMMITMENT_FREQUENCIES } from '../core/config.js';
 import { formatEGP, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 import { endMonthFromRemaining, remainingMonths, MAX_REMAINING } from '../services/debt-plan.js';
+import { PRIORITIES, normalizePriority } from '../services/daily-need.js';
 
 /* ==========================================================================
    1. نموذج الالتزام
@@ -33,6 +34,13 @@ export function openCommitmentForm(ctx, existing = null) {
     const o = el('option', { value: c.id }, c.icon + ' ' + c.label);
     if (isEdit && existing.category === c.id) o.selected = true;
     catSelect.appendChild(o);
+  });
+
+  const prioSelect = el('select', { className: 'select', 'data-role': 'priority-select' });
+  PRIORITIES.forEach((p) => {
+    const o = el('option', { value: p.id }, p.icon + ' ' + p.label);
+    if (normalizePriority(isEdit ? existing.priority : null) === p.id) o.selected = true;
+    prioSelect.appendChild(o);
   });
 
   const amountInput = el('input', {
@@ -75,6 +83,7 @@ export function openCommitmentForm(ctx, existing = null) {
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'اسم الالتزام *'), nameInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التصنيف *'), catSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ *'), amountInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الأهمية'), prioSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الدورية'), freqSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'يوم الاستحقاق'), dueInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '⏳ الأقساط المتبقية (شاملة هذا الشهر)'), remainingInput]),
@@ -99,6 +108,7 @@ export function openCommitmentForm(ctx, existing = null) {
             name,
             category: catSelect.value,
             amount,
+            priority: normalizePriority(prioSelect.value),
             frequency: freqSelect.value,
             dueDay: dueVal ? Math.max(1, Math.min(31, Number(dueVal))) : null,
             endMonth: endMonthFromRemaining(remainingInput.value) || null,

@@ -6,6 +6,7 @@
 
 import { el } from '../core/dom.js';
 import { COMMITMENT_CAT_MAP, COMMITMENT_FREQ_MAP } from '../services/commitments-calculator.js';
+import { priorityMeta } from '../services/daily-need.js';
 import { formatEGP } from '../core/utils.js';
 import { openPaymentForm, openGoalDeposit } from './commitments-forms.js';
 import {
@@ -20,6 +21,7 @@ import {
 export function buildCommitmentCard(ctx, item) {
   const cat = COMMITMENT_CAT_MAP[item.category] || COMMITMENT_CAT_MAP.other;
   const freq = COMMITMENT_FREQ_MAP[item.frequency] || COMMITMENT_FREQ_MAP.monthly;
+  const prio = priorityMeta(item.priority);   /* v3.11.0: 🔴 ضروري · ⚖️ ممكن يتأجل (المهم بلا شارة) */
   const paid = item.paidThisMonth >= item.monthlyEquivalent && item.monthlyEquivalent > 0;
   const isOverdue = !paid && item.dueDay && item.dueDay < new Date().getDate();
 
@@ -34,7 +36,7 @@ export function buildCommitmentCard(ctx, item) {
     style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' },
   }, [
     el('div', { style: { flex: '1' } }, [
-      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, cat.icon + ' ' + item.name),
+      el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '15px' } }, cat.icon + ' ' + item.name + (prio.id !== 'important' ? ' ' + prio.icon : '')),
       el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
         freq.icon + ' ' + freq.label + (item.dueDay ? ' · 📅 يوم ' + item.dueDay : '')),
     ]),

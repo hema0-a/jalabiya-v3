@@ -46,7 +46,7 @@ export const SYNC_STORES = [
   'workers', 'expenses', 'appointments', 'activity',
   'portfolio', 'commitments', 'commitmentPayments', 'savingsGoals',
   'houseExpenses', 'personalLoans', 'loanPayments', 'referrals', 'workerPayments',
-  'quotes', 'ledger', 'orderMedia',
+  'quotes', 'ledger', 'orderMedia', 'suppliers', 'supplierEntries',
 ];
 
 /* مخزن وهمي في المانيفست يحمل شواهد الحذف (v3.3.24) */

@@ -13,6 +13,7 @@ import { formatEGP, normalizeSearch } from '../core/utils.js';
 import { filterCommitments, filterGoals } from './commitments-logic.js';
 import { buildCommitmentCard, buildGoalCard } from './commitments-cards.js';
 import { buildDebtPlanCard } from '../ui/debt-plan-card.js';
+import { buildDailyNeedCards } from '../ui/daily-need-cards.js';
 
 /* ==========================================================================
    1. التبويبات
@@ -132,7 +133,7 @@ export function renderHealth(ctx) {
 
 export function renderAlerts(ctx) {
   const state = ctx.state;
-  const alerts = getSmartAlerts(state.stats, state.withPayments);
+  const alerts = getSmartAlerts(state.stats, state.withPayments, { hardMonth: !!state.hardMonth });
   if (alerts.length === 0) return null;
 
   const colors = {
@@ -289,6 +290,7 @@ export function renderPage(ctx) {
   if (state.activeTab === 'commitments') {
     c.appendChild(renderStats(ctx));
     c.appendChild(renderHealth(ctx));
+    c.appendChild(buildDailyNeedCards());   /* v3.11.0: الاحتياج اليومي + خط الأمان الشهري */
     c.appendChild(buildDebtPlanCard());   /* v3.9.0: عدّاد التحرر + استراتيجية السداد */
     const alerts = renderAlerts(ctx);
     if (alerts) c.appendChild(alerts);

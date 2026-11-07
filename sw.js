@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.10.1 — الصلاحيات: وضع الكشك
+   الإصدار: v3.12.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.10.1';
+const CACHE_VERSION = 'v3.12.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -79,6 +79,7 @@ const PRECACHE_URLS = [
   './src/data/repos/referrals.js',
   './src/data/repos/savings-goals.js',
   './src/data/repos/settings.js',
+  './src/data/repos/suppliers.js',
   './src/data/repos/trash.js',
   './src/data/repos/worker-payments.js',
   './src/data/repos/workers.js',
@@ -144,6 +145,8 @@ const PRECACHE_URLS = [
   './src/pages/referrals.js',
   './src/pages/reports.js',
   './src/pages/season-compare.js',
+  './src/pages/suppliers-forms.js',
+  './src/pages/suppliers.js',
   './src/pages/tests.js',
   './src/pages/trash.js',
   './src/pages/wall.js',
@@ -212,6 +215,8 @@ const PRECACHE_URLS = [
   './src/services/customer-merge-exec.js',
   './src/services/customer-merge.js',
   './src/services/daily-insights.js',
+  './src/services/daily-need.js',
+  './src/services/daily-tip.js',
   './src/services/dashboard-layout.js',
   './src/services/data-integrity.js',
   './src/services/debt-plan.js',
@@ -286,6 +291,7 @@ const PRECACHE_URLS = [
   './src/services/size-clusters.js',
   './src/services/status-notify.js',
   './src/services/storage-health.js',
+  './src/services/suppliers.js',
   './src/services/system-status.js',
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
@@ -319,6 +325,8 @@ const PRECACHE_URLS = [
   './src/ui/controls.js',
   './src/ui/customer-menu.js',
   './src/ui/customer-picker.js',
+  './src/ui/daily-need-cards.js',
+  './src/ui/daily-tip-card.js',
   './src/ui/dashboard-charts.js',
   './src/ui/debt-plan-card.js',
   './src/ui/delivery-receipt-dialog.js',

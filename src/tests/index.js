@@ -152,5 +152,8 @@ import './modules/v391-wellbeing.test.js';
 import './modules/v392-investment.test.js';
 import './modules/v3100-roles.test.js';
 import './modules/v3101-kiosk.test.js';
+import './modules/v3110-daily-need.test.js';
+import './modules/v3111-daily-tip.test.js';
+import './modules/v3120-suppliers.test.js';
 
 export { runAll, register } from './registry.js';

@@ -1,6 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
+   v13: إضافة مخزني suppliers وsupplierEntries (الموردون والمشتريات — v3.12.0، يُنشآن تلقائياً بالترقية).
    v11: إضافة مخزن ledger (الدفتر المالي — v3.3.79، يُنشأ تلقائياً بالترقية).
    v10: إضافة مخزن quotes (عروض الأسعار).
    v9: إضافة مخزن backups (النسخ الاحتياطية التلقائية).
@@ -184,6 +185,22 @@ export const SCHEMA = {
     keyPath: 'id', autoIncrement: false,
     indexes: [
       idx('by_orderId', 'orderId'),
+    ],
+  },
+  /* --- جديد v13: الموردون ودفتر مشترياتهم ودفعاتهم --- */
+  [STORES.SUPPLIERS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_name', 'name'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  [STORES.SUPPLIER_ENTRIES]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_supplierId', 'supplierId'),
+      idx('by_date', 'date'),
+      idx('by_createdAt', 'createdAt'),
     ],
   },
 };

@@ -37,6 +37,7 @@ export const NAV_GROUPS = [
     { id: 'workers',            icon: '👷', label: 'العمال' },
     { id: 'pricing-calculator', icon: '🧮', label: 'حاسبة التسعير' },
     { id: 'quotes',             icon: '📝', label: 'عروض الأسعار' },
+    { id: 'suppliers',          icon: '🚚', label: 'الموردون' },
   ]},
   { id: 'growth', title: 'التسويق والمواسم', icon: '📢', items: [
     { id: 'portfolio',      icon: '📸', label: 'معرض الأعمال' },

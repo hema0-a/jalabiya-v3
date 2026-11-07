@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.10.1',
+  version: '3.12.0',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 12,   /* v11: مخزن ledger (الدفتر المالي) · v12: مخزن orderMedia (صور/توقيعات الطلبات منفصلة عن سجل الطلب) */
+  version: 13,   /* v11: مخزن ledger (الدفتر المالي) · v12: مخزن orderMedia (صور/توقيعات الطلبات منفصلة عن سجل الطلب) · v13: مخزنا suppliers وsupplierEntries (الموردون والمشتريات) */
 };
 
 /* --- 4. Stores --- */
@@ -53,6 +53,8 @@ export const STORES = {
   QUOTES:              'quotes',
   LEDGER:              'ledger',
   ORDER_MEDIA:         'orderMedia',
+  SUPPLIERS:           'suppliers',
+  SUPPLIER_ENTRIES:    'supplierEntries',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */
@@ -245,6 +247,10 @@ export const DEFAULT_SETTINGS = {
   fabricCalc: { templates: [], wastePercent: 0, roundTo: 0 },
   /* v3.9.1: الرفاهية المالية — نسبة تحدي الشهر وما تجاهلته من اقتراحات الالتزام المستتر */
   wellbeing: { challengePct: 5, dismissedHidden: [] },
+  /* v3.11.0: التحكم الشخصي — وضع الشهر الصعب (يُبقي تنبيهات الالتزامات «الضرورية» فقط) */
+  personalControls: { hardMonth: false },
+  /* v3.11.1: نصائحك المالية المحفوظة ⭐ (تتزامن بين الأجهزة) */
+  dailyTips: { saved: [] },
   /* v3.9.2: خطة الاستثمار — جيوب + سحوبات + توزيعات + سجل صافي الثروة */
   investment: { pockets: [], withdrawals: [], distributions: [], netWorthHistory: [] },
   imageCompression: { quality: 0.85, maxSizeKB: 500, maxDimensionPx: 1600, enabled: false, applyOrders: true, applyPortfolio: true },

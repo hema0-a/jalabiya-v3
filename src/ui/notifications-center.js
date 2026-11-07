@@ -25,6 +25,7 @@ import { alertToggles, filterLowStockForAlerts, splitOutOfStock, notificationOpt
 import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
+import { filterForHardMonth, normalizePersonalControls } from '../services/daily-need.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -197,7 +198,8 @@ export async function getNotifications() {
     const activeCommitments = await commitments.listActive().catch(() => []);
     const today = new Date();
     const todayDay = today.getDate();
-    const soonCommitments = activeCommitments.filter((c) => {
+    const hardMonth = normalizePersonalControls(s.personalControls).hardMonth;   /* v3.11.0 */
+    const soonCommitments = filterForHardMonth(activeCommitments, hardMonth).filter((c) => {
       if (!c.dueDay) return false;
       const diff = c.dueDay - todayDay;
       return diff >= 0 && diff <= no.commitmentsDays;
