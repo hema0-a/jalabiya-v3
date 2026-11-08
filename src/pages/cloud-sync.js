@@ -9,6 +9,7 @@
    - يعتمد على: sync/firebase-config.js + sync/auth-sync.js + sync/sync-flow.js
    ========================================================================== */
 
+import { attachPasswordMeter } from '../ui/insight-cards.js';
 import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -270,7 +271,7 @@ function buildSignUpCard() {
   const btn = el('button', { className: 'btn btn--primary btn--block', type: 'button', 'data-action': 'signup' }, '✅ إنشاء الحساب');
   btn.addEventListener('click', () => doSignUp(emailInput.value.trim(), passInput.value, confirmInput.value));
 
-  card.append(emailInput, passInput, confirmInput, btn);
+  card.append(emailInput, passInput, attachPasswordMeter(passInput), confirmInput, btn);   /* v3.13.0: مقياس قوة كلمة المرور (إرشاد لا منع) */
   card.appendChild(el('div', {
     style: { fontSize: '11px', color: '#999', marginTop: '10px', textAlign: 'center', lineHeight: '1.6' },
   }, 'الحساب جديد وفارغ، وبياناتك فيه معزولة عن أي حساب آخر.'));

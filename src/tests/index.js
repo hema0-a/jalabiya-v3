@@ -155,5 +155,6 @@ import './modules/v3101-kiosk.test.js';
 import './modules/v3110-daily-need.test.js';
 import './modules/v3111-daily-tip.test.js';
 import './modules/v3120-suppliers.test.js';
+import './modules/v3130-insights.test.js';
 
 export { runAll, register } from './registry.js';

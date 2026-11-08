@@ -10,6 +10,7 @@ import { formatEGP, formatDate } from '../../core/utils.js';
 import { previewOrder } from '../../ui/quick-preview.js';
 import { attachSwipe } from '../../ui/swipe.js';
 import { hasReferenceImage, hasOrderSignature } from '../../services/order-media.js';
+import { isHighValue } from '../../services/insights.js';
 import { deliveryProgress, canPartialDeliver, deliveryBadgeText } from '../../services/partial-delivery.js';
 import { getDeadlineInfo, getPickupInfo, formatDuration, getTotalWorkTime, getActiveSession } from '../../services/order-timing.js';
 import { orderProfit } from '../../services/order-profit.js';
@@ -118,6 +119,9 @@ export function buildOrderCard(ctx, o) {
   const metaChildren = [];
   if (o.dueDate) metaChildren.push(el('span', {}, '📅 ' + formatDate(o.dueDate)));
   if (o.amount) metaChildren.push(el('span', {}, '💰 ' + formatEGP(o.amount)));
+  if (o.status !== 'cancelled' && ctx.state && isHighValue(o, ctx.state.hvThreshold)) {
+    metaChildren.push(el('span', { 'data-role': 'high-value', style: { fontWeight: '700', color: '#6A1B9A' } }, '💎 طلب كبير'));
+  }
   { const pr = orderProfit(o);
     if (pr.hasCost) metaChildren.push(el('span', { style: { color: pr.profit < 0 ? '#C62828' : '#2E7D32' } },
       '📈 ربح ' + formatEGP(pr.profit))); }

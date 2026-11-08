@@ -45,8 +45,9 @@ export function openSupplierForm(ctx, existing = null) {
   });
 }
 
-export function openEntryForm(ctx, supplier, kind) {
-  const isPurchase = kind !== 'payment';
+export function openEntryForm(ctx, supplier, kind, existing = null) {
+  const isEdit = existing !== null;
+  const isPurchase = (isEdit ? existing.kind : kind) !== 'payment';
   const meta = KINDS.find((k) => k.id === (isPurchase ? 'purchase' : 'payment'));
   const amountInput = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', inputmode: 'decimal', placeholder: '0', 'data-role': 'entry-amount' });
   const dateInput = el('input', { className: 'input', type: 'date', value: localDateInput() });
@@ -56,12 +57,20 @@ export function openEntryForm(ctx, supplier, kind) {
   const ppm = isPurchase ? el('div', { 'data-role': 'entry-ppm', style: { fontSize: '12.5px', color: '#666', marginTop: '4px' } }, '') : null;
   const expenseCb = isPurchase ? el('input', { type: 'checkbox', 'data-role': 'entry-as-expense' }) : null;
 
+  if (isEdit) {
+    amountInput.value = String(existing.amount || '');
+    dateInput.value = localDateInput(existing.date || Date.now());
+    notesInput.value = existing.notes || '';
+    if (itemInput) itemInput.value = existing.item || '';
+    if (metersInput) metersInput.value = Number(existing.meters) > 0 ? String(existing.meters) : '';
+  }
+
   const updatePpm = () => {
     if (!ppm) return;
     const a = Number(amountInput.value), m = Number(metersInput.value);
     ppm.textContent = a > 0 && m > 0 ? 'سعر المتر: ' + formatEGP(Math.round((a / m) * 100) / 100) : '';
   };
-  if (isPurchase) { amountInput.addEventListener('input', updatePpm); metersInput.addEventListener('input', updatePpm); }
+  if (isPurchase) { amountInput.addEventListener('input', updatePpm); metersInput.addEventListener('input', updatePpm); updatePpm(); }
 
   const parts = [];
   if (isPurchase) { parts.push(field('الصنف', itemInput)); parts.push(field('الأمتار', metersInput)); }
@@ -69,12 +78,12 @@ export function openEntryForm(ctx, supplier, kind) {
   if (isPurchase) parts.push(ppm);
   parts.push(field('التاريخ *', dateInput));
   parts.push(field('ملاحظات', notesInput));
-  if (isPurchase) {
+  if (isPurchase && !(isEdit && existing.expenseId)) {
     parts.push(el('label', { style: { display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px', marginTop: '6px' } }, [expenseCb, 'سجّلها أيضاً كمصروف «قماش» في المصروفات']));
   }
 
   const handle = modal.open({
-    title: meta.icon + ' ' + meta.label + ' — ' + supplier.name,
+    title: (isEdit ? 'تعديل ' : '') + meta.icon + ' ' + meta.label + ' — ' + supplier.name,
     body: el('div', {}, parts),
     actions: [
       { text: 'إلغاء', variant: 'ghost', action: 'cancel', onClick: () => handle.close() },
@@ -89,8 +98,15 @@ export function openEntryForm(ctx, supplier, kind) {
           if (!r.ok) return toast.warning(r.error);
           const date = parseDateInput(dateInput.value);
           try {
-            const entry = await supplierEntries.create({ ...r.data, supplierId: supplier.id, date });
-            if (isPurchase && expenseCb.checked) {
+            if (isEdit) {
+              await supplierEntries.update(existing.id, { ...r.data, date });
+              if (existing.expenseId) {   /* المصروف المرتبط يتبع تعديل الحركة */
+                await expenses.update(existing.expenseId, { amount: r.data.amount, date, notes: 'مشتريات — ' + supplier.name + (r.data.item ? ' · ' + r.data.item : '') })
+                  .catch(() => toast.warning('تعدّلت الحركة لكن تعذّر تحديث مصروفها المرتبط'));
+              }
+            }
+            const entry = isEdit ? existing : await supplierEntries.create({ ...r.data, supplierId: supplier.id, date });
+            if (isPurchase && expenseCb && expenseCb.checked) {
               try {
                 const ex = await expenses.create({
                   category: 'fabric', amount: r.data.amount, date,

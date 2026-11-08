@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.12.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.13.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.12.0';
+const CACHE_VERSION = 'v3.13.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -234,6 +234,7 @@ const PRECACHE_URLS = [
   './src/services/image-options.js',
   './src/services/image-worker-client.js',
   './src/services/input-checks.js',
+  './src/services/insights.js',
   './src/services/investment.js',
   './src/services/invoice-image-order.js',
   './src/services/invoice-image-output.js',
@@ -336,6 +337,7 @@ const PRECACHE_URLS = [
   './src/ui/fabric-calc-dialog.js',
   './src/ui/form-builder.js',
   './src/ui/input-hints.js',
+  './src/ui/insight-cards.js',
   './src/ui/investment-card.js',
   './src/ui/kiosk-settings.js',
   './src/ui/kiosk.js',

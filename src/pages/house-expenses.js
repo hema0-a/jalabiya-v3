@@ -20,6 +20,8 @@ import {
 import { formatEGP, formatDate, localDateInput, parseDateInput, normalizeSearch } from '../core/utils.js';
 import { dayDiff } from '../core/day-math.js';
 import { buildChallengeCard, buildHiddenCommitmentsCard } from '../ui/wellbeing-cards.js';
+import { compareCategories } from '../services/insights.js';
+import { buildCompareCard } from '../ui/insight-cards.js';
 
 /* --- الحالة --- */
 let state = {
@@ -30,6 +32,7 @@ let state = {
   stats: null,
   categoryStats: [],
   monthComparison: null,
+  compare: null,
 };
 
 const CAT_MAP = {};
@@ -66,6 +69,8 @@ function safeDiv(a, b, fallback = 0) {
 function getDaysInPeriod(period, filtered) {
   const now = new Date();
   if (period === 'month') return now.getDate();
+  if (period === 'last30') return 30;
+  if (period === 'last90') return 90;
   if (period === 'year') {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     return dayDiff(startOfYear, now) + 1; /* بالتقويم لا بالساعات (التوقيت الصيفي) */
@@ -123,6 +128,7 @@ async function loadData() {
   state.stats = stats;
   state.categoryStats = categoryStats;
   state.monthComparison = getMonthlyComparison(allList);
+  state.compare = compareCategories(allList, new Date(), HOUSE_EXPENSE_CATEGORIES);   /* v3.13.0 */
 }
 
 /* ==========================================================================
@@ -137,6 +143,8 @@ function renderPeriodFilter() {
   });
   const items = [
     { id: 'month', label: '📅 هذا الشهر' },
+    { id: 'last30', label: '🕒 آخر 30 يوم' },
+    { id: 'last90', label: '🕒 آخر 3 شهور' },
     { id: 'year',  label: '🗓️ هذا العام' },
     { id: 'all',   label: '📊 الكل' },
   ];
@@ -441,6 +449,10 @@ function renderPage() {
   const bars = buildCategoryBars(state.categoryStats);
   bars.classList.add('no-print');
   c.appendChild(bars);
+  if (state.period === 'month') {   /* v3.13.0: كل فئة مقابل الشهر الماضي */
+    const cmp = buildCompareCard(state.compare);
+    if (cmp) { cmp.classList.add('no-print'); c.appendChild(cmp); }
+  }
 
   /* البحث */
   const searchInput = el('input', {
@@ -525,6 +537,7 @@ export const houseExpensesPage = {
       stats: null,
       categoryStats: [],
       monthComparison: null,
+      compare: null,
     };
   },
 };

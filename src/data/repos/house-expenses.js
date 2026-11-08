@@ -24,7 +24,7 @@ HOUSE_EXPENSE_CATEGORIES.forEach((c) => { CAT_MAP[c.id] = c; });
 
 /**
  * حساب نطاق الفترة.
- * @param {'month'|'year'|'all'} period
+ * @param {'month'|'year'|'last30'|'last90'|'all'} period
  * @returns {{fromMs:number, toMs:number}}
  */
 export function getPeriodRange(period) {
@@ -42,6 +42,11 @@ export function getPeriodRange(period) {
       fromMs: new Date(y, 0, 1).getTime(),
       toMs: new Date(y + 1, 0, 1).getTime(),
     };
+  }
+  /* v3.13.0: آخر 30 يوماً / آخر 3 شهور (90 يوماً) بما فيها اليوم */
+  if (period === 'last30' || period === 'last90') {
+    const days = period === 'last30' ? 30 : 90;
+    return { fromMs: new Date(y, m, now.getDate() - (days - 1)).getTime(), toMs: new Date(y, m, now.getDate() + 1).getTime() };
   }
   return { fromMs: 0, toMs: Date.now() + 86400000 };
 }

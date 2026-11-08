@@ -17,6 +17,8 @@
    الوحدات تستلم ctx = { state, refresh, renderList } ولا تستورد هذا الملف.
    ========================================================================== */
 
+import { referrerInsights } from '../services/insights.js';
+import { buildReferrersCard } from '../ui/insight-cards.js';
 import { el, clear } from '../core/dom.js';
 import { toast } from '../ui/toast.js';
 import { referrals } from '../data/repos/referrals.js';
@@ -60,11 +62,21 @@ async function loadData() {
   state.rewards = new Map(computeReferralRewards(items, custs, ords).map((x) => [x.referral.id, x]));
 }
 
+/* v3.13.0: أفضل المُرشِّحين + من يستحق مكافأة (يعيد البناء عند كل تحديث) */
+function renderInsights() {
+  const wrap = state.container?.querySelector('#ref-insights');
+  if (!wrap) return;
+  clear(wrap);
+  const card = buildReferrersCard(referrerInsights(state.items));
+  if (card) wrap.appendChild(card);
+}
+
 async function refreshAll() {
   try {
     await loadData();
     renderStats(ctx);
     renderPercentCard(ctx);
+    renderInsights();
     renderFilters(ctx);
     renderList(ctx);
   } catch (e) {
@@ -110,6 +122,7 @@ export const referralsPage = {
 
     /* نسبة المكافأة الافتراضية */
     container.appendChild(el('div', { id: 'ref-percent' }));
+    container.appendChild(el('div', { id: 'ref-insights' }));   /* v3.13.0: أفضل المُرشِّحين */
 
     /* بحث */
     const searchInput = el('input', {

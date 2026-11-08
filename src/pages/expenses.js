@@ -5,6 +5,8 @@
    - Autosave: حفظ تلقائي لمسودة النموذج (24 ساعة)
    ========================================================================== */
 
+import { breakdownByCategory } from '../services/insights.js';
+import { buildBreakdownCard } from '../ui/insight-cards.js';
 import { el, clear } from '../core/dom.js';
 import { consumeNew } from '../core/deeplink.js';
 import { expenses } from '../data/repos/expenses.js';
@@ -42,11 +44,15 @@ async function loadData() {
   state.expenses = list;
 }
 
+/* تصنيفات مصروفات الورشة (النموذج وتوزيع المصروفات يشتركان فيها) */
+const EXPENSE_CATEGORIES = [['fabric', 'قماش'], ['thread', 'خيوط'], ['tools', 'أدوات'], ['rent', 'إيجار'], ['electricity', 'كهرباء'], ['water', 'مياه'], ['salary', 'رواتب'], ['other', 'أخرى']];
+const EXPENSE_LABELS = Object.fromEntries(EXPENSE_CATEGORIES);
+
 function openExpenseForm(existing = null) {
   const isEdit = existing !== null;
 
   const categorySelect = el('select', { className: 'select' });
-  [['fabric', 'قماش'], ['thread', 'خيوط'], ['tools', 'أدوات'], ['rent', 'إيجار'], ['electricity', 'كهرباء'], ['water', 'مياه'], ['salary', 'رواتب'], ['other', 'أخرى']].forEach(([v, l]) => {
+  EXPENSE_CATEGORIES.forEach(([v, l]) => {
     categorySelect.appendChild(el('option', { value: v }, l));
   });
   if (isEdit) categorySelect.value = existing.category || 'other';
@@ -208,6 +214,13 @@ function renderStats() {
     el('span', { className: 'stat__value' }, String(count)),
     el('span', { className: 'stat__label' }, 'عدد البنود'),
   ]));
+  /* v3.13.0: توزيع المصروفات على الفئات للفترة المختارة */
+  const bw = state.container?.querySelector('#expenses-breakdown');
+  if (bw) {
+    clear(bw);
+    const card = buildBreakdownCard(breakdownByCategory(filtered, (id) => EXPENSE_LABELS[id] || 'أخرى'), '📊 توزيع المصروفات');
+    if (card) bw.appendChild(card);
+  }
 }
 
 function renderFilters() {
@@ -263,6 +276,7 @@ export const expensesPage = {
       id: 'expenses-stats',
       style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' },
     }));
+    container.appendChild(el('div', { id: 'expenses-breakdown' }));
     container.appendChild(el('button', {
       className: 'btn btn--primary btn--block',
       style: { marginBottom: '12px' },

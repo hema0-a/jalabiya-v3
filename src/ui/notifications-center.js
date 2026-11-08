@@ -26,6 +26,8 @@ import { payments } from '../data/repos/payments.js';
 import { computeReceivables } from '../services/receivables.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
 import { filterForHardMonth, normalizePersonalControls } from '../services/daily-need.js';
+import { suppliers, supplierEntries } from '../data/repos/suppliers.js';
+import { balancesBySupplier, overdueSupplierDues } from '../services/suppliers.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -255,6 +257,22 @@ export async function getNotifications() {
         });
       }
     }
+
+    /* --- 7. مستحقات موردين قديمة (v3.13.0): رصيد عليك لمورد لم تتحرك حركاته منذ 30 يوماً --- */
+    try {
+      const [sup, ent] = await Promise.all([suppliers.list(), supplierEntries.list()]);
+      const stale = overdueSupplierDues(balancesBySupplier(sup, ent), Date.now(), 30);
+      if (stale.length > 0) {
+        out.push({
+          type: 'warning',
+          icon: '🚚',
+          title: stale.length + ' مورد عليك له مبلغ قديم',
+          subtitle: stale.slice(0, 2).map((r) => r.supplier.name + ' (' + formatEGP(r.owed) + ')').join(' — '),
+          route: '#/suppliers',
+          count: stale.length,
+        });
+      }
+    } catch (e) { /* الموردون اختياريون ولا يعطّلون بقية الإشعارات */ }
   } catch (e) {
     console.warn('[NotificationsCenter] getNotifications failed:', e);
   }

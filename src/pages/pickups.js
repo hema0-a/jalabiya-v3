@@ -17,6 +17,8 @@ import { sendLogged } from '../services/auto-messages.js';
 import { loadLog, lastSentIn, sinceText } from '../services/message-log.js';
 import { toast } from '../ui/toast.js';
 import { computePickups, buildPickupText, DEFAULT_PICKUP_DAYS } from '../services/pickup-reminders.js';
+import { pickupStats } from '../services/insights.js';
+import { buildPickupStatsCard } from '../ui/insight-cards.js';
 
 let state = { container: null, data: null, workshop: {}, msgCfg: null, onlyLate: false };
 
@@ -25,6 +27,7 @@ async function loadData() {
   state.workshop = st.workshop || {};
   state.msgCfg = st.autoMessages || null;
   state.data = computePickups(ord, pay, cus, Date.now(), DEFAULT_PICKUP_DAYS);
+  state.stats = pickupStats(ord, new Date());   /* v3.13.0 */
 }
 
 function statCard(label, value, color) {
@@ -71,6 +74,7 @@ function draw() {
     statCard('متأخرة ' + DEFAULT_PICKUP_DAYS + '+ أيام', String(d.lateCount), d.lateCount ? '#C62828' : '#2E7D32'),
     statCard('متبقٍّ للتحصيل', formatEGP(d.remainingTotal), '#E65100'),
   ]));
+  { const ps = buildPickupStatsCard(state.stats); if (ps) c.appendChild(ps); }
   c.appendChild(el('div', { style: { display: 'flex', gap: '8px', marginBottom: '12px' } }, [
     el('button', { className: 'btn ' + (state.onlyLate ? 'btn--primary' : 'btn--secondary'), type: 'button',
       onClick: () => { state.onlyLate = true; draw(); } }, 'المتأخرة فقط'),

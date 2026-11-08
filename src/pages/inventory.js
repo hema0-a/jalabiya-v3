@@ -39,6 +39,7 @@ let state = {
   items: [],
   activeCategory: 'all',
   searchQuery: '',
+  lowOnly: false,
   container: null,
   stats: null,
   globalThreshold: 5,
@@ -390,10 +391,18 @@ function renderFilters() {
       },
     }, c.icon + ' ' + c.label));
   });
+  /* v3.13.0: النواقص فقط (يجمع مع فلتر الفئة والبحث) */
+  wrap.appendChild(el('button', {
+    className: 'btn btn--sm ' + (state.lowOnly ? 'btn--danger' : 'btn--ghost'),
+    type: 'button', 'data-filter': 'low-only', 'aria-pressed': String(state.lowOnly),
+    style: { marginInlineEnd: '4px', marginBottom: '4px' },
+    onClick: () => { state.lowOnly = !state.lowOnly; renderFilters(); renderList(); },
+  }, '⚠️ النواقص فقط'));
 }
 
 function applyFilters() {
   let list = state.items;
+  if (state.lowOnly) list = list.filter((i) => isLowStockItem(i, state.globalThreshold));
   if (state.activeCategory !== 'all') {
     list = list.filter((i) => (i.category || 'other') === state.activeCategory);
   }
@@ -446,6 +455,7 @@ export const inventoryPage = {
     state.container = container;
     state.activeCategory = 'all';
     state.searchQuery = '';
+    state.lowOnly = false;
 
     container.appendChild(el('div', {
       id: 'inventory-stats',
@@ -482,7 +492,7 @@ export const inventoryPage = {
 
   destroy() {
     state = {
-      items: [], activeCategory: 'all', searchQuery: '',
+      items: [], activeCategory: 'all', searchQuery: '', lowOnly: false,
       container: null, stats: null, globalThreshold: 5,
     };
   },

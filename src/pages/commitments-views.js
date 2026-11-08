@@ -14,6 +14,9 @@ import { filterCommitments, filterGoals } from './commitments-logic.js';
 import { buildCommitmentCard, buildGoalCard } from './commitments-cards.js';
 import { buildDebtPlanCard } from '../ui/debt-plan-card.js';
 import { buildDailyNeedCards } from '../ui/daily-need-cards.js';
+import { annualMap } from '../services/insights.js';
+import { buildAnnualMapCard } from '../ui/insight-cards.js';
+import { remainingMonths } from '../services/debt-plan.js';
 
 /* ==========================================================================
    1. التبويبات
@@ -291,6 +294,7 @@ export function renderPage(ctx) {
     c.appendChild(renderStats(ctx));
     c.appendChild(renderHealth(ctx));
     c.appendChild(buildDailyNeedCards());   /* v3.11.0: الاحتياج اليومي + خط الأمان الشهري */
+    { const am = buildAnnualMapCard(annualMap(state.withPayments, new Date(), remainingMonths)); if (am) c.appendChild(am); }   /* v3.13.0 */
     c.appendChild(buildDebtPlanCard());   /* v3.9.0: عدّاد التحرر + استراتيجية السداد */
     const alerts = renderAlerts(ctx);
     if (alerts) c.appendChild(alerts);

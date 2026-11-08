@@ -22,6 +22,7 @@ import { customers } from '../data/repos/customers.js';
 import { settings } from '../data/repos/settings.js';
 import { createCollapsible } from '../ui/collapsible.js'; // يُستخدم من اختبار v354 — لا تحذفه
 import { assessOrderRisks } from '../services/order-risk.js';
+import { highValueThreshold } from '../services/insights.js';
 import { getTotalWorkTime, getActiveSession, formatDuration } from '../services/order-timing.js';
 import { groupingOptions, fabricPickupDays } from '../services/alert-rules.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
@@ -114,6 +115,9 @@ async function loadData() {
       dailyOrderLimit: Number(s.dailyLimit.dailyOrderLimit) || 0,
     };
   }
+
+  /* حدّ «الطلب الكبير» من توزيع طلباتك أنت (v3.13.0) — بلا عينة كافية لا شارة */
+  try { state.hvThreshold = highValueThreshold(state.orders); } catch (e) { state.hvThreshold = Infinity; }
 
   /* الطلبات المعرَّضة للتأخر (شارة في البطاقة + فلتر) */
   try {

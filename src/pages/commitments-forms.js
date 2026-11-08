@@ -16,6 +16,7 @@ import { COMMITMENT_CATEGORIES, COMMITMENT_FREQUENCIES } from '../core/config.js
 import { formatEGP, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 import { endMonthFromRemaining, remainingMonths, MAX_REMAINING } from '../services/debt-plan.js';
 import { PRIORITIES, normalizePriority } from '../services/daily-need.js';
+import { MONTH_NAMES_AR } from '../services/insights.js';
 
 /* ==========================================================================
    1. نموذج الالتزام
@@ -55,6 +56,11 @@ export function openCommitmentForm(ctx, existing = null) {
     freqSelect.appendChild(o);
   });
 
+  /* v3.13.0: شهر الاستحقاق للدورات غير الشهرية (يضبط خريطة الالتزامات السنوية) */
+  const dueMonthSelect = el('select', { className: 'select', 'data-role': 'due-month-select' });
+  dueMonthSelect.appendChild(el('option', { value: '' }, '— غير محدد —'));
+  MONTH_NAMES_AR.forEach((nm, i) => { const o = el('option', { value: String(i + 1) }, nm); if (isEdit && Number(existing.dueMonth) === i + 1) o.selected = true; dueMonthSelect.appendChild(o); });
+
   const dueInput = el('input', {
     className: 'input', type: 'number', min: '1', max: '31', placeholder: '1-31 (اختياري)',
     value: isEdit && existing.dueDay ? String(existing.dueDay) : '',
@@ -86,6 +92,7 @@ export function openCommitmentForm(ctx, existing = null) {
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الأهمية'), prioSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'الدورية'), freqSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'يوم الاستحقاق'), dueInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'شهر الاستحقاق (للسنوي وكل 3 أو 6 شهور)'), dueMonthSelect]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, '⏳ الأقساط المتبقية (شاملة هذا الشهر)'), remainingInput]),
     el('div', { className: 'field' }, [activeToggle]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
@@ -111,6 +118,7 @@ export function openCommitmentForm(ctx, existing = null) {
             priority: normalizePriority(prioSelect.value),
             frequency: freqSelect.value,
             dueDay: dueVal ? Math.max(1, Math.min(31, Number(dueVal))) : null,
+            dueMonth: dueMonthSelect.value ? Math.max(1, Math.min(12, Number(dueMonthSelect.value))) : null,
             endMonth: endMonthFromRemaining(remainingInput.value) || null,
             notes: notesInput.value.trim(),
             active: activeCheckbox.checked,

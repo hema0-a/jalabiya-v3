@@ -87,6 +87,12 @@ export function balancesBySupplier(suppliers, entries) {
   return rows;
 }
 
+/** موردون عليك لهم رصيد لم تتحرك حركاتهم منذ أكثر من `days` يوماً (مرتّبين بالأكبر). */
+export function overdueSupplierDues(rows, nowMs = Date.now(), days = 30) {
+  const limit = Math.max(1, n(days)) * 86400000;
+  return (Array.isArray(rows) ? rows : []).filter((r) => r && n(r.owed) > 0 && n(r.lastDate) > 0 && nowMs - n(r.lastDate) > limit).sort((a, b) => b.owed - a.owed);
+}
+
 /** إجمالي المستحق عليك للموردين (الأرصدة الموجبة فقط). */
 export function totalOwed(rows) {
   return r2((Array.isArray(rows) ? rows : []).reduce((s, r) => s + Math.max(0, n(r && r.owed)), 0));

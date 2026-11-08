@@ -70,7 +70,7 @@ function boardCard() {
   return card;
 }
 
-function entryRow(e) {
+function entryRow(e, supplier) {
   const m = kindMeta(e.kind);
   const p = entryPricePerMeter(e);
   const detail = e.kind === 'purchase'
@@ -80,6 +80,7 @@ function entryRow(e) {
     el('span', {}, m.icon),
     el('span', { style: { flex: '1' } }, [formatDate(e.date) + (detail ? ' — ' + detail : '') + (e.notes ? ' — ' + e.notes : '')]),
     el('b', { style: { color: e.kind === 'purchase' ? '#C62828' : '#2E7D32' } }, (e.kind === 'purchase' ? '+' : '−') + formatEGP(e.amount)),
+    el('button', { type: 'button', className: 'btn btn--sm btn--ghost', 'data-action': 'edit-entry', onClick: () => openEntryForm(ctx, supplier, e.kind, e) }, '✏️'),
     el('button', { type: 'button', className: 'btn btn--sm btn--ghost', 'data-action': 'delete-entry', onClick: () => deleteEntry(ctx, e) }, '🗑️'),
   ]);
 }
@@ -115,7 +116,7 @@ function supplierCard(row) {
   const list = state.entries.filter((e) => e.supplierId === s.id).sort((a, b) => (b.date || 0) - (a.date || 0) || (b.createdAt || 0) - (a.createdAt || 0));
   const box = el('div', { 'data-role': 'entries', style: { marginTop: '8px' } });
   if (!list.length) box.appendChild(el('div', { style: { fontSize: '13px', color: '#888' } }, 'لا حركات بعد — سجّل أول مشتريات أو دفعة.'));
-  list.slice(0, MAX_SHOWN_ENTRIES).forEach((e) => box.appendChild(entryRow(e)));
+  list.slice(0, MAX_SHOWN_ENTRIES).forEach((e) => box.appendChild(entryRow(e, s)));
   if (list.length > MAX_SHOWN_ENTRIES) box.appendChild(el('div', { style: { fontSize: '12px', color: '#888', marginTop: '4px' } }, 'يظهر أحدث ' + MAX_SHOWN_ENTRIES + ' من ' + list.length + ' حركة'));
   card.appendChild(box);
   return card;
