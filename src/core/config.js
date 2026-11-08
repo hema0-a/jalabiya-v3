@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.13.0',
+  version: '3.14.0',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -25,7 +25,7 @@ export const MONTH_NAMES     = ['يناير', 'فبراير', 'مارس', 'أب�
 /* --- 3. DB --- */
 export const DB_CONFIG = {
   name: 'jalabiya_v3',
-  version: 13,   /* v11: مخزن ledger (الدفتر المالي) · v12: مخزن orderMedia (صور/توقيعات الطلبات منفصلة عن سجل الطلب) · v13: مخزنا suppliers وsupplierEntries (الموردون والمشتريات) */
+  version: 14,   /* v11: مخزن ledger (الدفتر المالي) · v12: مخزن orderMedia (صور/توقيعات الطلبات منفصلة عن سجل الطلب) · v13: مخزنا suppliers وsupplierEntries (الموردون والمشتريات) · v14: مخزن aftercare (التعديلات والمرتجعات بعد التسليم) */
 };
 
 /* --- 4. Stores --- */
@@ -55,6 +55,7 @@ export const STORES = {
   ORDER_MEDIA:         'orderMedia',
   SUPPLIERS:           'suppliers',
   SUPPLIER_ENTRIES:    'supplierEntries',
+  AFTERCARE:           'aftercare',
 };
 
 /* --- 5. فئات معرض الأعمال (8) --- */

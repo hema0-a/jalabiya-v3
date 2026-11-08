@@ -147,3 +147,27 @@ export function deferrableSuggestion(a) {
     currentTotal: required.total, reducedTotal: Math.max(0, Math.round(reducedTotal)),
   };
 }
+
+/**
+ * خطة تحصيل اليوم (v3.14.0): أي طلبات جاهزة عليها متبقٍّ تحصّل منها لتغطية عجز اليوم؟
+ * الأكبر متبقياً أولاً (أقل عدد من المكالمات)، مع تفضيل المتأخر عند التساوي، وبحد أقصى `max` طلبات.
+ * @param {Array<{remaining:number, late?:boolean}>} items عناصر computePickups
+ * @param {number} target العجز اليومي المطلوب تغطيته
+ * @returns {{target:number, picks:Array, covered:number, gap:number, met:boolean}|null} null إن لا عجز
+ */
+export function collectionPlan(items, target, max = 5) {
+  const t = Math.round(n(target));
+  if (!(t > 0)) return null;
+  const cand = (Array.isArray(items) ? items : []).filter((i) => i && n(i.remaining) > 0)
+    .sort((a, b) => n(b.remaining) - n(a.remaining) || (b.late ? 1 : 0) - (a.late ? 1 : 0));
+  const limit = Math.max(1, Math.round(n(max)) || 5);
+  const picks = [];
+  let covered = 0;
+  for (const i of cand) {
+    if (covered >= t || picks.length >= limit) break;
+    picks.push(i);
+    covered += n(i.remaining);
+  }
+  covered = Math.round(covered * 100) / 100;
+  return { target: t, picks, covered, gap: Math.max(0, Math.round((t - covered) * 100) / 100), met: covered >= t };
+}

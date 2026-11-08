@@ -1,6 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
+   v14: إضافة مخزن aftercare (التعديلات والمرتجعات بعد التسليم — v3.14.0، يُنشأ تلقائياً بالترقية).
    v13: إضافة مخزني suppliers وsupplierEntries (الموردون والمشتريات — v3.12.0، يُنشآن تلقائياً بالترقية).
    v11: إضافة مخزن ledger (الدفتر المالي — v3.3.79، يُنشأ تلقائياً بالترقية).
    v10: إضافة مخزن quotes (عروض الأسعار).
@@ -200,6 +201,15 @@ export const SCHEMA = {
     indexes: [
       idx('by_supplierId', 'supplierId'),
       idx('by_date', 'date'),
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  /* --- جديد v14: التعديلات والمرتجعات بعد التسليم --- */
+  [STORES.AFTERCARE]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_orderId', 'orderId'),
+      idx('by_status', 'status'),
       idx('by_createdAt', 'createdAt'),
     ],
   },

@@ -20,6 +20,7 @@ export const NAV_GROUPS = [
     { id: 'orders',    icon: '📋', label: 'الطلبات' },
     { id: 'customers', icon: '👥', label: 'العملاء' },
     { id: 'pickups',   icon: '📦', label: 'جاهز للاستلام' },
+    { id: 'aftercare', icon: '🪡', label: 'التعديلات والمرتجعات' },
     { id: 'messages',  icon: '📣', label: 'رسائل اليوم' },
   ]},
   { id: 'money', title: 'المال', icon: '💰', items: [
@@ -42,6 +43,7 @@ export const NAV_GROUPS = [
   { id: 'growth', title: 'التسويق والمواسم', icon: '📢', items: [
     { id: 'portfolio',      icon: '📸', label: 'معرض الأعمال' },
     { id: 'referrals',      icon: '🤝', label: 'الإحالات' },
+    { id: 'winback',        icon: '💌', label: 'العملاء المنقطعون' },
     { id: 'occasions',      icon: '🎉', label: 'المواسم والأعياد' },
     { id: 'season-compare', icon: '⚖️', label: 'مقارنة المواسم' },
   ]},

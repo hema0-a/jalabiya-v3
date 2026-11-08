@@ -12,12 +12,16 @@ import { commitments } from '../data/repos/commitments.js';
 import { houseExpenses } from '../data/repos/house-expenses.js';
 import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
+import { orders } from '../data/repos/orders.js';
+import { customers } from '../data/repos/customers.js';
+import { computePickups, buildPickupText, DEFAULT_PICKUP_DAYS } from '../services/pickup-reminders.js';
+import { sendLogged } from '../services/auto-messages.js';
 import { toast } from './toast.js';
 import { formatEGP } from '../core/utils.js';
 import { resolveDayOffSettings } from '../core/day-off.js';
 import { getMonthlyEquivalent } from '../services/commitments-calculator.js';
 import {
-  requiredDaily, monthProgress, safetyStatus, todaySurplus, deferrableSuggestion,
+  requiredDaily, monthProgress, safetyStatus, todaySurplus, deferrableSuggestion, collectionPlan,
   normalizePersonalControls, DEFAULT_CAPACITY,
 } from '../services/daily-need.js';
 
@@ -32,8 +36,9 @@ const muted = (t, extra) => el('div', { style: Object.assign({ fontSize: '12.5px
 async function loadAll() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29).getTime();
-  const [cm, he, pay, s] = await Promise.all([
+  const [cm, he, pay, s, ord, cus] = await Promise.all([
     commitments.list(), houseExpenses.listByPeriod(from, now.getTime() + 86400000), payments.list(), settings.get(),
+    orders.list().catch(() => []), customers.list().catch(() => []),
   ]);
   const dl = (s && s.dailyLimit) || {};
   return {
@@ -44,6 +49,9 @@ async function loadAll() {
     },
     capacity: Number(dl.dailyOrderLimit) > 0 ? Number(dl.dailyOrderLimit) : DEFAULT_CAPACITY,
     controls: normalizePersonalControls(s && s.personalControls),
+    pickups: computePickups(ord, pay, cus, Date.now(), DEFAULT_PICKUP_DAYS),
+    workshop: (s && s.workshop) || {},
+    msgCfg: (s && s.autoMessages) || null,
   };
 }
 
@@ -102,6 +110,25 @@ function drawSafety(card, d) {
     cell('اليوم', sur ? (sur.surplus >= 0 ? '+' : '−') + formatEGP(Math.abs(sur.surplus)) : '—', sur ? (sur.surplus >= 0 ? '#2E7D32' : '#C62828') : null, 'n-today'),
     cell('محصّل الشهر', formatEGP(p.collectedMonth), null, 'n-collected'),
   ]));
+  drawCollectionPlan(card, d, sur);
+}
+
+/* v3.14.0: خطة تحصيل اليوم — أي طلبات جاهزة تحصّل منها لتغطية عجز اليوم (تذكير واتساب مسجَّل كما في صفحة الاستلام) */
+function drawCollectionPlan(card, d, sur) {
+  if (!sur || sur.surplus >= 0) return;
+  const plan = collectionPlan(d.pickups && d.pickups.items, -sur.surplus, 5);
+  if (!plan || !plan.picks.length) return;
+  const box = el('div', { 'data-role': 'collection-plan', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #E5DDD0' } });
+  box.appendChild(el('div', { style: { fontWeight: '700', fontSize: '13.5px' } }, '🎯 لتغطية احتياج اليوم (ينقصك ' + formatEGP(-sur.surplus) + ') حصّل من:'));
+  plan.picks.forEach((i) => box.appendChild(el('div', { 'data-order-id': i.orderId, style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '13px' } }, [
+    el('span', { style: { flex: '1' } }, i.name + (i.late ? ' ⏰' : '') + ' — ' + formatEGP(i.remaining)),
+    el('button', {
+      type: 'button', className: 'btn btn--sm btn--ghost', 'data-action': 'plan-remind', disabled: i.phone ? null : 'disabled',
+      onClick: () => { if (!sendLogged(i.phone, buildPickupText(i, d.workshop, d.msgCfg), { kind: 'pickup_ready', ref: i.orderId, customerId: i.customerId })) toast.danger('تعذّر فتح واتساب'); },
+    }, i.phone ? '💬 تذكير' : 'بلا رقم'),
+  ])));
+  box.appendChild(muted(plan.met ? 'مجموعها ' + formatEGP(plan.covered) + ' — يغطي العجز ✅' : 'مجموعها ' + formatEGP(plan.covered) + ' فقط — يبقى ' + formatEGP(plan.gap) + ' بلا تغطية من الطلبات الجاهزة.', { marginTop: '4px' }));
+  card.appendChild(box);
 }
 
 export function buildDailyNeedCards() {

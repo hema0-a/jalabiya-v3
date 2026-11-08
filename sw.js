@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.13.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.14.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.13.0';
+const CACHE_VERSION = 'v3.14.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -61,6 +61,7 @@ const PRECACHE_URLS = [
 
   /* --- src/data/repos --- */
   './src/data/repos/activity.js',
+  './src/data/repos/aftercare.js',
   './src/data/repos/appointments.js',
   './src/data/repos/commitment-payments.js',
   './src/data/repos/commitments.js',
@@ -86,6 +87,8 @@ const PRECACHE_URLS = [
 
   /* --- src/pages --- */
   './src/pages/activity-log.js',
+  './src/pages/aftercare-forms.js',
+  './src/pages/aftercare.js',
   './src/pages/appointments.js',
   './src/pages/calendar-day.js',
   './src/pages/calendar-grid.js',
@@ -150,6 +153,7 @@ const PRECACHE_URLS = [
   './src/pages/tests.js',
   './src/pages/trash.js',
   './src/pages/wall.js',
+  './src/pages/winback.js',
   './src/pages/workers-actions.js',
   './src/pages/workers-cards.js',
   './src/pages/workers-detail.js',
@@ -200,6 +204,7 @@ const PRECACHE_URLS = [
   './src/security/role-pins.js',
 
   /* --- src/services --- */
+  './src/services/aftercare.js',
   './src/services/alert-rules.js',
   './src/services/amount-guard.js',
   './src/services/auto-backup.js',
@@ -299,6 +304,7 @@ const PRECACHE_URLS = [
   './src/services/week-visits.js',
   './src/services/wellbeing.js',
   './src/services/whatif.js',
+  './src/services/winback.js',
 
   /* --- src/sync --- */
   './src/sync/auth-sync.js',

@@ -173,6 +173,8 @@ async function loadPageModule(pageId) {
       case 'messages':           return await import('./pages/messages.js');
       case 'quotes':             return await import('./pages/quotes.js');
       case 'suppliers':          return await import('./pages/suppliers.js');
+      case 'aftercare':          return await import('./pages/aftercare.js');
+      case 'winback':            return await import('./pages/winback.js');
       case 'season-compare':     return await import('./pages/season-compare.js');
       case 'data-care':          return await import('./pages/data-care.js');
       case 'inventory':          return await import('./pages/inventory.js');
@@ -234,6 +236,8 @@ const MODULE_EXPORT_MAP = {
   messages:             'messagesPage',
   quotes:               'quotesPage',
   suppliers:            'suppliersPage',
+  aftercare:            'aftercarePage',
+  winback:              'winbackPage',
   'season-compare':     'seasonComparePage',
   'data-care':          'dataCarePage',
   inventory:            'inventoryPage',

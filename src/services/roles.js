@@ -17,7 +17,7 @@ export const OWNER_ONLY = ['settings', 'financial-center', 'commitments', 'house
 export const RECEPTIONIST_ALLOWED = ['orders', 'customers', 'pickups', 'messages', 'appointments', 'calendar', 'quotes', 'pricing-calculator', 'portfolio', 'occasions', 'referrals', 'wall'];
 
 /** صفحات يحميها «القفل المالي» (رقم مستقل) إن عُيّن. */
-export const FINANCE_LOCK_PAGES = ['financial-center', 'kpis', 'reports', 'expenses', 'commitments', 'house-expenses', 'loans', 'suppliers'];
+export const FINANCE_LOCK_PAGES = ['financial-center', 'kpis', 'reports', 'expenses', 'commitments', 'house-expenses', 'loans', 'suppliers', 'aftercare', 'winback'];
 
 export const FINANCE_UNLOCK_MINUTES = 10;
 
