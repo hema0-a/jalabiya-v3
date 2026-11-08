@@ -16,7 +16,7 @@ export const STORE_LABELS = {
   customers: 'عميل', orders: 'طلب', payments: 'دفعة', inventory: 'مخزون', workers: 'عامل',
   expenses: 'مصروف', appointments: 'موعد', portfolio: 'نموذج', commitments: 'التزام',
   commitmentPayments: 'دفعة التزام', savingsGoals: 'هدف ادخار', houseExpenses: 'مصروف بيت',
-  personalLoans: 'سلفة', loanPayments: 'دفعة سلفة', referrals: 'إحالة', workerPayments: 'دفعة عامل', quotes: 'عرض سعر', suppliers: 'مورد', supplierEntries: 'حركة مورد', aftercare: 'حالة رجوع',
+  personalLoans: 'سلفة', loanPayments: 'دفعة سلفة', referrals: 'إحالة', workerPayments: 'دفعة عامل', quotes: 'عرض سعر', suppliers: 'مورد', supplierEntries: 'حركة مورد', aftercare: 'حالة رجوع', attendance: 'حضور عامل',
 };
 
 export const FIELD_LABELS = {

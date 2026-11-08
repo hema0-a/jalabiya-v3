@@ -6,6 +6,7 @@
 
 import { workers } from '../data/repos/workers.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
+import { attendance } from '../data/repos/attendance.js';
 import { trash } from '../data/repos/trash.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -18,7 +19,7 @@ import { formatEGP } from '../core/utils.js';
 export async function deleteWorker(ctx, w) {
   const ok = await modal.confirm({
     title: 'حذف عامل',
-    message: 'حذف "' + w.name + '"؟ سيتم حذف كل دفعاته.',
+    message: 'حذف "' + w.name + '"؟ سيتم حذف كل دفعاته وسجل حضوره.',
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
@@ -26,6 +27,8 @@ export async function deleteWorker(ctx, w) {
     const pays = await workerPayments.listByWorker(w.id);
     await trash.addToTrash('workers', w);          /* أولاً: حتى لا تضيع الدفعات إن فشل الحفظ */
     for (const p of pays) await workerPayments.remove(p.id);
+    /* v3.15.0: سجلات حضور العامل تُحذف معه (لا يتيم في المزامنة) */
+    for (const r of (await attendance.list()).filter((x) => x.workerId === w.id)) await attendance.remove(r.id);
     await workers.remove(w.id);
     toast.success('تم الحذف');
     await ctx.refresh();

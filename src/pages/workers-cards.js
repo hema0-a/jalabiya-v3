@@ -130,7 +130,9 @@ export function buildPaymentRow(ctx, payment) {
       el('div', { style: { fontWeight: '600', color: '#123C2F', fontSize: '14px' } },
         '👷 ' + name),
       el('div', { style: { fontSize: '11px', color: '#666', marginTop: '2px' } },
+        (payment.kind === 'advance' ? '🤝 سلفة · ' : '') +
         '📅 ' + (payment.date ? formatDate(payment.date) : '—') +
+        (Number(payment.advanceDeducted) > 0 ? ' · ✂️ خصم سلفة ' + formatEGP(payment.advanceDeducted) : '') +
         (payment.notes ? ' · 📝 ' + payment.notes : '')),
     ]),
     el('div', { style: { fontWeight: '700', color: '#2E7D32', fontSize: '15px' } },

@@ -16,6 +16,9 @@
 import { el, clear } from '../core/dom.js';
 import { workers } from '../data/repos/workers.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
+import { attendance } from '../data/repos/attendance.js';
+import { settings } from '../data/repos/settings.js';
+import { resolveDayOffSettings } from '../core/day-off.js';
 import { toast } from '../ui/toast.js';
 import { openWorkerForm } from './workers-forms.js';
 import { renderPage, renderList } from './workers-views.js';
@@ -29,6 +32,9 @@ const state = {
   container: null,
   workers: [],
   payments: [],
+  attendance: [],
+  dayOff: null,
+  acc: null,
   activeTab: 'workers',       // 'workers' | 'payments'
   activeFilter: 'all',
   searchQuery: '',
@@ -48,6 +54,9 @@ function resetWorkersState(s) {
     container: null,
     workers: [],
     payments: [],
+    attendance: [],
+    dayOff: null,
+    acc: null,
     activeTab: 'workers',
     activeFilter: 'all',
     searchQuery: '',
@@ -59,14 +68,18 @@ function resetWorkersState(s) {
    ========================================================================== */
 
 async function loadData() {
-  const [wList, pList] = await Promise.all([
+  const [wList, pList, aList, st] = await Promise.all([
     workers.list(),
     workerPayments.list(),
+    attendance.list().catch(() => []),
+    settings.get().catch(() => ({})),
   ]);
   wList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
   pList.sort((a, b) => (b.date || 0) - (a.date || 0));
   state.workers = wList;
   state.payments = pList;
+  state.attendance = aList;                                     /* v3.15.0 */
+  state.dayOff = resolveDayOffSettings((st && st.dailyLimit) || {});
 }
 
 async function refreshAll() {

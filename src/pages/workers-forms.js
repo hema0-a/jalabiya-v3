@@ -11,6 +11,7 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { formatEGP, localDateInput, parseDateInput, toNonNegative } from '../core/utils.js';
 import { SPECIALTIES, SALARY_TYPES, SALARY_TYPE_MAP } from './workers-logic.js';
+import { PAY_KINDS, checkWorkerPaymentInput, workerStatement, outstandingAdvance } from '../services/worker-accounts.js';
 
 /* ==========================================================================
    3. نموذج العامل
@@ -133,7 +134,23 @@ export function openWorkerForm(ctx, existing = null) {
    4. نموذج دفعة
    ========================================================================== */
 
-export function openPaymentForm(ctx, worker) {
+export function openPaymentForm(ctx, worker, opts = {}) {
+  /* v3.15.0: نوع الدفعة (راتب/سلفة) وخصم السلفة من الراتب — المبلغ يبقى نقداً دائماً */
+  const kindSelect = el('select', { className: 'select', 'data-role': 'pay-kind' });
+  PAY_KINDS.forEach((k) => { const o = el('option', { value: k.id }, k.icon + ' ' + k.label); if (k.id === (opts.kind || 'salary')) o.selected = true; kindSelect.appendChild(o); });
+  const mine = (ctx.state.payments || []).filter((p) => p.workerId === worker.id);
+  const outstanding = outstandingAdvance(mine);
+  const nowD = new Date();
+  const stmt = workerStatement({ worker, attendance: ctx.state.attendance || [], payments: mine, year: nowD.getFullYear(), month: nowD.getMonth(), now: nowD, dayOff: ctx.state.dayOff });
+  const dedInput = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '0', 'data-role': 'pay-deduct', value: opts.kind !== 'advance' && stmt.suggestedDeduction > 0 ? String(stmt.suggestedDeduction) : '' });
+  const dedField = el('div', { className: 'field', 'data-role': 'deduct-field' }, [
+    el('label', { className: 'field__label' }, 'منها خصم سلفة (ليس نقداً — اترك المبلغ أعلاه نقداً فقط)'), dedInput,
+    el('div', { style: { fontSize: '12px', color: '#B26A00', marginTop: '3px' } }, outstanding > 0 ? 'سلفة قائمة على العامل: ' + formatEGP(outstanding) : 'لا سلفة قائمة'),
+  ]);
+  const syncKind = () => { dedField.style.display = kindSelect.value === 'advance' || outstanding <= 0 ? 'none' : ''; };
+  kindSelect.addEventListener('change', syncKind);
+  syncKind();
+
   const amountInput = el('input', {
     className: 'input', type: 'number', min: '0', step: '0.01',
     placeholder: '0',
@@ -157,7 +174,9 @@ export function openPaymentForm(ctx, worker) {
       el('div', { style: { color: '#666', fontSize: '12px', marginTop: '2px' } },
         salaryType.icon + ' ' + salaryType.label + ' — ' + formatEGP(worker.salary || 0)),
     ]),
-    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ *'), amountInput]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'النوع'), kindSelect]),
+    el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'المبلغ النقدي *'), amountInput]),
+    dedField,
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'التاريخ *'), dateInput]),
     el('div', { className: 'field' }, [el('label', { className: 'field__label' }, 'ملاحظات'), notesInput]),
   ]);
@@ -170,13 +189,14 @@ export function openPaymentForm(ctx, worker) {
       {
         text: 'حفظ الدفعة', variant: 'primary', action: 'save',
         onClick: async () => {
-          const amount = Number(amountInput.value);
-          if (!amount || !Number.isFinite(amount) || amount <= 0) return toast.warning('أدخل مبلغاً صحيحاً');
+          const chk = checkWorkerPaymentInput({ kind: kindSelect.value, amount: amountInput.value, advanceDeducted: dedInput.value });
+          if (!chk.ok) return toast.warning(chk.error);
+          if (chk.data.advanceDeducted && chk.data.advanceDeducted > outstanding) return toast.warning('الخصم أكبر من السلفة القائمة (' + formatEGP(outstanding) + ')');
           if (!dateInput.value) return toast.warning('التاريخ مطلوب');
           try {
             await workerPayments.create({
               workerId: worker.id,
-              amount,
+              ...chk.data,
               date: parseDateInput(dateInput.value),
               notes: notesInput.value.trim(),
             });

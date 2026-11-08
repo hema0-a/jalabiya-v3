@@ -8,6 +8,8 @@
    - الحد الأقصى 400 طلب (الأقرب موعداً أولاً) ليبقى المستند صغيراً.
    ========================================================================== */
 
+import { filterForHardMonth, normalizePersonalControls } from './daily-need.js';
+
 export const DIGEST_VERSION = 1;
 export const MAX_DIGEST_ORDERS = 400;
 
@@ -89,7 +91,9 @@ export function buildDigest(src) {
 
   const cm = [];
   if (opts.commitments) {
-    for (const c of src.commitments || []) {
+    /* v3.15.0: «وضع الشهر الصعب» يُبقي الالتزامات الضرورية فقط في الملخص اليومي (يُطبَّق هنا قبل الرفع) */
+    const hard = normalizePersonalControls(settings.personalControls).hardMonth;
+    for (const c of filterForHardMonth(src.commitments || [], hard)) {
       if (!c || c.active === false) continue;
       const day = Number(c.dueDay);
       if (!Number.isInteger(day) || day < 1 || day > 31) continue;

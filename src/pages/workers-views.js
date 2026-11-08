@@ -10,6 +10,7 @@ import { formatEGP, normalizeSearch } from '../core/utils.js';
 import { filterWorkers } from './workers-logic.js';
 import { buildWorkerCard, buildPaymentRow } from './workers-cards.js';
 import { mountProductionBoard } from '../ui/production-board.js';
+import { mountAccounts } from './workers-accounts.js';
 
 /* ==========================================================================
    9. الرسم
@@ -70,6 +71,7 @@ function renderTabs(ctx) {
     { id: 'workers',  icon: '👷', label: 'العمال' },
     { id: 'board',    icon: '📊', label: 'الإنتاج' },
     { id: 'payments', icon: '💵', label: 'الدفعات' },
+    { id: 'accounts', icon: '📒', label: 'الحساب' },
   ];
 
   tabs.forEach((t) => {
@@ -131,6 +133,11 @@ export function renderList(ctx) {
   if (state.activeTab === 'board') {
     if (state.board) { try { state.board.destroy(); } catch (e) { /* اختياري */ } }
     state.board = mountProductionBoard(lc);
+    return;
+  }
+
+  if (state.activeTab === 'accounts') {   /* v3.15.0: الحضور وكشف الشهر والسلف */
+    mountAccounts(ctx, lc);
     return;
   }
 

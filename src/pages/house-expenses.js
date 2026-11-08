@@ -22,6 +22,9 @@ import { dayDiff } from '../core/day-math.js';
 import { buildChallengeCard, buildHiddenCommitmentsCard } from '../ui/wellbeing-cards.js';
 import { compareCategories } from '../services/insights.js';
 import { buildCompareCard } from '../ui/insight-cards.js';
+import { settings } from '../data/repos/settings.js';
+import { normalizeBudget, budgetStatus } from '../services/family-budget.js';
+import { buildBudgetCard, openBudgetEditor } from '../ui/family-budget-card.js';
 
 /* --- الحالة --- */
 let state = {
@@ -33,6 +36,8 @@ let state = {
   categoryStats: [],
   monthComparison: null,
   compare: null,
+  budget: null,
+  budgetStatus: null,
 };
 
 const CAT_MAP = {};
@@ -120,15 +125,18 @@ function getMonthlyComparison(allExpenses) {
    ========================================================================== */
 
 async function loadData() {
-  const [stats, categoryStats, allList] = await Promise.all([
+  const [stats, categoryStats, allList, st] = await Promise.all([
     houseExpenses.getStats(state.period),
     houseExpenses.getCategoryStats(state.period),
     houseExpenses.list(),
+    settings.get().catch(() => ({})),
   ]);
+  state.budget = normalizeBudget(st && st.familyBudget);   /* v3.15.0 */
   state.stats = stats;
   state.categoryStats = categoryStats;
   state.monthComparison = getMonthlyComparison(allList);
   state.compare = compareCategories(allList, new Date(), HOUSE_EXPENSE_CATEGORIES);   /* v3.13.0 */
+  state.budgetStatus = budgetStatus({ expenses: allList, budget: state.budget, now: new Date(), cats: HOUSE_EXPENSE_CATEGORIES });
 }
 
 /* ==========================================================================
@@ -449,6 +457,11 @@ function renderPage() {
   const bars = buildCategoryBars(state.categoryStats);
   bars.classList.add('no-print');
   c.appendChild(bars);
+  if (state.period === 'month') {   /* v3.15.0: ميزانية الشهر (سقف لكل فئة) */
+    const bc = buildBudgetCard(state.budgetStatus, () => openBudgetEditor(state.budget, HOUSE_EXPENSE_CATEGORIES, () => refreshAll()));
+    bc.classList.add('no-print');
+    c.appendChild(bc);
+  }
   if (state.period === 'month') {   /* v3.13.0: كل فئة مقابل الشهر الماضي */
     const cmp = buildCompareCard(state.compare);
     if (cmp) { cmp.classList.add('no-print'); c.appendChild(cmp); }
@@ -538,6 +551,8 @@ export const houseExpensesPage = {
       categoryStats: [],
       monthComparison: null,
       compare: null,
+      budget: null,
+      budgetStatus: null,
     };
   },
 };

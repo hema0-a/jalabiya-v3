@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.14.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.15.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.14.0';
+const CACHE_VERSION = 'v3.15.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -63,6 +63,7 @@ const PRECACHE_URLS = [
   './src/data/repos/activity.js',
   './src/data/repos/aftercare.js',
   './src/data/repos/appointments.js',
+  './src/data/repos/attendance.js',
   './src/data/repos/commitment-payments.js',
   './src/data/repos/commitments.js',
   './src/data/repos/customers.js',
@@ -154,6 +155,7 @@ const PRECACHE_URLS = [
   './src/pages/trash.js',
   './src/pages/wall.js',
   './src/pages/winback.js',
+  './src/pages/workers-accounts.js',
   './src/pages/workers-actions.js',
   './src/pages/workers-cards.js',
   './src/pages/workers-detail.js',
@@ -231,6 +233,7 @@ const PRECACHE_URLS = [
   './src/services/diagnostics.js',
   './src/services/draft-manager.js',
   './src/services/fabric-calc.js',
+  './src/services/family-budget.js',
   './src/services/financial-calculator.js',
   './src/services/financial-export.js',
   './src/services/house-expenses-export.js',
@@ -305,6 +308,7 @@ const PRECACHE_URLS = [
   './src/services/wellbeing.js',
   './src/services/whatif.js',
   './src/services/winback.js',
+  './src/services/worker-accounts.js',
 
   /* --- src/sync --- */
   './src/sync/auth-sync.js',
@@ -341,6 +345,7 @@ const PRECACHE_URLS = [
   './src/ui/display-settings.js',
   './src/ui/fab.js',
   './src/ui/fabric-calc-dialog.js',
+  './src/ui/family-budget-card.js',
   './src/ui/form-builder.js',
   './src/ui/input-hints.js',
   './src/ui/insight-cards.js',

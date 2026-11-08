@@ -28,6 +28,9 @@ import { resolveDayOffSettings } from '../core/day-off.js';
 import { filterForHardMonth, normalizePersonalControls } from '../services/daily-need.js';
 import { suppliers, supplierEntries } from '../data/repos/suppliers.js';
 import { balancesBySupplier, overdueSupplierDues } from '../services/suppliers.js';
+import { houseExpenses } from '../data/repos/house-expenses.js';
+import { normalizeBudget, hasBudget, budgetAlerts, budgetStatus } from '../services/family-budget.js';
+import { HOUSE_EXPENSE_CATEGORIES } from '../core/config.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -273,6 +276,26 @@ export async function getNotifications() {
         });
       }
     } catch (e) { /* الموردون اختياريون ولا يعطّلون بقية الإشعارات */ }
+
+    /* --- 8. ميزانية الأسرة (v3.15.0): بنود وصلت 80% من سقفها أو تجاوزته --- */
+    try {
+      const bud = normalizeBudget(s.familyBudget);
+      if (hasBudget(bud)) {
+        const nowD = new Date();
+        const he = await houseExpenses.listByPeriod(new Date(nowD.getFullYear(), nowD.getMonth(), 1).getTime(), Date.now() + 86400000);
+        const al = budgetAlerts(budgetStatus({ expenses: he, budget: bud, now: nowD, cats: HOUSE_EXPENSE_CATEGORIES }));
+        if (al.length > 0) {
+          out.push({
+            type: 'warning',
+            icon: '🧮',
+            title: al.length + ' من بنود الميزانية ' + (al.some((a) => a.level === 'over') ? 'تجاوزت السقف' : 'اقتربت من السقف'),
+            subtitle: al.slice(0, 2).map((a) => a.label + ' (' + a.pct + '%)').join(' — '),
+            route: '#/house-expenses',
+            count: al.length,
+          });
+        }
+      }
+    } catch (e) { /* الميزانية اختيارية ولا تعطّل بقية الإشعارات */ }
   } catch (e) {
     console.warn('[NotificationsCenter] getNotifications failed:', e);
   }
