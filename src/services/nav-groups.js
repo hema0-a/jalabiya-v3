@@ -51,6 +51,9 @@ export const NAV_GROUPS = [
     { id: 'commitments',    icon: '💳', label: 'الالتزامات' },
     { id: 'house-expenses', icon: '🏡', label: 'مصاريف البيت' },
     { id: 'loans',          icon: '💵', label: 'القروض' },
+    { id: 'circles',        icon: '🪙', label: 'الجمعيات' },
+    { id: 'documents',      icon: '🗂️', label: 'المستندات' },
+    { id: 'todos',          icon: '✅', label: 'المهام والملاحظات' },
   ]},
   { id: 'system', title: 'النظام', icon: '⚙️', items: [
     { id: 'activity-log', icon: '📜', label: 'سجل النشاط' },

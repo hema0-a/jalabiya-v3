@@ -1,0 +1,81 @@
+/* ==========================================================================
+   v3160-circles-docs-todos.test.js — الجمعيات · تجديد المستندات · المهام والمشتريات والملاحظات (v3.16.0)
+   ========================================================================== */
+import { register } from '../registry.js';
+import { STORES, DB_CONFIG } from '../../core/config.js';
+import { SCHEMA } from '../../data/schema.js';
+import { RECORD_STORES } from '../../data/record-meta.js';
+import { SYNC_STORES } from '../../sync/firestore-sync.js';
+import { NAV_IDS, groupIdOf, NAV_GROUPS } from '../../services/nav-groups.js';
+import { canAccess, FINANCE_LOCK_PAGES } from '../../services/roles.js';
+import {
+  validYm, ymOf, addMonths, checkCircleInput, potOf, schedule, circleProgress, monthOverview, circleAlerts,
+} from '../../services/circles.js';
+import {
+  CATEGORIES, normalizeCategory, normalizeRemindDays, checkDocumentInput, documentStatus, sortDocuments, renewedExpiry, documentsSummary, documentAlerts,
+} from '../../services/documents.js';
+import {
+  normalizeKind, normalizeRepeat, normalizePriority, checkTodoInput, taskBucket, sortTasks, nextDue, taskSummary, shoppingText, searchNotes,
+} from '../../services/todos.js';
+
+const src = async (rel) => (await fetch(new URL('../../' + rel, import.meta.url))).text();
+const NOW = new Date(2026, 5, 10, 12);
+const d = (m, day) => new Date(2026, m, day, 10).getTime();
+const C = { id: 'c1', name: 'جمعية', installment: 1000, members: 10, myTurn: 4, startYm: '2026-04', payDay: 12, paid: { '2026-04': true, '2026-05': true } };
+
+register('v3.16.0 الجمعيات والمستندات والمهام', async (t) => {
+  /* ---- الجمعيات ---- */
+  await t.test('1. validYm وaddMonths مع عبور السنة', validYm('2026-04') && !validYm('2026-4') && !validYm('2026-13') && !validYm(null) && addMonths('2026-11', 3) === '2027-02' && addMonths('2026-01', -1) === '2025-12' && ymOf(NOW) === '2026-06');
+  await t.test('2. checkCircleInput: الحقول المطلوبة وحدودها', !checkCircleInput({}).ok && !checkCircleInput({ name: 'أ', installment: 0, members: 5, myTurn: 1, startYm: '2026-04' }).ok && !checkCircleInput({ name: 'أ', installment: 100, members: 1, myTurn: 1, startYm: '2026-04' }).ok && !checkCircleInput({ name: 'أ', installment: 100, members: 5, myTurn: 6, startYm: '2026-04' }).ok && !checkCircleInput({ name: 'أ', installment: 100, members: 5, myTurn: 0, startYm: '2026-04' }).ok && !checkCircleInput({ name: 'أ', installment: 100, members: 5, myTurn: 1, startYm: 'x' }).ok && !checkCircleInput({ name: 'أ', installment: 100, members: 61, myTurn: 1, startYm: '2026-04' }).ok && !checkCircleInput(null).ok);
+  await t.test('3. checkCircleInput: يُنقّي الاسم ويقبل يوم الدفع الصالح فقط', (() => { const r = checkCircleInput({ name: ' <b>جمعية</b> ', installment: '1000.5', members: '10', myTurn: '4', startYm: '2026-04', payDay: '40' }); const r2 = checkCircleInput({ name: 'أ', installment: 5, members: 3, myTurn: 2, startYm: '2026-04', payDay: '15' }); return r.ok && r.data.name === 'b جمعية /b' && r.data.installment === 1000.5 && r.data.payDay === null && r2.data.payDay === 15; })());
+  await t.test('4. القبض = القسط × الأعضاء', potOf(C) === 10000 && potOf(null) === 0);
+  await t.test('5. جدول الأشهر: يبدأ من startYm ويعبر السنة ويعلّم دورك والمدفوع', (() => { const s = schedule(C); const y = schedule({ installment: 1, members: 4, myTurn: 3, startYm: '2026-11' }); return s.length === 10 && s[0].ym === '2026-04' && s[3].ym === '2026-07' && s[3].isMyTurn && s[0].paid && s[1].paid && !s[2].paid && y.map((r) => r.ym).join() === '2026-11,2026-12,2027-01,2027-02' && schedule({}).length === 0 && schedule(null).length === 0; })());
+  const p = circleProgress(C, NOW);
+  await t.test('6. التقدّم: المدفوع والمتبقي والقبض وشهر الدور والقادم', p.totalMonths === 10 && p.paidMonths === 2 && p.paidAmount === 2000 && p.remainingAmount === 8000 && p.pot === 10000 && p.turnYm === '2026-07' && p.nextDueYm === '2026-06' && p.overdueMonths === 0 && p.status === 'active' && !p.collected);
+  await t.test('7. المتأخر: شهر مضى بلا دفع', circleProgress({ ...C, paid: { '2026-04': true } }, NOW).overdueMonths === 1 && circleProgress({ ...C, paid: {} }, NOW).overdueMonths === 2);
+  await t.test('8. الحالة: لم تبدأ · جارية · انتهت (بعد دفع الكل وتسجيل القبض)', circleProgress(C, new Date(2026, 2, 5)).status === 'upcoming' && (() => { const all = Object.fromEntries(schedule(C).map((r) => [r.ym, true])); const end = new Date(2027, 1, 10); return circleProgress({ ...C, paid: all, collected: true }, end).status === 'finished' && circleProgress({ ...C, paid: all, collected: false }, end).status === 'active' && circleProgress({ ...C, paid: {} }, end).status === 'active'; })());
+  const C2 = { id: 'c2', name: 'ثانية', installment: 500, members: 6, myTurn: 3, startYm: '2026-04', paid: { '2026-04': true, '2026-05': true, '2026-06': true } };
+  await t.test('9. ملخص الشهر: القسط غير المدفوع والقبض المنتظر (والموقوفة خارجه)', (() => { const o = monthOverview([C, C2], NOW); const j = monthOverview([C, C2, { ...C, id: 'x', active: false }], new Date(2026, 5, 10)); const jul = monthOverview([C, { ...C2, myTurn: 3 }], new Date(2026, 6, 5)); return o.dueAmount === 1000 && o.dueCount === 1 && o.collectAmount === 3000 && o.collectCount === 1 && j.dueCount === 1 && jul.collectAmount === 10000 && monthOverview(null).dueAmount === 0 && monthOverview([{ ...C2, collected: true }], NOW).collectAmount === 0; })());
+  await t.test('10. التنبيهات: قسط قريب (خلال 3 أيام) ثم متأخر بعد يوم الدفع', (() => { const near = circleAlerts([C], NOW, 3); const far = circleAlerts([C], new Date(2026, 5, 8), 3); const late = circleAlerts([C], new Date(2026, 5, 15), 3); return near.length === 1 && near[0].kind === 'due' && near[0].daysLeft === 2 && near[0].amount === 1000 && far.length === 0 && late[0].kind === 'late' && late[0].daysLate === 3; })());
+  await t.test('11. التنبيهات: أشهر متأخرة وقبض هذا الشهر، والمدفوع والموقوف بلا تنبيه', (() => { const od = circleAlerts([{ ...C, paid: {}, payDay: null }], NOW); const col = circleAlerts([{ ...C2, myTurn: 3, startYm: '2026-04' }], new Date(2026, 5, 10)); const turnNow = circleAlerts([{ ...C2, myTurn: 3, startYm: '2026-04', payDay: null }], new Date(2026, 5, 10)); return od.length === 1 && od[0].kind === 'overdue' && od[0].months === 2 && od[0].amount === 2000 && turnNow.some((a) => a.kind === 'collect' && a.amount === 3000) && circleAlerts([{ ...C, active: false, paid: {} }], NOW).length === 0 && circleAlerts(null, NOW).length === 0 && col.every((a) => a.kind === 'collect' || a.kind === 'due' || a.kind === 'late'); })());
+
+  /* ---- المستندات ---- */
+  await t.test('12. التصنيفات: أنواع وتطبيع، ومدة التنبيه المعقولة فقط', CATEGORIES.length === 7 && normalizeCategory('lease') === 'lease' && normalizeCategory('x') === 'other' && normalizeRemindDays(45) === 45 && normalizeRemindDays(-1) === 30 && normalizeRemindDays('x') === 30 && normalizeRemindDays(400) === 30 && normalizeRemindDays(0) === 0);
+  await t.test('13. checkDocumentInput: الاسم والتاريخ مطلوبان والتكلفة معقولة وتُنقّى', !checkDocumentInput({ expiresAt: d(6, 1) }).ok && !checkDocumentInput({ title: 'عقد' }).ok && !checkDocumentInput({ title: 'عقد', expiresAt: d(6, 1), cost: -5 }).ok && (() => { const r = checkDocumentInput({ title: ' <b>عقد</b> ', expiresAt: d(6, 1), category: 'zz', remindDays: '15', cost: '1500.456' }); return r.ok && r.data.title === 'b عقد /b' && r.data.category === 'other' && r.data.remindDays === 15 && r.data.cost === 1500.46 && r.data.expiresAt === new Date(2026, 6, 1).getTime(); })());
+  await t.test('14. الحالة: ساري/قريب/ينتهي اليوم/منتهٍ مع الأيام المتبقية', (() => { const s = (day, m = 6, rd) => documentStatus({ expiresAt: d(m, day), remindDays: rd }, NOW); return s(1).status === 'due' && s(1).daysLeft === 21 && documentStatus({ expiresAt: d(7, 20) }, NOW).status === 'ok' && documentStatus({ expiresAt: d(5, 10) }, NOW).daysLeft === 0 && documentStatus({ expiresAt: d(5, 10) }, NOW).status === 'due' && documentStatus({ expiresAt: d(5, 1) }, NOW).status === 'expired' && documentStatus({ expiresAt: d(5, 1) }, NOW).daysLeft === -9 && documentStatus({ expiresAt: d(6, 1), remindDays: 10 }, NOW).status === 'ok'; })());
+  const docs = [{ title: 'ساري', expiresAt: d(10, 1) }, { title: 'قريب', expiresAt: d(6, 1), cost: 500 }, { title: 'منتهٍ', expiresAt: d(5, 1), cost: 300 }, { title: 'بلا تاريخ' }, null];
+  await t.test('15. الترتيب: المنتهي ثم القريب ثم الساري ويُسقط بلا تاريخ', sortDocuments(docs, NOW).map((x) => x.title).join() === 'منتهٍ,قريب,ساري');
+  await t.test('16. التجديد: مبكر ⟵ عام من الانتهاء القديم، ومتأخر ⟵ عام من اليوم', new Date(renewedExpiry({ expiresAt: d(6, 1) }, NOW)).toISOString().slice(0, 10) === new Date(2027, 6, 1).toISOString().slice(0, 10) && new Date(renewedExpiry({ expiresAt: d(4, 1) }, NOW)).toISOString().slice(0, 10) === new Date(2027, 5, 10).toISOString().slice(0, 10));
+  await t.test('17. الملخص والتنبيهات: المنتهي والقريب وتكلفة 90 يوماً', (() => { const s = documentsSummary(docs, NOW); const a = documentAlerts(docs, NOW); return s.expired === 1 && s.due === 1 && s.cost90 === 800 && a.length === 2 && a[0].d.title === 'منتهٍ' && a[1].status === 'due' && documentAlerts(null, NOW).length === 0; })());
+
+  /* ---- المهام ---- */
+  await t.test('18. التطبيع الآمن للنوع والتكرار والأولوية', normalizeKind('note') === 'note' && normalizeKind('x') === 'task' && normalizeRepeat('weekly') === 'weekly' && normalizeRepeat('x') === 'none' && normalizePriority('high') === 'high' && normalizePriority('x') === 'normal');
+  await t.test('19. checkTodoInput: لكل نوع حقوله، والمتكررة تحتاج موعداً', !checkTodoInput({ kind: 'task', title: '  ' }).ok && !checkTodoInput({ kind: 'task', title: 'م', repeat: 'daily' }).ok && checkTodoInput({ kind: 'task', title: 'م', repeat: 'daily', due: d(5, 10) }).ok && checkTodoInput({ kind: 'shopping', title: 'خيط', qty: '5 بكر' }).data.qty === '5 بكر' && !('due' in checkTodoInput({ kind: 'shopping', title: 'خيط' }).data) && checkTodoInput({ kind: 'note', title: 'ن', body: 'نص\nسطرين' }).data.body === 'نص\nسطرين' && !checkTodoInput({ kind: 'note', title: '' }).ok && !checkTodoInput(null).ok);
+  await t.test('20. تصنيف المهمة: متأخرة/اليوم/قريبة/لاحقاً/بلا موعد/منجزة', taskBucket({ due: d(5, 9) }, NOW) === 'overdue' && taskBucket({ due: d(5, 10) }, NOW) === 'today' && taskBucket({ due: d(5, 17) }, NOW) === 'soon' && taskBucket({ due: d(5, 18) }, NOW) === 'later' && taskBucket({}, NOW) === 'nodate' && taskBucket({ due: d(5, 9), done: true }, NOW) === 'done' && taskBucket(null, NOW) === 'nodate');
+  const tasks = [{ kind: 'task', title: 'لاحقاً', due: d(7, 30) }, { kind: 'task', title: 'اليوم', due: d(5, 10) }, { kind: 'task', title: 'متأخرة عادية', due: d(5, 5) }, { kind: 'task', title: 'متأخرة مهمة', due: d(5, 8), priority: 'high' }, { kind: 'task', title: 'منجزة', due: d(5, 1), done: true }, { kind: 'task', title: 'بلا موعد' }, { kind: 'note', title: 'ملاحظة' }, null];
+  await t.test('21. ترتيب المهام: المتأخرة ثم اليوم ثم لاحقاً ثم بلا موعد ثم المنجزة، والمهم أولاً داخل الفئة', sortTasks(tasks, NOW).map((x) => x.title).join() === 'متأخرة مهمة,متأخرة عادية,اليوم,لاحقاً,بلا موعد,منجزة');
+  await t.test('22. الموعد التالي: يومي/أسبوعي/شهري (31 يناير ⟵ 30 يونيو) وبلا تكرار ⟵ null', new Date(nextDue({ due: d(5, 8), repeat: 'daily' }, NOW)).getDate() === 11 && new Date(nextDue({ due: d(5, 1), repeat: 'weekly' }, NOW)).getDate() === 15 && (() => { const x = new Date(nextDue({ due: d(0, 31), repeat: 'monthly' }, NOW)); return x.getMonth() === 5 && x.getDate() === 30; })() && nextDue({ due: d(5, 8), repeat: 'none' }, NOW) === null && nextDue({ repeat: 'daily' }, NOW) === null && nextDue(null, NOW) === null);
+  await t.test('23. الموعد التالي دائماً بعد اليوم', [{ due: d(5, 9), repeat: 'daily' }, { due: d(5, 10), repeat: 'weekly' }, { due: d(2, 1), repeat: 'monthly' }].every((x) => nextDue(x, NOW) > new Date(2026, 5, 10, 23, 59).getTime()));
+  await t.test('24. ملخص المهام: متأخرة واليوم والمفتوحة فقط', (() => { const s = taskSummary(tasks, NOW); return s.overdue === 2 && s.today === 1 && s.open === 5 && taskSummary(null, NOW).open === 0; })());
+  await t.test('25. نص المشتريات: غير المشتراة فقط وبكمياتها، وفارغ بلا بنود', (() => { const txt = shoppingText([{ kind: 'shopping', title: 'خيط', qty: '5' }, { kind: 'shopping', title: 'أزرار', done: true }, { kind: 'shopping', title: 'مقص' }, { kind: 'task', title: 'x' }]); return txt.startsWith('🛒 قائمة المشتريات') && txt.includes('• خيط (5)') && txt.includes('• مقص') && !txt.includes('أزرار') && !txt.includes('x') && shoppingText([]) === '' && shoppingText(null) === ''; })());
+  await t.test('26. بحث الملاحظات: تطبيع الهمزات والتاء المربوطة، والأحدث أولاً', (() => { const notes = [{ kind: 'note', title: 'إجتماع المدرسة', body: 'x', createdAt: 1 }, { kind: 'note', title: 'قماش', body: 'مدرسه', createdAt: 5 }, { kind: 'task', title: 'مدرسة' }]; const r = searchNotes(notes, 'اجتماع'); const r2 = searchNotes(notes, 'مدرسة'); return r.length === 1 && r2.length === 2 && r2[0].createdAt === 5 && searchNotes(notes, '').length === 2 && searchNotes(null, 'x').length === 0; })());
+
+  /* ---- التسجيل ---- */
+  await t.test('27. المخازن الثلاثة: STORES والمخطط وفهارسها والإصدار 16', STORES.CIRCLES === 'circles' && STORES.DOCUMENTS === 'documents' && STORES.TODOS === 'todos' && SCHEMA.circles && SCHEMA.documents.indexes.some((i) => i.name === 'by_expiresAt') && SCHEMA.todos.indexes.some((i) => i.name === 'by_kind') && DB_CONFIG.version >= 16);
+  await t.test('28. المخازن في قائمتي المزامنة والسجلات متطابقتين', ['circles', 'documents', 'todos'].every((k) => RECORD_STORES.includes(k) && SYNC_STORES.includes(k)) && RECORD_STORES.length === SYNC_STORES.length);
+  const bk = await src('pages/settings/section-backup-io.js');
+  await t.test('29. المخازن في تصدير واستيراد النسخ الاحتياطي (الموضعين)', ['circles', 'documents', 'todos'].every((k) => (bk.match(new RegExp("'" + k + "'", 'g')) || []).length === 2));
+  await t.test('30. الصفحات الثلاث في مجموعة «الشخصي» وبحد 7 للمجموعة', ['circles', 'documents', 'todos'].every((p) => NAV_IDS.has(p) && groupIdOf(p) === 'personal') && NAV_GROUPS.every((g) => g.items.length <= 7));
+  await t.test('31. الصلاحيات: المالك والمدير نعم والاستقبال لا، والجمعيات تحت القفل المالي', ['circles', 'documents', 'todos'].every((p) => canAccess('owner', p) && canAccess('manager', p) && !canAccess('receptionist', p)) && FINANCE_LOCK_PAGES.includes('circles'));
+  const main = await src('main.js');
+  await t.test('32. الراوتر وخريطة التصدير للصفحات الثلاث', ['circles', 'documents', 'todos'].every((p) => main.includes("case '" + p + "':") && main.includes("./pages/" + p + ".js") && main.includes(p + ':') && main.includes(p + 'Page')));
+
+  /* ---- عقود الواجهات ---- */
+  const cp = await src('pages/circles.js'); const dp = await src('pages/documents.js'); const tp = await src('pages/todos.js');
+  await t.test('33. الصفحات الجديدة: بلا innerHTML ولا import ديناميكي', !/innerHTML\s*=/.test(cp + dp + tp) && !/\bimport\(/.test(cp + dp + tp));
+  await t.test('34. الجمعيات: تعليم المدفوع يستبدل كائن paid كاملاً، والقبض والإيقاف أعلام', cp.includes('await circles.update(c.id, { paid })') && cp.includes('await circles.update(c.id, { collected: !c.collected })') && cp.includes('{ active: c.active === false }') && cp.includes('paid: {}, collected: false, active: true'));
+  await t.test('35. المستندات: التجديد يرفض تاريخاً لا يتجاوز القديم ويحسب عدد التجديدات', dp.includes('exp > Number(d.expiresAt)') && dp.includes('renewals: (Number(d.renewals) || 0) + 1') && dp.includes('renewedExpiry(d)'));
+  await t.test('36. المهام: الإنجاز يحرّك المتكررة لموعدها التالي، والمشاركة عبر واتساب مُشفَّرة', tp.includes('const next = nextDue(t);') && tp.includes("lastDoneAt: Date.now()") && tp.includes("'https://wa.me/?text=' + encodeURIComponent(text)") && tp.includes("'noopener,noreferrer'"));
+  const nc = await src('ui/notifications-center.js');
+  await t.test('37. الإشعارات الثلاثة كل منها مغلَّف بـ try/catch مستقل', ['الجمعيات اختيارية', 'المستندات اختيارية', 'المهام اختيارية'].every((s) => nc.includes('/* ' + s + ' ولا تعطّل بقية الإشعارات */')) && nc.includes("route: '#/circles'") && nc.includes("route: '#/documents'") && nc.includes("route: '#/todos'"));
+});

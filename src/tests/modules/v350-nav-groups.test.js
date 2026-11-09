@@ -38,8 +38,8 @@ register('v3.5.0 nav-groups — التجميع والمفضلة', async (t) => {
     NAV_GROUPS.every((g) => g.title && g.icon && g.items.length > 0));
 
   await t.test('2. الصفحات الأصلية كلها موجودة مرة واحدة بلا زيادة (ما عدا cloud-sync وdata-care المُزالتين عمداً من القائمة: v3.5.22 وv3.5.27)',
-    ALL_NAV_ITEMS.length === 31 &&   /* +الموردون (v3.12.0) +التعديلات والمرتجعات +العملاء المنقطعون (v3.14.0) */
-    NAV_IDS.size === 31 &&
+    ALL_NAV_ITEMS.length === 34 &&   /* +الموردون (v3.12.0) +التعديلات والمرتجعات +العملاء المنقطعون (v3.14.0) +الجمعيات +المستندات +المهام (v3.16.0) */
+    NAV_IDS.size === 34 &&
     !NAV_IDS.has('cloud-sync') && !NAV_IDS.has('data-care') &&
     ORIGINAL_IDS.every((id) => NAV_IDS.has(id)));
 

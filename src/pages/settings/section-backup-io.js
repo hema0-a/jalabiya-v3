@@ -104,7 +104,7 @@ export async function exportAllData() {
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia', 'suppliers', 'supplierEntries', 'aftercare', 'attendance',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia', 'suppliers', 'supplierEntries', 'aftercare', 'attendance', 'circles', 'documents', 'todos',
     ];
     const data = { version: 10, exportedAt: Date.now(), stores: {} };
     for (const s of stores) data.stores[s] = await db.getAll(s);
@@ -146,7 +146,7 @@ export async function importAllData(file) {
       'customers', 'orders', 'payments', 'inventory', 'workers', 'expenses',
       'appointments', 'settings', 'portfolio', 'commitments',
       'commitmentPayments', 'savingsGoals', 'houseExpenses',
-      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia', 'suppliers', 'supplierEntries', 'aftercare', 'attendance',
+      'personalLoans', 'loanPayments', 'referrals', 'workerPayments', 'quotes', 'ledger', 'orderMedia', 'suppliers', 'supplierEntries', 'aftercare', 'attendance', 'circles', 'documents', 'todos',
     ];
     const plan = {};
     let skipped = 0;

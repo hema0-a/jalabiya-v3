@@ -31,6 +31,12 @@ import { balancesBySupplier, overdueSupplierDues } from '../services/suppliers.j
 import { houseExpenses } from '../data/repos/house-expenses.js';
 import { normalizeBudget, hasBudget, budgetAlerts, budgetStatus } from '../services/family-budget.js';
 import { HOUSE_EXPENSE_CATEGORIES } from '../core/config.js';
+import { circles } from '../data/repos/circles.js';
+import { documents } from '../data/repos/documents.js';
+import { todos } from '../data/repos/todos.js';
+import { circleAlerts } from '../services/circles.js';
+import { documentAlerts } from '../services/documents.js';
+import { taskSummary } from '../services/todos.js';
 
 /* ==========================================================================
    1. الثوابت
@@ -296,6 +302,54 @@ export async function getNotifications() {
         }
       }
     } catch (e) { /* الميزانية اختيارية ولا تعطّل بقية الإشعارات */ }
+
+    /* --- 9. الجمعيات (v3.16.0): قسط مستحق أو متأخر، وقبض هذا الشهر --- */
+    try {
+      const al = circleAlerts(await circles.list(), new Date(), 3);
+      const pay = al.filter((a) => a.kind !== 'collect');
+      if (pay.length > 0) {
+        out.push({
+          type: 'warning', icon: '🪙',
+          title: pay.length + ' قسط جمعية ' + (pay.some((a) => a.kind === 'overdue' || a.kind === 'late') ? 'متأخر أو مستحق' : 'مستحق قريباً'),
+          subtitle: pay.slice(0, 2).map((a) => a.name + ' (' + formatEGP(a.amount) + ')').join(' — '),
+          route: '#/circles', count: pay.length,
+        });
+      }
+      const col = al.filter((a) => a.kind === 'collect');
+      if (col.length > 0) {
+        out.push({
+          type: 'info', icon: '💰', title: 'قبض جمعية هذا الشهر',
+          subtitle: col.slice(0, 2).map((a) => a.name + ' (' + formatEGP(a.amount) + ')').join(' — '),
+          route: '#/circles', count: col.length,
+        });
+      }
+    } catch (e) { /* الجمعيات اختيارية ولا تعطّل بقية الإشعارات */ }
+
+    /* --- 10. المستندات (v3.16.0): منتهية أو تنتهي خلال مدة تنبيهها --- */
+    try {
+      const da = documentAlerts(await documents.list(), new Date());
+      if (da.length > 0) {
+        out.push({
+          type: 'warning', icon: '🗂️',
+          title: da.length + ' مستند ' + (da.some((x) => x.status === 'expired') ? 'منتهٍ أو ينتهي قريباً' : 'ينتهي قريباً'),
+          subtitle: da.slice(0, 2).map((x) => x.d.title + (x.status === 'expired' ? ' (منتهٍ)' : ' (' + x.daysLeft + ' يوم)')).join(' — '),
+          route: '#/documents', count: da.length,
+        });
+      }
+    } catch (e) { /* المستندات اختيارية ولا تعطّل بقية الإشعارات */ }
+
+    /* --- 11. المهام (v3.16.0): متأخرة أو موعدها اليوم --- */
+    try {
+      const ts = taskSummary(await todos.list(), new Date());
+      if (ts.overdue + ts.today > 0) {
+        out.push({
+          type: ts.overdue > 0 ? 'warning' : 'info', icon: '✅',
+          title: (ts.overdue + ts.today) + ' مهمة ' + (ts.overdue > 0 ? 'متأخرة أو اليوم' : 'اليوم'),
+          subtitle: ts.overdue > 0 ? ts.overdue + ' متأخرة · ' + ts.today + ' اليوم' : 'موعدها اليوم',
+          route: '#/todos', count: ts.overdue + ts.today,
+        });
+      }
+    } catch (e) { /* المهام اختيارية ولا تعطّل بقية الإشعارات */ }
   } catch (e) {
     console.warn('[NotificationsCenter] getNotifications failed:', e);
   }

@@ -1,6 +1,7 @@
 /* ==========================================================================
    schema.js — تعريف بنية IndexedDB
    ==========================================================================
+   v16: إضافة مخازن circles وdocuments وtodos (الجمعيات وتجديد المستندات والمهام — v3.16.0، تُنشأ تلقائياً بالترقية).
    v15: إضافة مخزن attendance (غياب ونصف يوم العمال — v3.15.0، يُنشأ تلقائياً بالترقية).
    v14: إضافة مخزن aftercare (التعديلات والمرتجعات بعد التسليم — v3.14.0، يُنشأ تلقائياً بالترقية).
    v13: إضافة مخزني suppliers وsupplierEntries (الموردون والمشتريات — v3.12.0، يُنشآن تلقائياً بالترقية).
@@ -220,6 +221,26 @@ export const SCHEMA = {
     indexes: [
       idx('by_workerId', 'workerId'),
       idx('by_day', 'day'),
+    ],
+  },
+  /* --- جديد v16: الجمعيات · المستندات · المهام والمشتريات والملاحظات --- */
+  [STORES.CIRCLES]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_createdAt', 'createdAt'),
+    ],
+  },
+  [STORES.DOCUMENTS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_expiresAt', 'expiresAt'),
+    ],
+  },
+  [STORES.TODOS]: {
+    keyPath: 'id', autoIncrement: false,
+    indexes: [
+      idx('by_kind', 'kind'),
+      idx('by_due', 'due'),
     ],
   },
 };

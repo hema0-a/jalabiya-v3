@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.15.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.16.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.15.0';
+const CACHE_VERSION = 'v3.16.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -64,9 +64,11 @@ const PRECACHE_URLS = [
   './src/data/repos/aftercare.js',
   './src/data/repos/appointments.js',
   './src/data/repos/attendance.js',
+  './src/data/repos/circles.js',
   './src/data/repos/commitment-payments.js',
   './src/data/repos/commitments.js',
   './src/data/repos/customers.js',
+  './src/data/repos/documents.js',
   './src/data/repos/expenses.js',
   './src/data/repos/house-expenses.js',
   './src/data/repos/inventory.js',
@@ -82,6 +84,7 @@ const PRECACHE_URLS = [
   './src/data/repos/savings-goals.js',
   './src/data/repos/settings.js',
   './src/data/repos/suppliers.js',
+  './src/data/repos/todos.js',
   './src/data/repos/trash.js',
   './src/data/repos/worker-payments.js',
   './src/data/repos/workers.js',
@@ -95,6 +98,7 @@ const PRECACHE_URLS = [
   './src/pages/calendar-grid.js',
   './src/pages/calendar-utils.js',
   './src/pages/calendar.js',
+  './src/pages/circles.js',
   './src/pages/cloud-sync.js',
   './src/pages/commitments-actions.js',
   './src/pages/commitments-cards.js',
@@ -119,6 +123,7 @@ const PRECACHE_URLS = [
   './src/pages/dashboard.js',
   './src/pages/data-care.js',
   './src/pages/debts.js',
+  './src/pages/documents.js',
   './src/pages/expenses.js',
   './src/pages/financial-center.js',
   './src/pages/house-expenses.js',
@@ -152,6 +157,7 @@ const PRECACHE_URLS = [
   './src/pages/suppliers-forms.js',
   './src/pages/suppliers.js',
   './src/pages/tests.js',
+  './src/pages/todos.js',
   './src/pages/trash.js',
   './src/pages/wall.js',
   './src/pages/winback.js',
@@ -216,6 +222,7 @@ const PRECACHE_URLS = [
   './src/services/calendar-events.js',
   './src/services/capacity-strip.js',
   './src/services/catalog-page.js',
+  './src/services/circles.js',
   './src/services/commitments-calculator.js',
   './src/services/contacts-import.js',
   './src/services/custom-fonts.js',
@@ -231,6 +238,7 @@ const PRECACHE_URLS = [
   './src/services/demo-data.js',
   './src/services/deposit-policy.js',
   './src/services/diagnostics.js',
+  './src/services/documents.js',
   './src/services/draft-manager.js',
   './src/services/fabric-calc.js',
   './src/services/family-budget.js',
@@ -302,6 +310,7 @@ const PRECACHE_URLS = [
   './src/services/storage-health.js',
   './src/services/suppliers.js',
   './src/services/system-status.js',
+  './src/services/todos.js',
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
   './src/services/week-visits.js',
