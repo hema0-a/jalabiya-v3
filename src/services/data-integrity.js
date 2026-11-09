@@ -13,7 +13,7 @@ const ids = (list) => new Set((Array.isArray(list) ? list : []).filter(Boolean).
  * @returns {{issues:Array, counts:Object, total:number}}
  *   issue = {type, severity:'error'|'warn'|'info', message, store, id, fix?:{store,id,patch}}
  */
-export function scanIntegrity({ customers, orders, payments, appointments, quotes, orderMediaKeys, trashOrderIds } = {}) {
+export function scanIntegrity({ customers, orders, payments, appointments, quotes, orderMediaKeys, trashOrderIds, aftercare, workers, attendance, suppliers, supplierEntries } = {}) {
   const cs = Array.isArray(customers) ? customers : [];
   const os = Array.isArray(orders) ? orders : [];
   const ps = Array.isArray(payments) ? payments : [];
@@ -89,6 +89,36 @@ export function scanIntegrity({ customers, orders, payments, appointments, quote
       add({ type: 'media_bad_key', severity: 'warn', store: 'orderMedia', id: k, message: 'سجل وسائط بمعرّف غير صالح' });
     }
   }
+  /* روابط مخازن 3.12–3.16 (v3.16.2): يُتخطّى كل فحص إن لم تُمرَّر مدخلاته. تُعرض للتقرير فقط (لا إصلاح آلي: الحذف قرار المستخدم).
+     طلب في السلة ليس يتيماً. وبلا طلبات محمَّلة (فحص جزئي) لا نحكم على الحالات. */
+  if (Array.isArray(aftercare) && os.length > 0) {
+    const trashSet = new Set(Array.isArray(trashOrderIds) ? trashOrderIds : []);
+    for (const c of aftercare) {
+      if (!c) continue;
+      if (c.orderId && !oMap.has(c.orderId) && !trashSet.has(c.orderId)) {
+        add({ type: 'aftercare_orphan_order', severity: 'warn', store: 'aftercare', id: c.id, message: 'حالة رجوع مربوطة بطلب غير موجود' });
+      }
+      if (c.customerId && !cid.has(c.customerId)) {
+        add({ type: 'aftercare_missing_customer', severity: 'info', store: 'aftercare', id: c.id, message: 'حالة رجوع لعميل محذوف' });
+      }
+    }
+  }
+  if (Array.isArray(attendance) && Array.isArray(workers)) {
+    const wid = ids(workers);
+    for (const r of attendance) {
+      if (r && r.workerId && !wid.has(r.workerId)) {
+        add({ type: 'attendance_orphan_worker', severity: 'warn', store: 'attendance', id: r.id, message: 'سجل حضور لعامل غير موجود' });
+      }
+    }
+  }
+  if (Array.isArray(supplierEntries) && Array.isArray(suppliers)) {
+    const sid = ids(suppliers);
+    for (const e of supplierEntries) {
+      if (e && e.supplierId && !sid.has(e.supplierId)) {
+        add({ type: 'supplier_entry_orphan', severity: 'warn', store: 'supplierEntries', id: e.id, message: 'حركة مورد لمورد غير موجود' });
+      }
+    }
+  }
   const counts = {};
   issues.forEach((i) => { counts[i.type] = (counts[i.type] || 0) + 1; });
   return { issues, counts, total: issues.length };
@@ -108,4 +138,8 @@ export const ISSUE_LABELS = {
   quote_orphan_order: 'عروض مربوطة بطلب محذوف',
   media_orphan: 'وسائط (صور/توقيعات) لطلب غير موجود',
   media_bad_key: 'سجلات وسائط بمعرّف غير صالح',
+  aftercare_orphan_order: 'حالات رجوع مربوطة بطلب محذوف',
+  aftercare_missing_customer: 'حالات رجوع لعميل محذوف',
+  attendance_orphan_worker: 'سجلات حضور لعامل غير موجود',
+  supplier_entry_orphan: 'حركات موردين لمورد غير موجود',
 };
