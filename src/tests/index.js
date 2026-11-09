@@ -159,5 +159,6 @@ import './modules/v3130-insights.test.js';
 import './modules/v3140-aftercare-winback.test.js';
 import './modules/v3150-workers-budget.test.js';
 import './modules/v3160-circles-docs-todos.test.js';
+import './modules/v3161-backup-coverage.test.js';
 
 export { runAll, register } from './registry.js';

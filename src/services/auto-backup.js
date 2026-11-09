@@ -42,6 +42,14 @@ const BACKUP_STORES = [
   STORES.QUOTES,
   STORES.LEDGER,
   STORES.ORDER_MEDIA,
+  /* v3.16.1: مخازن 3.12–3.16 (كانت غائبة عن النسخ التلقائي؛ الاستعادة من نسخة أقدم تتخطاها فلا تمسح بياناتها) */
+  STORES.SUPPLIERS,
+  STORES.SUPPLIER_ENTRIES,
+  STORES.AFTERCARE,
+  STORES.ATTENDANCE,
+  STORES.CIRCLES,
+  STORES.DOCUMENTS,
+  STORES.TODOS,
 ];
 
 /* ==========================================================================
