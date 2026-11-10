@@ -1,0 +1,31 @@
+name: Push cron (free alternative to Cloud Functions)
+
+# بديل مجاني للدوال: يرسل الإشعار اليومي وطلبات الاختبار عبر GitHub Actions.
+# يعمل كل 30 دقيقة، ويدوياً من Actions ← Push cron ← Run workflow.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push-cron
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: تثبيت firebase-admin
+        run: npm install --prefix functions --omit=dev --no-audit --no-fund
+      - name: إرسال الإشعارات
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/push-runner.cjs
