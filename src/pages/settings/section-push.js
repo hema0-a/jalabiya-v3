@@ -81,7 +81,7 @@ export const pushSection = {
           if (r.ok) { push.start(); toast.success('✅ تفعّلت الإشعارات الحقيقية'); }
           else {
             await savePush({ enabled: false });
-            toast.danger(REASONS[r.reason] || REASONS.error);
+            toast.danger((REASONS[r.reason] || REASONS.error) + (r.message ? ' [' + r.message + ']' : ''));
           }
         }
       } finally {
