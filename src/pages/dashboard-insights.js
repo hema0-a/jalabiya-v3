@@ -7,6 +7,7 @@
    API: buildInsightsCard(model) → HTMLElement · loadInsightsModel(now?) → Promise<Object> · mountInsights(slot) → Promise<void>
    ========================================================================== */
 
+import { buildPersonalTodayCard, loadPersonalToday } from '../ui/personal-today-card.js';
 import { el } from '../core/dom.js';
 import { startOfDay, startOfNextDay } from '../core/day-math.js';
 import { orders } from '../data/repos/orders.js';
@@ -121,5 +122,12 @@ export async function mountInsights(slot) {
     if (slot && slot.isConnected) slot.appendChild(buildInsightsCard(model));
   } catch (e) {
     console.warn('[Dashboard] insights failed:', e);
+  }
+  /* v3.17.0: ملخصك الشخصي (مهام/مستندات/جمعيات) — مستقل: فشله لا يمسّ بطاقة الإنتاجية */
+  try {
+    const card = buildPersonalTodayCard(await loadPersonalToday());
+    if (card && slot && slot.isConnected) slot.appendChild(card);
+  } catch (e) {
+    console.warn('[Dashboard] personal summary failed:', e);
   }
 }

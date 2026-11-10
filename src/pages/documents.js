@@ -9,6 +9,8 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { documents } from '../data/repos/documents.js';
+import { trash } from '../data/repos/trash.js';
+import { STORES } from '../core/config.js';
 import { formatEGP, formatDate, localDateInput, parseDateInput } from '../core/utils.js';
 import {
   CATEGORIES, DEFAULT_REMIND_DAYS, checkDocumentInput, categoryMeta, documentStatus, sortDocuments, renewedExpiry, documentsSummary,
@@ -75,9 +77,9 @@ function openRenew(d) {
 }
 
 async function removeDoc(d) {
-  const ok = await modal.confirm({ title: 'حذف مستند', message: 'حذف "' + d.title + '" نهائياً؟', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+  const ok = await modal.confirm({ title: 'حذف مستند', message: 'حذف "' + d.title + '"؟ ينتقل إلى سلة المحذوفات 7 أيام.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
   if (!ok) return;
-  try { await documents.remove(d.id); toast.success('تم الحذف'); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
+  try { await trash.addToTrash(STORES.DOCUMENTS, d); await documents.remove(d.id); toast.success('تم الحذف'); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 
 const STATUS = {

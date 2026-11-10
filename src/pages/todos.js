@@ -9,6 +9,8 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { todos } from '../data/repos/todos.js';
+import { trash } from '../data/repos/trash.js';
+import { STORES } from '../core/config.js';
 import { formatDate, localDateInput, parseDateInput } from '../core/utils.js';
 import {
   REPEATS, PRIORITIES, checkTodoInput, taskBucket, sortTasks, nextDue, taskSummary, shoppingText, searchNotes, normalizePriority, normalizeRepeat,
@@ -70,9 +72,9 @@ async function completeTask(t) {
   } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 async function removeItem(t) {
-  const ok = await modal.confirm({ title: 'حذف', message: 'حذف "' + t.title + '"؟', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+  const ok = await modal.confirm({ title: 'حذف', message: 'حذف "' + t.title + '"؟ ينتقل إلى سلة المحذوفات 7 أيام.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
   if (!ok) return;
-  try { await todos.remove(t.id); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
+  try { await trash.addToTrash(STORES.TODOS, t); await todos.remove(t.id); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 
 function taskRow(t) {

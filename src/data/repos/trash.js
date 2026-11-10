@@ -84,6 +84,10 @@ export const trash = {
       });
     }
     delete data.creditRefunded;
+    /* v3.17.0: مورد محذوف يحمل معه حركاته (_entries): استرجاعه يعيدها كلها ولا يُخزَّن الحقل المساعد */
+    let bundledEntries = null;
+    if (item.originalStore === STORES.SUPPLIERS && Array.isArray(data._entries)) { bundledEntries = data._entries; }
+    delete data._entries;
     /* حراسة السلة (v3.3.83): حين يكون الدفتر مرجعاً لا نثق بعدّادات العميل المحفوظة في السلة (قديمة)؛
        يُشتق الرصيد والنقاط من الدفتر قبل الكتابة، فلا يظهر العميل بأرقام قديمة ولا نافذة مزامنة بها.
        (walletLog يبقى كما هو: سجل عرض فقط.) */
@@ -94,6 +98,7 @@ export const trash = {
     }
     /* updatedAt جديد: السجل المُسترجع يغلب شاهد حذفه على كل الأجهزة (v3.3.24) */
     await idb.put(item.originalStore, { ...data, updatedAt: Date.now() });
+    if (bundledEntries) for (const e of bundledEntries) if (e && e.id) await idb.put(STORES.SUPPLIER_ENTRIES, { ...e, updatedAt: Date.now() });
     /* الدفتر الظلّي (v3.3.80): استرجاع صنف يعيد كميته؛ المعرّف مشتق من عنصر السلة فلا يتكرر */
     if (item.originalStore === STORES.INVENTORY && Number(data.quantity) > 0) {
       await recordStockMove(data.id, Number(data.quantity), { type: 'adjust', moveId: 'restore:' + trashId, note: 'استرجاع صنف من السلة' });

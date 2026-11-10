@@ -9,6 +9,8 @@ import { el, clear } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { circles } from '../data/repos/circles.js';
+import { trash } from '../data/repos/trash.js';
+import { STORES } from '../core/config.js';
 import { formatEGP } from '../core/utils.js';
 import { MONTH_NAMES_AR } from '../services/insights.js';
 import { checkCircleInput, circleProgress, schedule, monthOverview, potOf, ymOf } from '../services/circles.js';
@@ -63,9 +65,9 @@ async function toggleActive(c) {
   try { await circles.update(c.id, { active: c.active === false }); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 async function removeCircle(c) {
-  const ok = await modal.confirm({ title: 'حذف جمعية', message: 'حذف "' + c.name + '" وسجل مدفوعاتها نهائياً؟', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+  const ok = await modal.confirm({ title: 'حذف جمعية', message: 'حذف "' + c.name + '" وسجل مدفوعاتها؟ تنتقل إلى سلة المحذوفات 7 أيام.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
   if (!ok) return;
-  try { await circles.remove(c.id); toast.success('تم الحذف'); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
+  try { await trash.addToTrash(STORES.CIRCLES, c); await circles.remove(c.id); toast.success('تم الحذف'); await refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
 }
 
 function overviewCard() {

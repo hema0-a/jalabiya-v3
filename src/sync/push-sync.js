@@ -19,6 +19,9 @@ import { orders as ordersRepo } from '../data/repos/orders.js';
 import { customers as customersRepo } from '../data/repos/customers.js';
 import { inventory as inventoryRepo } from '../data/repos/inventory.js';
 import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
+import { documents as documentsRepo } from '../data/repos/documents.js';
+import { circles as circlesRepo } from '../data/repos/circles.js';
+import { todos as todosRepo } from '../data/repos/todos.js';
 import { filterLowStockForAlerts, splitOutOfStock } from '../services/alert-rules.js';
 import { buildDigest, serverPrefs, pushOptions, sameDigest } from '../services/push-digest.js';
 
@@ -26,7 +29,7 @@ const VERSION = '10.12.0';
 const BASE = 'https://www.gstatic.com/firebasejs/' + VERSION + '/';
 const K_HASH = 'jalabiya_v3_push_hash';        /* بصمة رمز هذا الجهاز (يعني: مفعّل هنا) */
 const K_LAST = 'jalabiya_v3_push_last';        /* آخر ملخص + خيارات رُفعت */
-const WATCHED = new Set(['orders', 'customers', 'inventory', 'commitments', 'settings']);
+const WATCHED = new Set(['orders', 'customers', 'inventory', 'commitments', 'settings', 'documents', 'circles', 'todos']);
 const DEBOUNCE_MS = 15000;
 
 let _uid = null;
@@ -147,19 +150,22 @@ export async function requestServerTest() {
 /* ---------- الملخص ---------- */
 
 async function collect() {
-  const [st, ords, custs, low, cms] = await Promise.all([
+  const [st, ords, custs, low, cms, docs, circs, tds] = await Promise.all([
     settingsRepo.get().catch(() => ({})),
     ordersRepo.list().catch(() => []),
     customersRepo.list().catch(() => []),
     inventoryRepo.getLowStock().catch(() => []),
     commitmentsRepo.listActive().catch(() => []),
+    documentsRepo.list().catch(() => []),
+    circlesRepo.list().catch(() => []),
+    todosRepo.list().catch(() => []),
   ]);
   let lowN = 0; let outN = 0;
   try {
     const split = splitOutOfStock(filterLowStockForAlerts(low, st), st);
     lowN = split.low.length; outN = split.out.length;
   } catch (e) { lowN = Array.isArray(low) ? low.length : 0; }
-  return { settings: st, orders: ords, customers: custs, lowStock: lowN, outOfStock: outN, commitments: cms };
+  return { settings: st, orders: ords, customers: custs, lowStock: lowN, outOfStock: outN, commitments: cms, documents: docs, circles: circs, tasks: tds };
 }
 
 /**

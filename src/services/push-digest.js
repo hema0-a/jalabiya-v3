@@ -9,6 +9,7 @@
    ========================================================================== */
 
 import { filterForHardMonth, normalizePersonalControls } from './daily-need.js';
+import { schedule as circleSchedule, ymOf } from './circles.js';
 
 export const DIGEST_VERSION = 1;
 export const MAX_DIGEST_ORDERS = 400;
@@ -47,6 +48,9 @@ export function pushOptions(settings) {
     stock: p.stock !== false,
     commitments: p.commitments !== false,
     commitmentsDays: clampInt(p.commitmentsDays, 0, 14, 3),
+    documents: p.documents !== false,   /* v3.17.0 */
+    circles: p.circles !== false,
+    tasks: p.tasks !== false,
     quietEnabled: n.quietEnabled === true,
     quietFrom: hhmm(n.quietFrom, '22:00'),
     quietTo: hhmm(n.quietTo, '07:00'),
@@ -104,14 +108,49 @@ export function buildDigest(src) {
     }
   }
 
-  return {
-    v: DIGEST_VERSION,
-    at: now,
-    orders: open.slice(0, MAX_DIGEST_ORDERS).map((x) => x.row),
+  /* v3.17.0: إضافات اختيارية متوافقة مع الخادمة القديمة (تتجاهل الحقول التي لا تعرفها).
+     تُرسَل تواريخ لا أعداد جاهزة، فيحسبها الخادم بتاريخ يومه فلا يبلى الملخص بين الصباحات. */
+  const out = { v: DIGEST_VERSION, at: now, orders: open.slice(0, MAX_DIGEST_ORDERS).map((x) => x.row),
     low: opts.stock ? Math.max(0, Math.floor(Number(src.lowStock) || 0)) : 0,
     out: opts.stock ? Math.max(0, Math.floor(Number(src.outOfStock) || 0)) : 0,
-    cm,
-  };
+    cm };
+  if (opts.documents && Array.isArray(src.documents)) {
+    const dc = [];
+    for (const d of src.documents) {
+      const exp = Number(d && d.expiresAt);
+      if (!(exp > 0)) continue;
+      const row = { e: localYmd(exp), r: Number.isFinite(Number(d.remindDays)) ? Math.max(0, Math.min(365, Math.floor(Number(d.remindDays)))) : 30 };
+      if (opts.includeNames && d.title) row.t = String(d.title).slice(0, 24);
+      dc.push(row);
+    }
+    dc.sort((a, b) => (a.e < b.e ? -1 : a.e > b.e ? 1 : 0));
+    if (dc.length) out.dc = dc.slice(0, 30);
+  }
+  if (opts.circles && Array.isArray(src.circles)) {
+    const cur = ymOf(new Date(now));
+    const cr = [];
+    for (const c of src.circles) {
+      if (!c || c.active === false) continue;
+      const day = Number(c.payDay);
+      if (!Number.isInteger(day) || day < 1 || day > 31) continue;
+      const row = circleSchedule(c).find((r) => r.ym === cur);
+      if (!row || row.paid) continue;
+      const item = { day };
+      if (opts.includeNames && c.name) item.t = String(c.name).slice(0, 24);
+      cr.push(item);
+    }
+    if (cr.length) out.cr = cr.slice(0, 20);
+  }
+  if (opts.tasks && Array.isArray(src.tasks)) {
+    const tk = [];
+    for (const t of src.tasks) {
+      if (!t || t.kind !== 'task' || t.done === true || !(Number(t.due) > 0)) continue;
+      tk.push(localYmd(Number(t.due)));
+    }
+    tk.sort();
+    if (tk.length) out.tk = tk.slice(0, 40);
+  }
+  return out;
 }
 
 /** الخيارات التي تحتاجها الخادمة (بلا المفتاح العام). */
@@ -126,6 +165,9 @@ export function serverPrefs(settings, tz) {
     stock: o.stock,
     commitments: o.commitments,
     commitmentsDays: o.commitmentsDays,
+    documents: o.documents,
+    circles: o.circles,
+    tasks: o.tasks,
     quiet: o.quietEnabled ? { from: o.quietFrom, to: o.quietTo } : null,
     tz: tz || 'Africa/Cairo',
   };

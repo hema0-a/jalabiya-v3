@@ -11,6 +11,8 @@ import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { suppliers, supplierEntries } from '../data/repos/suppliers.js';
 import { expenses } from '../data/repos/expenses.js';
+import { trash } from '../data/repos/trash.js';
+import { STORES } from '../core/config.js';
 import { formatEGP, localDateInput, parseDateInput } from '../core/utils.js';
 import { checkSupplierInput, checkEntryInput, KINDS } from '../services/suppliers.js';
 
@@ -128,11 +130,12 @@ export function openEntryForm(ctx, supplier, kind, existing = null) {
 export async function deleteEntry(ctx, entry) {
   const ok = await modal.confirm({
     title: 'حذف حركة',
-    message: 'حذف هذه الحركة (' + formatEGP(entry.amount) + ')؟' + (entry.expenseId ? ' سيُحذف معها المصروف المسجَّل منها.' : ''),
+    message: 'حذف هذه الحركة (' + formatEGP(entry.amount) + ')؟ تنتقل إلى سلة المحذوفات 7 أيام.' + (entry.expenseId ? ' سيُحذف معها المصروف المسجَّل منها.' : ''),
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
   try {
+    await trash.addToTrash(STORES.SUPPLIER_ENTRIES, entry);   /* أولاً: حتى لا تضيع إن فشل الحذف */
     await supplierEntries.remove(entry.id);
     if (entry.expenseId) await expenses.remove(entry.expenseId).catch(() => {});
     toast.success('تم الحذف');
@@ -143,12 +146,13 @@ export async function deleteEntry(ctx, entry) {
 export async function deleteSupplier(ctx, supplier, entryCount) {
   const ok = await modal.confirm({
     title: 'حذف مورد',
-    message: 'حذف "' + supplier.name + '" وكل حركاته (' + entryCount + ')؟ لا يمكن التراجع. المصروفات المسجَّلة من مشترياته تبقى كما هي.',
+    message: 'حذف "' + supplier.name + '" وكل حركاته (' + entryCount + ')؟ ينتقل مع حركاته إلى سلة المحذوفات 7 أيام ويمكن استرجاعه. المصروفات المسجَّلة من مشترياته تبقى كما هي.',
     confirmText: 'حذف', cancelText: 'إلغاء', danger: true,
   });
   if (!ok) return;
   try {
     const list = await supplierEntries.listBySupplier(supplier.id);
+    await trash.addToTrash(STORES.SUPPLIERS, { ...supplier, _entries: list });   /* المورد وحركاته معاً */
     for (const e of list) await supplierEntries.remove(e.id);
     await suppliers.remove(supplier.id);
     toast.success('تم الحذف');

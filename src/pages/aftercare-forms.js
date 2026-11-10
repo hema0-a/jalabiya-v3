@@ -6,6 +6,8 @@ import { el } from '../core/dom.js';
 import { modal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { aftercare } from '../data/repos/aftercare.js';
+import { trash } from '../data/repos/trash.js';
+import { STORES } from '../core/config.js';
 import { formatEGP, formatDate } from '../core/utils.js';
 import { KINDS, REASONS, checkCaseInput, normalizeKind, normalizeReason } from '../services/aftercare.js';
 
@@ -74,7 +76,7 @@ export async function setCaseStatus(ctx, item, status) {
 }
 
 export async function deleteCase(ctx, item) {
-  const ok = await modal.confirm({ title: 'حذف حالة', message: 'حذف هذه الحالة نهائياً؟', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+  const ok = await modal.confirm({ title: 'حذف حالة', message: 'حذف هذه الحالة؟ تنتقل إلى سلة المحذوفات 7 أيام.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
   if (!ok) return;
-  try { await aftercare.remove(item.id); toast.success('تم الحذف'); await ctx.refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
+  try { await trash.addToTrash(STORES.AFTERCARE, item); await aftercare.remove(item.id); toast.success('تم الحذف'); await ctx.refresh(); } catch (e) { toast.danger('فشل: ' + e.message); }
 }

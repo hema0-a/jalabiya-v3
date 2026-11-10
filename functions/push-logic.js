@@ -107,6 +107,45 @@ function buildMessage(digest, prefs, state, nowMs) {
     }
   }
 
+  /* v3.17.0 (إضافات متوافقة: الملخص القديم بلا هذه الحقول لا يغيّر شيئاً) */
+  if (prefs.documents !== false && digest && Array.isArray(digest.dc)) {
+    const expired = []; const near = [];
+    for (const x of digest.dc) {
+      if (!x || typeof x.e !== 'string') continue;
+      const diff = diffDays(lp.ymd, x.e);
+      const remind = Number.isFinite(Number(x.r)) ? Number(x.r) : 30;
+      if (diff < 0) expired.push(x); else if (diff <= remind) near.push({ ...x, diff });
+    }
+    if (expired.length) lines.push('🗂️ ' + (expired.length === 1 && expired[0].t ? expired[0].t + ' منتهٍ' : expired.length + ' مستند منتهٍ'));
+    if (near.length) {
+      lines.push(near.length === 1 && near[0].t
+        ? '🗂️ ' + near[0].t + ' ينتهي ' + (near[0].diff === 0 ? 'اليوم' : 'بعد ' + near[0].diff + ' يوم')
+        : '🗂️ ' + near.length + ' مستند ينتهي قريباً');
+    }
+  }
+  if (prefs.circles !== false && digest && Array.isArray(digest.cr)) {
+    const win = Number(prefs.commitmentsDays);
+    const span = Number.isFinite(win) ? win : 3;
+    const dueC = digest.cr.filter((c) => {
+      const d = Math.min(c.day, lp.daysInMonth) - lp.day;
+      return d >= 0 && d <= span;
+    });
+    if (dueC.length) {
+      lines.push(dueC.length === 1 && dueC[0].t
+        ? '🪙 قسط ' + dueC[0].t + ' يستحق ' + (Math.min(dueC[0].day, lp.daysInMonth) === lp.day ? 'اليوم' : 'قريباً')
+        : '🪙 ' + dueC.length + ' قسط جمعية يستحق قريباً');
+    }
+  }
+  if (prefs.tasks !== false && digest && Array.isArray(digest.tk)) {
+    let od = 0; let td = 0;
+    for (const d of digest.tk) {
+      if (typeof d !== 'string') continue;
+      const diff = diffDays(lp.ymd, d);
+      if (diff < 0) od++; else if (diff === 0) td++;
+    }
+    if (od + td > 0) lines.push('✅ ' + (td ? td + ' مهمة اليوم' : '') + (td && od ? ' و' : '') + (od ? od + ' متأخرة' : ''));
+  }
+
   const url = today.length || overdue.length || soon.length ? '#/orders' : (lines.length ? '#/dashboard' : '#/dashboard');
   return {
     lines, ids, url,

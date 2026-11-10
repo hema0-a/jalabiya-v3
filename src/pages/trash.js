@@ -31,6 +31,13 @@ const STORE_MAP = {
   'commitments':      { label: 'الالتزامات',       icon: '💳' },
   'house-expenses':   { label: 'مصاريف البيت',    icon: '🏠' },
   'personal-loans':   { label: 'القروض',           icon: '💵' },
+  /* v3.17.0: مخازن 3.12–3.16 */
+  'suppliers':        { label: 'الموردون',         icon: '🚚' },
+  'supplierEntries':  { label: 'حركات الموردين',   icon: '🧾' },
+  'aftercare':        { label: 'التعديلات والمرتجعات', icon: '🪡' },
+  'circles':          { label: 'الجمعيات',         icon: '🪙' },
+  'documents':        { label: 'المستندات',        icon: '🗂️' },
+  'todos':            { label: 'المهام والملاحظات', icon: '✅' },
 };
 
 /* --- الحالة --- */
@@ -73,6 +80,8 @@ function daysLeft(deletedAt) {
 function itemTitle(item) {
   const d = item.data || {};
   if (item.originalStore === 'quotes') return 'عرض سعر #' + String(d.id || '').slice(-6);
+  if (item.originalStore === 'aftercare') return 'حالة رجوع #' + String(d.orderId || d.id || '').slice(-6);
+  if (item.originalStore === 'supplierEntries') return (d.kind === 'payment' ? 'دفعة مورد ' : 'مشتريات مورد ') + (d.amount || '');
   return String(d.name || d.title || d.personName || d.id || 'بدون اسم');
 }
 

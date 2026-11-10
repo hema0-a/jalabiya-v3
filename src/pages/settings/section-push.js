@@ -118,6 +118,9 @@ export const pushSection = {
     body.appendChild(row('ready', 'الطلبات الجاهزة لم تُستلم'));
     body.appendChild(row('stock', 'نواقص المخزون'));
     body.appendChild(row('commitments', 'استحقاق الالتزامات', 'قبل الاستحقاق بـ 3 أيام'));
+    body.appendChild(row('documents', 'المستندات المنتهية أو القريبة', 'حسب مدة التنبيه المحددة لكل مستند'));
+    body.appendChild(row('circles', 'أقساط الجمعيات', 'تحتاج «يوم الدفع» في الجمعية'));
+    body.appendChild(row('tasks', 'المهام المتأخرة واليوم'));
     body.appendChild(row('includeNames', 'إرسال أول اسم العميل للخادم', 'عند الإيقاف لا يغادر أي اسم جهازك (الإشعار يذكر الأعداد فقط)'));
 
     body.appendChild(el('div', { className: 'settings-row__hint' }, 'ساعات الهدوء تُؤخذ من قسم «التنبيهات».'));
