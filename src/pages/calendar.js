@@ -3,7 +3,7 @@
    ==========================================================================
    - يعتمد على services/calendar-events.js للأحداث الموحّدة.
    - يقرأ dayOffWeekday من الإعدادات.
-   - 3 فلاتر: طلبات / مواعيد / الكل.
+   - 4 فلاتر: طلبات / مواعيد / شخصي (التزامات·مستندات·جمعيات·مهام — v3.18.0) / الكل.
    [v3.5.25] قُسِّمت الصفحة دون تغيير سلوك (على نمط orders*.js):
      calendar.js        — الحالة + تحميل الشهر + التنقل + الواجهة العامة (هذا الملف)
      calendar-utils.js  — أدوات التاريخ (نقية)
@@ -117,7 +117,7 @@ export const calendarPage = {
     /* استعادة الفلتر */
     try {
       const f = localStorage.getItem('jalabiya_v3_calendar_filter');
-      if (f === 'all' || f === 'orders' || f === 'appointments') state.filter = f;
+      if (f === 'all' || f === 'orders' || f === 'appointments' || f === 'personal') state.filter = f;
     } catch {}
 
     /* الشهر الحالي */

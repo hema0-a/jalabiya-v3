@@ -1,14 +1,20 @@
 /* ==========================================================================
    calendar-events.js — موحّد الأحداث (Adapter Pattern)
    ==========================================================================
-   يحوّل الطلبات + المواعيد → نموذج موحّد (CalendarEvent).
+   يحوّل الطلبات + المواعيد (+ v3.18.0: الالتزامات والمستندات والجمعيات والمهام) → نموذج موحّد (CalendarEvent).
    calendar.js لا يعرف مصادر البيانات — فقط يستقبل CalendarEvent[].
    ========================================================================== */
 
 import { orders } from '../data/repos/orders.js';
 import { appointments } from '../data/repos/appointments.js';
 import { customers } from '../data/repos/customers.js';
+import { commitments } from '../data/repos/commitments.js';
+import { documents } from '../data/repos/documents.js';
+import { circles } from '../data/repos/circles.js';
+import { todos } from '../data/repos/todos.js';
+import { settings } from '../data/repos/settings.js';
 import { isPastDue } from './order-timing.js';
+import { personalEvents } from './calendar-personal.js';
 
 /* --- ألوان حالات الطلبات --- */
 export const ORDER_STATUS_COLORS = {
@@ -26,12 +32,13 @@ export const APPT_COLOR = '#1565C0';
    ==========================================================================
    @param {number} startMs - بداية النطاق (شامل)
    @param {number} endMs   - نهاية النطاق (غير شامل)
-   @param {'all'|'orders'|'appointments'} filter
+   @param {'all'|'orders'|'appointments'|'personal'} filter
    @returns {Promise<CalendarEvent[]>}
    ========================================================================== */
 export async function getCalendarEvents(startMs, endMs, filter = 'all') {
   const wantOrders = filter === 'all' || filter === 'orders';
   const wantAppts  = filter === 'all' || filter === 'appointments';
+  const wantPersonal = filter === 'all' || filter === 'personal';
 
   const [ordersList, apptsList, customersList] = await Promise.all([
     wantOrders ? orders.list() : Promise.resolve([]),
@@ -90,6 +97,16 @@ export async function getCalendarEvents(startMs, endMs, filter = 'all') {
       },
     });
   });
+
+  /* --- الشخصي (v3.18.0): فشله لا يُسقط تقويم الطلبات والمواعيد --- */
+  if (wantPersonal) {
+    try {
+      const [cm, dc, cr, tk, st] = await Promise.all([
+        commitments.list(), documents.list(), circles.list(), todos.list(), settings.get().catch(() => ({})),
+      ]);
+      events.push(...personalEvents({ commitments: cm, documents: dc, circles: cr, tasks: tk, settings: st }, startMs, endMs));
+    } catch (e) { console.warn('[calendar] personal events failed:', e); }
+  }
 
   events.sort((a, b) => a.date - b.date);
   return events;

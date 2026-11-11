@@ -10,6 +10,7 @@ import { modal } from '../ui/modal.js';
 import { getCalendarEvents } from '../services/calendar-events.js';
 import { formatEGP } from '../core/utils.js';
 import { startOfDayMs, formatArabicDate, eventsForDay } from './calendar-utils.js';
+import { PERSONAL_TYPES, PERSONAL_META } from '../services/calendar-personal.js';
 
 export async function renderUpcoming(ctx) {
   const { state } = ctx;
@@ -73,6 +74,8 @@ export function openDayModal(ctx, ts) {
   const dayEvents = eventsForDay(ctx.state, ts);
   const orders = dayEvents.filter((e) => e.type === 'order');
   const appts = dayEvents.filter((e) => e.type === 'appointment');
+  const personal = dayEvents.filter((e) => PERSONAL_TYPES.includes(e.type));
+  let handle = null;
 
   const body = el('div', {});
 
@@ -118,7 +121,28 @@ export function openDayModal(ctx, ts) {
     });
   }
 
-  modal.open({
+  if (personal.length > 0) {
+    body.appendChild(el('h4', {
+      style: { fontSize: '14px', color: '#123C2F', margin: '12px 0 8px 0' },
+    }, '🗂️ شخصي (' + personal.length + ')'));
+    personal.forEach((e) => {
+      const late = e.status === 'expired' || e.status === 'overdue';
+      body.appendChild(el('div', {
+        className: 'cal-personal', 'data-type': e.type, role: 'button', tabindex: '0',
+        style: {
+          padding: '8px', background: late ? '#FFEBEE' : '#E0F2F1', borderRadius: '6px',
+          marginBottom: '6px', fontSize: '13px', cursor: 'pointer',
+        },
+        onClick: () => { if (handle) handle.close(); location.hash = e.route || PERSONAL_META[e.type].route; },
+      }, [
+        el('div', { style: { fontWeight: '600', color: '#123C2F' } }, e.icon + ' ' + e.title),
+        el('div', { style: { fontSize: '12px', color: '#666', marginTop: '2px' } },
+          e.subtitle + (e.amount > 0 ? ' — ' + formatEGP(e.amount) : '') + '  ‹ فتح ' + PERSONAL_META[e.type].label),
+      ]));
+    });
+  }
+
+  handle = modal.open({
     title: formatArabicDate(ts),
     body,
     closable: true,

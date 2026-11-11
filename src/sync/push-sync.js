@@ -238,4 +238,38 @@ export function start() {
   } catch (e) { /* ignore */ }
 }
 
+/**
+ * v3.18.0: حالة السحابة للتشخيص (قراءة فقط): ما كتبه التطبيق (main) وما كتبه المُرسِل (state).
+ * @returns {Promise<{ok:boolean, message?:string, tokens?:number, hasMyToken?:boolean|null, digestAt?:number,
+ *                    lastSentDay?:string, lastCheckAt?:number, testHandledAt?:number}>}
+ */
+export async function getCloudStatus() {
+  try {
+    const { fs, db, uid } = await fsCtx();
+    const [mainSnap, stateSnap] = await Promise.all([
+      fs.getDoc(fs.doc(db, 'users_v3', uid, 'push', 'main')),
+      fs.getDoc(fs.doc(db, 'users_v3', uid, 'push', 'state')),
+    ]);
+    const main = mainSnap.exists() ? (mainSnap.data() || {}) : {};
+    const st = stateSnap.exists() ? (stateSnap.data() || {}) : {};
+    let hash = null;
+    try { hash = localStorage.getItem(K_HASH); } catch (e) { /* ignore */ }
+    const tokens = main.tokens && typeof main.tokens === 'object' ? main.tokens : {};
+    return {
+      ok: true,
+      tokens: Object.keys(tokens).length,
+      hasMyToken: hash ? Object.prototype.hasOwnProperty.call(tokens, hash) : null,
+      digestAt: Number(main.digest && main.digest.at) || 0,
+      lastSentDay: typeof st.lastSentDay === 'string' ? st.lastSentDay : '',
+      lastCheckAt: Number(st.lastCheckAt) || 0,
+      testHandledAt: Number(st.testHandledAt) || 0,
+    };
+  } catch (e) {
+    return { ok: false, message: e && e.message ? String(e.message) : '' };
+  }
+}
+
+/* v3.18.0: ملخص الصباح في التطبيق يقرأ نفس مصدر بيانات الإشعار (collect) فلا تتباعد الأرقام. */
+export { collect as collectDigestSource };
+
 export const _internal = { K_HASH, K_LAST, WATCHED, DEBOUNCE_MS };

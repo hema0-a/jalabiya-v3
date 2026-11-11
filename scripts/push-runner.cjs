@@ -71,6 +71,8 @@ async function sendToTokens(mainRef, tokensMap, msg) {
       if (!prefs || !digest) continue;
       const stateRef = doc.ref.parent.doc('state');
       const state = (await stateRef.get()).data() || {};
+      /* v3.18.0: بصمة آخر فحص — تقرؤها بطاقة «حالة الإشعارات» في التطبيق لتعرف أن الجدولة تعمل */
+      await stateRef.set({ lastCheckAt: now }, { merge: true }).catch(() => {});
       if (!isDue(prefs, state, now)) continue;
 
       const msg = buildMessage(digest, prefs, state, now);

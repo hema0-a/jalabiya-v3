@@ -10,6 +10,7 @@ import { appointments } from '../data/repos/appointments.js';
 import { payments } from '../data/repos/payments.js';
 import { settings } from '../data/repos/settings.js';
 import { shouldShowMorning, buildMorningModel, dayKey } from '../services/morning-summary.js';
+import { collectDigestSource } from '../sync/push-sync.js';   /* v3.18.0: نفس مصدر بيانات إشعار الجوال */
 
 export const ENABLED_KEY = 'jalabiya_v3_morning_summary';   /* 'off' يوقفه */
 export const LAST_KEY = 'jalabiya_v3_morning_last';
@@ -31,8 +32,9 @@ function buildBody(model, workshopName) {
         el('span', {}, s.icon + ' ' + s.title),
         el('span', { className: 'badge badge--info' }, String(s.count)),
       ]),
-      s.names.length ? el('div', { className: 'morning__names' }, s.names.join(' · ') + (s.count > s.names.length && s.id !== 'week' ? ' …' : '')) : null,
+      s.names.length ? el('div', { className: 'morning__names' }, s.names.join(' · ') + (s.count > s.names.length && !['week', 'stock', 'tasks'].includes(s.id) ? ' …' : '')) : null,
     ])),
+    model.unified ? el('p', { className: 'morning__hint', style: { fontSize: '12px', opacity: '0.7', margin: '8px 0 0' } }, 'هذه الأرقام نفسها التي تصلك في إشعار الجوال.') : null,
   ]);
 }
 
@@ -49,6 +51,8 @@ export async function maybeShowMorningSummary(now = Date.now()) {
     data = { orders: o, customers: c, appointments: a, payments: p };
     workshopName = (s.workshop && s.workshop.name) || '';
   } catch { return 'skipped'; }
+  /* v3.18.0: إن تعذّر جمع مصدر الإشعار يبقى الملخص القديم (طلبات ومواعيد) بلا أقسام إضافية */
+  try { data.source = await collectDigestSource(); } catch { /* سلوك قديم */ }
   const model = buildMorningModel(data, now);
   writeLast(dayKey(now));
   if (!model.total) return 'empty';

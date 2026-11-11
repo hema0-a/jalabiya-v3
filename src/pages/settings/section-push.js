@@ -10,6 +10,7 @@ import { el } from '../../core/dom.js';
 import { createToggle } from '../../ui/controls.js';
 import { toast } from '../../ui/toast.js';
 import { pushOptions } from '../../services/push-digest.js';
+import { buildPushStatus, formatPushError, STATE_ICON } from '../../services/push-status.js';
 import * as push from '../../sync/push-sync.js';   /* ثابت (القاعدة 14)؛ الاستيراد الثقيل داخله كسول */
 
 const REASONS = {
@@ -81,7 +82,7 @@ export const pushSection = {
           if (r.ok) { push.start(); toast.success('✅ تفعّلت الإشعارات الحقيقية'); }
           else {
             await savePush({ enabled: false });
-            toast.danger((REASONS[r.reason] || REASONS.error) + (r.message ? ' [' + r.message + ']' : ''));
+            toast.danger(r.message ? formatPushError(r.reason, r.message) : (REASONS[r.reason] || formatPushError(r.reason, '')));
           }
         }
       } finally {
@@ -131,7 +132,7 @@ export const pushSection = {
     testBtn.addEventListener('click', async () => {
       if (!push.getLocalStatus().registered) { toast.warning('فعّل الميزة على هذا الجهاز أولاً'); return; }
       const r = await push.requestServerTest();
-      if (r.ok) toast.info('طُلب إشعار تجريبي — يصل خلال ثوانٍ إن كانت الدالة منشورة');
+      if (r.ok) toast.info('طُلب إشعار تجريبي — يصل مع أقرب تشغيل للخادم (حتى 30 دقيقة، أو فوراً بتشغيل Push cron من GitHub)');
       else toast.danger('تعذّر الطلب: ' + (r.message || ''));
     });
     const refreshBtn = el('button', { className: 'btn', type: 'button' }, '🔄 تحديث الملخص الآن');
@@ -141,5 +142,42 @@ export const pushSection = {
     });
     toolsRow.appendChild(testBtn); toolsRow.appendChild(refreshBtn);
     body.appendChild(toolsRow);
+
+    /* 🩺 حالة الإشعارات (v3.18.0): تشخيص بالعربية يغني عن فتح GitHub */
+    const diagTitle = el('div', { className: 'settings-row__label', style: { marginTop: '14px' } }, '🩺 حالة الإشعارات');
+    const diagBox = el('div', { className: 'push-diag', 'data-testid': 'push-diag', style: { marginTop: '6px' } });
+    const diagNext = el('div', { className: 'settings-row__hint', style: { marginTop: '6px' } });
+    const diagBtn = el('button', { className: 'btn', type: 'button' }, '🔍 فحص الحالة');
+    const renderDiag = (cloud) => {
+      const m = buildPushStatus({ local: push.getLocalStatus(), cloud, now: Date.now() });
+      diagBox.textContent = '';
+      m.rows.forEach((r) => {
+        diagBox.appendChild(el('div', {
+          className: 'push-diag__row', 'data-state': r.state,
+          style: { display: 'flex', gap: '8px', alignItems: 'baseline', padding: '3px 0', fontSize: '13px' },
+        }, [
+          el('span', {}, STATE_ICON[r.state] || '⚪'),
+          el('span', { style: { flex: '1' } }, r.label),
+          el('span', { style: { opacity: '0.8', textAlign: 'left' } }, r.value),
+        ]));
+      });
+      diagNext.textContent = m.next ? '👉 ' + m.next : (m.level === 'ok' ? 'كل شيء يعمل ✅' : '');
+    };
+    const runDiag = async () => {
+      diagBtn.disabled = true;
+      try {
+        const s = push.getLocalStatus();
+        const cloud = (s.supported && s.signedIn) ? await push.getCloudStatus() : null;
+        renderDiag(cloud);
+      } finally { diagBtn.disabled = false; }
+    };
+    diagBtn.addEventListener('click', runDiag);
+    renderDiag(null);
+    body.appendChild(diagTitle);
+    body.appendChild(diagBox);
+    body.appendChild(diagNext);
+    body.appendChild(el('div', { style: { marginTop: '6px' } }, [diagBtn]));
+    /* لا تحميل ثقيل لـ Firebase عند مجرد فتح الإعدادات: الفحص التلقائي فقط إن كان الجهاز مفعّلاً أصلاً */
+    if (push.getLocalStatus().registered) runDiag().catch(() => {});
   },
 };

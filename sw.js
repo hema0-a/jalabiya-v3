@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.17.1 — الصلاحيات: وضع الكشك
+   الإصدار: v3.18.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.17.1';
+const CACHE_VERSION = 'v3.18.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -94,6 +94,7 @@ const PRECACHE_URLS = [
   './src/pages/aftercare-forms.js',
   './src/pages/aftercare.js',
   './src/pages/appointments.js',
+  './src/pages/calendar-chips.js',
   './src/pages/calendar-day.js',
   './src/pages/calendar-grid.js',
   './src/pages/calendar-utils.js',
@@ -220,6 +221,7 @@ const PRECACHE_URLS = [
   './src/services/backup-crypto.js',
   './src/services/backup-nudge.js',
   './src/services/calendar-events.js',
+  './src/services/calendar-personal.js',
   './src/services/capacity-strip.js',
   './src/services/catalog-page.js',
   './src/services/circles.js',
@@ -228,6 +230,7 @@ const PRECACHE_URLS = [
   './src/services/custom-fonts.js',
   './src/services/customer-merge-exec.js',
   './src/services/customer-merge.js',
+  './src/services/daily-brief.js',
   './src/services/daily-insights.js',
   './src/services/daily-need.js',
   './src/services/daily-tip.js',
@@ -299,6 +302,7 @@ const PRECACHE_URLS = [
   './src/services/pickup-reminders.js',
   './src/services/production-board.js',
   './src/services/push-digest.js',
+  './src/services/push-status.js',
   './src/services/quotes.js',
   './src/services/receivables.js',
   './src/services/referral-rewards.js',

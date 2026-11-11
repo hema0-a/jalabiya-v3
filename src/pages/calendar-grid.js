@@ -12,6 +12,7 @@ import { startOfNextDay } from '../core/day-math.js';
 import { isDayOff } from '../core/day-off.js';
 import { startOfDayMs, isSameDay, formatArabicDate, eventsForDay } from './calendar-utils.js';
 import { openDayModal } from './calendar-day.js';
+import { isPersonal, buildPersonalChip } from './calendar-chips.js';
 
 export function renderHeader(ctx) {
   const { state } = ctx;
@@ -61,7 +62,7 @@ export function renderFilters(ctx) {
   const filters = [
     { id: 'all',          label: '🎯 الكل' },
     { id: 'orders',       label: '📋 الطلبات' },
-    { id: 'appointments', label: '📅 المواعيد' },
+    { id: 'appointments', label: '📅 المواعيد' }, { id: 'personal', label: '🗂️ شخصي' },
   ];
   filters.forEach((f) => {
     const isActive = state.filter === f.id;
@@ -116,6 +117,7 @@ function buildDayCell(ctx, day, ts) {
   const dayEvents = eventsForDay(state, ts);
   const orders = dayEvents.filter((e) => e.type === 'order');
   const appts = dayEvents.filter((e) => e.type === 'appointment');
+  const personal = dayEvents.filter(isPersonal);
 
   /* حساب لون النقطة */
   let dotColor = null;
@@ -192,6 +194,7 @@ function buildDayCell(ctx, day, ts) {
       },
     }, '📅' + appts.length));
   }
+  if (personal.length > 0) bars.appendChild(buildPersonalChip(personal));
   if (bars.children.length > 0) cell.appendChild(bars);
 
   /* النقطة الملونة */
@@ -266,6 +269,7 @@ export function renderLegend() {
     { color: '#F57C00', label: 'خلال 3 أيام' },
     { color: '#C62828', label: 'متأخر' },
     { color: '#9E9E9E', label: '🏖️ إجازة' },
+    { color: '#00695C', label: '🗂️ شخصي' },
   ];
   const wrap = el('div', {
     style: {

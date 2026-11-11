@@ -162,5 +162,6 @@ import './modules/v3160-circles-docs-todos.test.js';
 import './modules/v3161-backup-coverage.test.js';
 import './modules/v3162-integrity-relations.test.js';
 import './modules/v3170-trash-push-today.test.js';
+import './modules/v3180-calendar-diagnostics-brief.test.js';
 
 export { runAll, register } from './registry.js';

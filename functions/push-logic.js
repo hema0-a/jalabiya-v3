@@ -53,9 +53,38 @@ function isDue(prefs, state, nowMs) {
   return true;
 }
 
+/** تصنيف خام لبقية الأقسام (مخزون · التزامات · مستندات · جمعيات · مهام) بلا مفاتيح التفعيل. */
+function classifyExtras(digest, prefs, lp) {
+  const c = { out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0 };
+  if (!digest) return c;
+  c.out = Number(digest.out) > 0 ? Number(digest.out) : 0;
+  c.low = Number(digest.low) > 0 ? Number(digest.low) : 0;
+  const win = Number(prefs && prefs.commitmentsDays);
+  const span = Number.isFinite(win) ? win : 3;
+  const inWin = (x) => { const d = Math.min(x.day, lp.daysInMonth) - lp.day; return d >= 0 && d <= span; };
+  if (Array.isArray(digest.cm)) c.commitments = digest.cm.filter(inWin).length;
+  if (Array.isArray(digest.cr)) c.circles = digest.cr.filter(inWin).length;
+  if (Array.isArray(digest.dc)) {
+    for (const x of digest.dc) {
+      if (!x || typeof x.e !== 'string') continue;
+      const diff = diffDays(lp.ymd, x.e);
+      const remind = Number.isFinite(Number(x.r)) ? Number(x.r) : 30;
+      if (diff < 0) c.docsExpired++; else if (diff <= remind) c.docsNear++;
+    }
+  }
+  if (Array.isArray(digest.tk)) {
+    for (const d of digest.tk) {
+      if (typeof d !== 'string') continue;
+      const diff = diffDays(lp.ymd, d);
+      if (diff < 0) c.tasksOverdue++; else if (diff === 0) c.tasksToday++;
+    }
+  }
+  return c;
+}
+
 /**
  * بناء أسطر الإشعار من الملخص.
- * @returns {{lines:string[], title:string, body:string, url:string, ids:string[]}}
+ * @returns {{lines:string[], title:string, body:string, url:string, ids:string[], counts:Object}}
  */
 function buildMessage(digest, prefs, state, nowMs) {
   const tz = (prefs && prefs.tz) || 'Africa/Cairo';
@@ -65,14 +94,16 @@ function buildMessage(digest, prefs, state, nowMs) {
   const orders = (digest && digest.orders) || [];
 
   const overdue = []; const today = []; const soon = []; const ready = [];
+  /* v3.18.0: الطلب «الجاهز» يُحسب في «جاهز لم يُستلم» فقط (لا يتكرر في اليوم/القريب/المتأخر) —
+     نفس قاعدة شاشة الورشة وملخص الصباح في التطبيق (services/daily-brief.js). */
   for (const o of orders) {
+    if (o.r === 1) { ready.push(o); continue; }
     if (o.d) {
       const diff = diffDays(lp.ymd, o.d);
-      if (diff < 0 && o.r !== 1) overdue.push(o);
+      if (diff < 0) overdue.push(o);
       else if (diff === 0) today.push(o);
       else if (diff > 0 && diff <= days && notified[o.i] !== o.d) soon.push(o);
     }
-    if (o.r === 1) ready.push(o);
   }
 
   const lines = []; const ids = [];
@@ -146,13 +177,17 @@ function buildMessage(digest, prefs, state, nowMs) {
     if (od + td > 0) lines.push('✅ ' + (td ? td + ' مهمة اليوم' : '') + (td && od ? ' و' : '') + (od ? od + ' متأخرة' : ''));
   }
 
+  /* v3.18.0: أعداد منظَّمة (تصنيف خام بلا مفاتيح التفعيل) — يقارنها اختبار التكافؤ مع services/daily-brief.js */
+  const counts = classifyExtras(digest, prefs, lp);
+  counts.today = today.length; counts.soon = soon.length; counts.overdue = overdue.length; counts.ready = ready.length;
+
   const url = today.length || overdue.length || soon.length ? '#/orders' : (lines.length ? '#/dashboard' : '#/dashboard');
   return {
-    lines, ids, url,
+    lines, ids, url, counts,
     title: lines.length > 1 ? '🧵 نشرة اليوم (' + lines.length + ')' : '🧵 ورشة الجلابيب',
     body: lines.join('\n'),
     today: lp.ymd,
   };
 }
 
-module.exports = { localParts, diffDays, inQuiet, isDue, buildMessage, toMin };
+module.exports = { localParts, diffDays, inQuiet, isDue, buildMessage, classifyExtras, toMin };
