@@ -16,6 +16,7 @@ import { toast } from '../ui/toast.js';
 import { previewInventory } from '../ui/quick-preview.js';
 import { formatEGP, toNonNegative, normalizeSearch } from '../core/utils.js';
 import * as draft from '../services/draft-manager.js';
+import { buildPurchasePlanCard } from './purchase-plan-card.js';   /* v3.19.0: 🛒 اقتراح مشتريات القماش */
 
 /* --- مفتاح المسودة --- */
 const DRAFT_KEY = 'inventory-form';
@@ -467,6 +468,9 @@ export const inventoryPage = {
       style: { marginBottom: '12px' },
       onClick: () => openItemForm(),
     }, '➕ إضافة صنف'));
+    const ppSlot = el('div', { 'data-role': 'purchase-plan-slot' });
+    container.appendChild(ppSlot);
+    buildPurchasePlanCard().then((n) => { if (ppSlot.isConnected) ppSlot.appendChild(n); });
 
     /* بحث */
     const searchInput = el('input', {

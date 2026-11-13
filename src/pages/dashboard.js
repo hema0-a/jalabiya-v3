@@ -35,6 +35,7 @@ import {
 } from './dashboard-sections.js';
 import { buildSectionsBar, openCustomize } from './dashboard-customize.js';
 import { mountInsights } from './dashboard-insights.js'; /* v3.5.22 */
+import { mountActionsTeaser } from '../ui/actions-teaser.js'; /* v3.19.0: 📥 مركز العمل */
 
 let state = {
   container: null,
@@ -180,6 +181,9 @@ export const dashboardPage = {
     buildBackupNudge(data).then((n) => { if (n && nudgeSlot.isConnected) nudgeSlot.appendChild(n); });
     if (isVisible(layout, 'kpis')) container.appendChild(buildKPICards(data));
     container.appendChild(buildAttention(data, actions));
+    const teaserSlot = el('div', { 'data-role': 'actions-teaser-slot' });
+    container.appendChild(teaserSlot);
+    mountActionsTeaser(teaserSlot);
     /* v3.5.22: «يومك في لمحة» — تُملأ بعد الرسم الأول فلا تؤخّر اللوحة */
     if (isVisible(layout, 'insights')) {
       const insightsSlot = el('div', { 'data-role': 'insights-slot' });

@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.18.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.19.0 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.18.0';
+const CACHE_VERSION = 'v3.19.0';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -90,6 +90,9 @@ const PRECACHE_URLS = [
   './src/data/repos/workers.js',
 
   /* --- src/pages --- */
+  './src/pages/actions-data.js',
+  './src/pages/actions-machines.js',
+  './src/pages/actions.js',
   './src/pages/activity-log.js',
   './src/pages/aftercare-forms.js',
   './src/pages/aftercare.js',
@@ -99,6 +102,7 @@ const PRECACHE_URLS = [
   './src/pages/calendar-grid.js',
   './src/pages/calendar-utils.js',
   './src/pages/calendar.js',
+  './src/pages/cashflow-card.js',
   './src/pages/circles.js',
   './src/pages/cloud-sync.js',
   './src/pages/commitments-actions.js',
@@ -148,11 +152,14 @@ const PRECACHE_URLS = [
   './src/pages/pickups.js',
   './src/pages/portfolio.js',
   './src/pages/pricing-calculator.js',
+  './src/pages/purchase-plan-card.js',
   './src/pages/quotes.js',
   './src/pages/referrals-card.js',
   './src/pages/referrals-form.js',
   './src/pages/referrals-list.js',
   './src/pages/referrals.js',
+  './src/pages/report-month-close.js',
+  './src/pages/report-weekly.js',
   './src/pages/reports.js',
   './src/pages/season-compare.js',
   './src/pages/suppliers-forms.js',
@@ -183,6 +190,7 @@ const PRECACHE_URLS = [
   './src/pages/orders/form.js',
   './src/pages/orders/item-rows.js',
   './src/pages/orders/logic.js',
+  './src/pages/orders/quick-entry.js',
 
   /* --- src/pages/settings --- */
   './src/pages/settings/index.js',
@@ -213,6 +221,7 @@ const PRECACHE_URLS = [
   './src/security/role-pins.js',
 
   /* --- src/services --- */
+  './src/services/action-center.js',
   './src/services/aftercare.js',
   './src/services/alert-rules.js',
   './src/services/amount-guard.js',
@@ -223,6 +232,7 @@ const PRECACHE_URLS = [
   './src/services/calendar-events.js',
   './src/services/calendar-personal.js',
   './src/services/capacity-strip.js',
+  './src/services/cashflow-forecast.js',
   './src/services/catalog-page.js',
   './src/services/circles.js',
   './src/services/commitments-calculator.js',
@@ -279,12 +289,14 @@ const PRECACHE_URLS = [
   './src/services/ledger-union.js',
   './src/services/ledger.js',
   './src/services/loans-calculator.js',
+  './src/services/machinery.js',
   './src/services/media-diagnostic.js',
   './src/services/media-migration.js',
   './src/services/message-composer.js',
   './src/services/message-log.js',
   './src/services/message-queue.js',
   './src/services/message-templates.js',
+  './src/services/month-close.js',
   './src/services/morning-summary.js',
   './src/services/nav-groups.js',
   './src/services/notifications.js',
@@ -301,8 +313,11 @@ const PRECACHE_URLS = [
   './src/services/personal-today.js',
   './src/services/pickup-reminders.js',
   './src/services/production-board.js',
+  './src/services/purchase-plan.js',
   './src/services/push-digest.js',
   './src/services/push-status.js',
+  './src/services/qitan-calc.js',
+  './src/services/quick-order.js',
   './src/services/quotes.js',
   './src/services/receivables.js',
   './src/services/referral-rewards.js',
@@ -320,6 +335,7 @@ const PRECACHE_URLS = [
   './src/services/vip-rules.js',
   './src/services/wall-board.js',
   './src/services/week-visits.js',
+  './src/services/weekly-report.js',
   './src/services/wellbeing.js',
   './src/services/whatif.js',
   './src/services/winback.js',
@@ -342,6 +358,7 @@ const PRECACHE_URLS = [
   './src/sync/tombstones.js',
 
   /* --- src/ui --- */
+  './src/ui/actions-teaser.js',
   './src/ui/bottom-nav.js',
   './src/ui/capacity-strip-view.js',
   './src/ui/catalog-page-share.js',
@@ -383,12 +400,14 @@ const PRECACHE_URLS = [
   './src/ui/personal-today-card.js',
   './src/ui/production-board.js',
   './src/ui/progressive-list.js',
+  './src/ui/qitan-calc-dialog.js',
   './src/ui/quick-preview-catalog.js',
   './src/ui/quick-preview-customer.js',
   './src/ui/quick-preview-entities.js',
   './src/ui/quick-preview-helpers.js',
   './src/ui/quick-preview-order.js',
   './src/ui/quick-preview.js',
+  './src/ui/report-image.js',
   './src/ui/report-issue.js',
   './src/ui/role-guard.js',
   './src/ui/roles-settings.js',

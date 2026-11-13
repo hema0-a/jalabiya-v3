@@ -119,6 +119,24 @@ export function scanIntegrity({ customers, orders, payments, appointments, quote
       }
     }
   }
+  /* v3.19.0: قيم غير صالحة تكسر الحسابات والتقويم والتوقّعات بصمت، وتكرار المعرّفات (قد ينتج عن دمج مزامنة).
+     تُعرض للتقرير فقط — لا إصلاح آلي لأنها تمسّ أرقاماً أو سجلات: القرار للمستخدم. المفقود (undefined) ليس خطأً: المُنكَر فقط (NaN/نص غير رقمي). */
+  const badNum = (v) => v != null && v !== '' && !Number.isFinite(Number(v));
+  for (const o of os) {
+    if (!o) continue;
+    if (badNum(o.amount)) add({ type: 'order_bad_amount', severity: 'error', store: 'orders', id: o.id, message: 'طلب بمبلغ غير رقمي' });
+    if (badNum(o.dueDate)) add({ type: 'order_bad_due', severity: 'warn', store: 'orders', id: o.id, message: 'طلب بموعد تسليم غير صالح (لا يظهر في التقويم والتأخير)' });
+  }
+  for (const p of ps) {
+    if (p && badNum(p.amount)) add({ type: 'payment_bad_amount', severity: 'error', store: 'payments', id: p.id, message: 'دفعة بمبلغ غير رقمي' });
+  }
+  const dupes = (list, store, label) => {
+    const seen = new Set(); const dup = new Set();
+    for (const x of list) { if (!x || x.id == null) continue; if (seen.has(x.id)) dup.add(x.id); seen.add(x.id); }
+    for (const id of dup) add({ type: 'duplicate_id', severity: 'error', store, id, message: label + ' بمعرّف مكرر (سجلان بنفس المعرّف)' });
+  };
+  dupes(cs, 'customers', 'عميل'); dupes(os, 'orders', 'طلب'); dupes(ps, 'payments', 'دفعة');
+
   const counts = {};
   issues.forEach((i) => { counts[i.type] = (counts[i.type] || 0) + 1; });
   return { issues, counts, total: issues.length };
@@ -142,4 +160,8 @@ export const ISSUE_LABELS = {
   aftercare_missing_customer: 'حالات رجوع لعميل محذوف',
   attendance_orphan_worker: 'سجلات حضور لعامل غير موجود',
   supplier_entry_orphan: 'حركات موردين لمورد غير موجود',
+  order_bad_amount: 'طلبات بمبلغ غير رقمي',
+  order_bad_due: 'طلبات بموعد تسليم غير صالح',
+  payment_bad_amount: 'دفعات بمبلغ غير رقمي',
+  duplicate_id: 'سجلات بمعرّف مكرر',
 };

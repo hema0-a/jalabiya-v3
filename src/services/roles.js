@@ -14,7 +14,7 @@ export const STAFF_ROLES = ['manager', 'receptionist'];
 export const OWNER_ONLY = ['settings', 'financial-center', 'commitments', 'house-expenses', 'loans', 'cloud-sync', 'activity-log', 'trash', 'tests', 'data-care'];
 
 /** ما يراه الاستقبال فقط (بلا أي صفحة مالية): استقبال الطلبات والعملاء والمواعيد. */
-export const RECEPTIONIST_ALLOWED = ['orders', 'customers', 'pickups', 'messages', 'appointments', 'calendar', 'quotes', 'pricing-calculator', 'portfolio', 'occasions', 'referrals', 'wall'];
+export const RECEPTIONIST_ALLOWED = ['orders', 'customers', 'pickups', 'messages', 'appointments', 'calendar', 'quotes', 'pricing-calculator', 'portfolio', 'occasions', 'referrals', 'wall', 'actions'];
 
 /** صفحات يحميها «القفل المالي» (رقم مستقل) إن عُيّن. */
 export const FINANCE_LOCK_PAGES = ['financial-center', 'kpis', 'reports', 'expenses', 'commitments', 'house-expenses', 'loans', 'suppliers', 'aftercare', 'winback', 'circles'];

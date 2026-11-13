@@ -6,7 +6,7 @@
 export const APP_CONFIG = {
   name: 'ورشة تفصيل الجلابيب',
   nameEn: 'Jalabiya Workshop',
-  version: '3.18.0',
+  version: '3.19.0',
   versionLabel: 'V3',
   buildDate: '2026',
   repo: 'https://github.com/hema0-a/jalabiya-v3',
@@ -254,6 +254,12 @@ export const DEFAULT_SETTINGS = {
   wellbeing: { challengePct: 5, dismissedHidden: [] },
   /* v3.11.0: التحكم الشخصي — وضع الشهر الصعب (يُبقي تنبيهات الالتزامات «الضرورية» فقط) */
   personalControls: { hardMonth: false },
+  /* v3.19.0: مركز العمل (ما أُنجز اليوم وما أُجِّل — يتزامن فيراه الإشعار من أي جهاز) · رصيد توقّع السيولة · متوسط طول زبائنك لاقتراح القماش · أشهر أُغلقت */
+  actionCenter: { snoozed: {}, done: {} },
+  cashflow: { opening: null, payrollDay: 0 },
+  purchasePlan: { avgHeightCm: 150 },
+  monthClose: { closed: {} },
+  machines: { list: [] },   /* v3.19.0: صيانة الماكينات بساعات التشغيل */
   /* v3.11.1: نصائحك المالية المحفوظة ⭐ (تتزامن بين الأجهزة) */
   dailyTips: { saved: [] },
   /* v3.15.0: ميزانية الأسرة — سقف شهري لكل فئة من مصروف البيت (0/فارغ = بلا سقف) */

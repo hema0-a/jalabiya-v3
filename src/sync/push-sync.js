@@ -22,6 +22,11 @@ import { commitments as commitmentsRepo } from '../data/repos/commitments.js';
 import { documents as documentsRepo } from '../data/repos/documents.js';
 import { circles as circlesRepo } from '../data/repos/circles.js';
 import { todos as todosRepo } from '../data/repos/todos.js';
+import { payments as paymentsRepo } from '../data/repos/payments.js';
+import { expenses as expensesRepo } from '../data/repos/expenses.js';
+import { workerPayments as workerPaymentsRepo } from '../data/repos/worker-payments.js';
+import { buildWeeklyReport, weeklyDigest } from '../services/weekly-report.js';
+import { snoozedOrders } from '../services/action-center.js';
 import { filterLowStockForAlerts, splitOutOfStock } from '../services/alert-rules.js';
 import { buildDigest, serverPrefs, pushOptions, sameDigest } from '../services/push-digest.js';
 
@@ -29,7 +34,7 @@ const VERSION = '10.12.0';
 const BASE = 'https://www.gstatic.com/firebasejs/' + VERSION + '/';
 const K_HASH = 'jalabiya_v3_push_hash';        /* بصمة رمز هذا الجهاز (يعني: مفعّل هنا) */
 const K_LAST = 'jalabiya_v3_push_last';        /* آخر ملخص + خيارات رُفعت */
-const WATCHED = new Set(['orders', 'customers', 'inventory', 'commitments', 'settings', 'documents', 'circles', 'todos']);
+const WATCHED = new Set(['orders', 'customers', 'inventory', 'commitments', 'settings', 'documents', 'circles', 'todos', 'payments', 'expenses']);
 const DEBOUNCE_MS = 15000;
 
 let _uid = null;
@@ -165,7 +170,16 @@ async function collect() {
     const split = splitOutOfStock(filterLowStockForAlerts(low, st), st);
     lowN = split.low.length; outN = split.out.length;
   } catch (e) { lowN = Array.isArray(low) ? low.length : 0; }
-  return { settings: st, orders: ords, customers: custs, lowStock: lowN, outOfStock: outN, commitments: cms, documents: docs, circles: circs, tasks: tds };
+  /* v3.19.0: ما أجّلتَه من «مركز العمل» + ملخص الأسبوع المضغوط (تقرؤه الخادمة يوم الجمعة) */
+  let snoozed = {}; let weekly = null;
+  try { snoozed = snoozedOrders(st && st.actionCenter, Date.now()); } catch (e) { snoozed = {}; }
+  try {
+    if (pushOptions(st).weekly) {
+      const [pays, exps, wps] = await Promise.all([paymentsRepo.list().catch(() => []), expensesRepo.list().catch(() => []), workerPaymentsRepo.list().catch(() => [])]);
+      weekly = weeklyDigest(buildWeeklyReport({ orders: ords, payments: pays, expenses: exps, workerPayments: wps, customers: custs, now: Date.now() }));
+    }
+  } catch (e) { weekly = null; }
+  return { settings: st, orders: ords, customers: custs, lowStock: lowN, outOfStock: outN, commitments: cms, documents: docs, circles: circs, tasks: tds, snoozed, weekly };
 }
 
 /**

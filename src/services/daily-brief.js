@@ -22,6 +22,7 @@ export function localParts(nowMs, tz) {
     day: Number(p.day),
     minutes: Number(p.hour) * 60 + Number(p.minute),
     daysInMonth: new Date(Number(p.year), Number(p.month), 0).getDate(),
+    dow: new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day))).getUTCDay(),   /* 5 = الجمعة (v3.19.0) */
   };
 }
 
@@ -33,7 +34,7 @@ export function diffDays(a, b) {
 
 export const EMPTY_COUNTS = Object.freeze({
   today: 0, soon: 0, overdue: 0, ready: 0,
-  out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0,
+  out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0, weekly: 0,
 });
 
 /**
@@ -53,8 +54,10 @@ export function briefCounts(digest, prefs, state, nowMs = Date.now()) {
 
   const counts = { ...EMPTY_COUNTS };
   /* الطلب «الجاهز» يُحسب في «جاهز» فقط (نفس قاعدة الخادمة وشاشة الورشة) */
+  const sz = (digest && digest.sz && typeof digest.sz === 'object') ? digest.sz : {};
   for (const o of orders) {
     if (!o) continue;
+    if (sz[o.i] && sz[o.i] > lp.ymd) continue;   /* v3.19.0: مؤجَّل من مركز العمل */
     if (o.r === 1) { counts.ready++; continue; }
     if (!o.d) continue;
     const diff = diffDays(lp.ymd, o.d);
@@ -66,6 +69,9 @@ export function briefCounts(digest, prefs, state, nowMs = Date.now()) {
   const names = { commitments: [], circles: [], docs: [] };
   if (!digest) return { counts, names, today: lp.ymd };
 
+  /* «أسبوعك» كل جمعة من ملخص لا يتجاوز عمره 48 ساعة (نفس شرط الخادمة) */
+  counts.weekly = (p.weekly !== false && digest.wk && typeof digest.wk === 'object' && lp.dow === 5
+    && Number(nowMs) - Number(digest.at) <= 48 * 3600000 && Number(nowMs) - Number(digest.at) >= -3600000) ? 1 : 0;
   counts.out = Number(digest.out) > 0 ? Number(digest.out) : 0;
   counts.low = Number(digest.low) > 0 ? Number(digest.low) : 0;
 

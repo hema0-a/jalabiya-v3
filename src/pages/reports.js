@@ -10,6 +10,8 @@ import { customers } from '../data/repos/customers.js';
 import { formatEGP } from '../core/utils.js';
 import { revenuePayments, withWorkerExpenses } from '../services/payments-view.js';
 import { workerPayments } from '../data/repos/worker-payments.js';
+import { buildWeeklyCard } from './report-weekly.js';          /* v3.19.0: 📈 تقرير الأسبوع */
+import { buildMonthCloseCard } from './report-month-close.js';  /* v3.19.0: 🔒 إقفال الشهر */
 
 let state = { container: null, activePeriod: 'month' };
 
@@ -169,6 +171,8 @@ async function refreshAll() {
   container.appendChild(buildKpiRow(report));
   container.appendChild(await buildOrdersByStatus());
   container.appendChild(await buildTopCustomers());
+  container.appendChild(await buildWeeklyCard());
+  container.appendChild(await buildMonthCloseCard());
 }
 
 export const reportsPage = {

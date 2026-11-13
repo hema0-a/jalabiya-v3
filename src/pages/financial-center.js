@@ -20,6 +20,7 @@ import { formatEGP } from '../core/utils.js';
 import { buildWhatIfCard } from '../ui/whatif-card.js';
 import { buildDailyTipCard } from '../ui/daily-tip-card.js';
 import { buildInvestmentCard } from '../ui/investment-card.js';
+import { buildCashflowCard } from './cashflow-card.js';   /* v3.19.0: 💧 توقّع السيولة */
 
 /* --- الحالة --- */
 let state = {
@@ -493,6 +494,9 @@ function renderPage() {
   c.appendChild(renderHealth());
   c.appendChild(renderSummary());
   c.appendChild(renderPending());
+  const cfSlot = el('div', { 'data-role': 'cashflow-slot' });
+  c.appendChild(cfSlot);
+  buildCashflowCard().then((n) => { if (cfSlot.isConnected) cfSlot.appendChild(n); });
   c.appendChild(renderComparison());
   c.appendChild(renderBarChart());
   c.appendChild(renderPieChart());

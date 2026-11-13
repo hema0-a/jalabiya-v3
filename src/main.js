@@ -170,6 +170,7 @@ async function loadPageModule(pageId) {
       case 'payments':           return await import('./pages/payments.js');
       case 'debts':              return await import('./pages/debts.js');
       case 'pickups':            return await import('./pages/pickups.js');
+      case 'actions':            return await import('./pages/actions.js');          /* v3.19.0: 📥 مركز العمل */
       case 'messages':           return await import('./pages/messages.js');
       case 'quotes':             return await import('./pages/quotes.js');
       case 'suppliers':          return await import('./pages/suppliers.js');
@@ -236,6 +237,7 @@ const MODULE_EXPORT_MAP = {
   payments:             'paymentsPage',
   debts:                'debtsPage',
   pickups:              'pickupsPage',
+  actions:              'actionsPage',
   messages:             'messagesPage',
   quotes:               'quotesPage',
   suppliers:            'suppliersPage',
@@ -546,6 +548,8 @@ async function renderPage(fullRoute) {
     layout.setActivePage(id);
   } else if (id === 'tests') {
     layout.setTitle('🧪 الاختبارات');
+  } else if (id === 'actions') {
+    layout.setTitle('📥 مركز العمل');   /* v3.19.0: صفحة خارج القائمة (تُفتح من بطاقة اللوحة والإشعار) */
   } else if (id === 'cloud-sync') {
     layout.setTitle('☁️ المزامنة السحابية');   /* v3.5.22: خارج القائمة الجانبية لكنها صفحة صالحة */
   }

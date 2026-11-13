@@ -11,6 +11,7 @@ import { modal } from './modal.js';
 import { toast } from './toast.js';
 import { settings } from '../data/repos/settings.js';
 import { formatEGP } from '../core/utils.js';
+import { openQitanCalcDialog } from './qitan-calc-dialog.js';   /* v3.19.0: 🧵 حاسبة القيطان */
 import {
   normalizeFabricConfig, normalizeTemplate, calcFabric, formulaText, newTemplateId,
   ROUND_OPTIONS, MAX_TEMPLATES, MAX_WASTE,
@@ -45,6 +46,7 @@ export async function openFabricCalcDialog(opts = {}) {
       body.appendChild(el('div', { style: { textAlign: 'center', padding: '12px', color: '#666', fontSize: '13px' } },
         'لم تسجّل أنواع قطع بعد. أضف أول نوع (مثال: جلابية رجالي: زيادة 10 · مضاعف 2 · خصم 30).'));
       body.appendChild(el('button', { className: 'btn btn--primary btn--block', type: 'button', 'data-action': 'add-type', onClick: () => renderForm(null) }, '➕ إضافة نوع قطعة'));
+      body.appendChild(el('button', { className: 'btn btn--ghost btn--block', type: 'button', 'data-action': 'open-qitan', style: { marginTop: '6px' }, onClick: () => openQitanCalcDialog() }, '🧵 حاسبة القيطان'));
       return;
     }
     const sel = el('select', { className: 'select', 'data-role': 'fc-type' });
@@ -96,6 +98,7 @@ export async function openFabricCalcDialog(opts = {}) {
     body.appendChild(el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [field('طول العميل (سم)', height), field('عدد القطع', qty)]));
     body.appendChild(out);
     body.appendChild(applyBtn);
+    body.appendChild(el('button', { className: 'btn btn--ghost btn--block', type: 'button', 'data-action': 'open-qitan', style: { marginTop: '6px' }, onClick: () => openQitanCalcDialog() }, '🧵 حاسبة القيطان'));
     body.appendChild(el('button', { className: 'btn btn--ghost btn--block', type: 'button', 'data-action': 'manage', style: { marginTop: '6px' }, onClick: renderManage }, '⚙️ إدارة الأنواع والإعدادات'));
     recalc();
   }

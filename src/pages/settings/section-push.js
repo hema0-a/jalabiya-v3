@@ -122,6 +122,7 @@ export const pushSection = {
     body.appendChild(row('documents', 'المستندات المنتهية أو القريبة', 'حسب مدة التنبيه المحددة لكل مستند'));
     body.appendChild(row('circles', 'أقساط الجمعيات', 'تحتاج «يوم الدفع» في الجمعية'));
     body.appendChild(row('tasks', 'المهام المتأخرة واليوم'));
+    body.appendChild(row('weekly', 'تقرير الأسبوع كل جمعة', 'سطر يلخّص محصّلك ومصروفك وما سلّمته (من آخر ملخص رفعه التطبيق)'));
     body.appendChild(row('includeNames', 'إرسال أول اسم العميل للخادم', 'عند الإيقاف لا يغادر أي اسم جهازك (الإشعار يذكر الأعداد فقط)'));
 
     body.appendChild(el('div', { className: 'settings-row__hint' }, 'ساعات الهدوء تُؤخذ من قسم «التنبيهات».'));

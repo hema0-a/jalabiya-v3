@@ -51,6 +51,7 @@ export function pushOptions(settings) {
     documents: p.documents !== false,   /* v3.17.0 */
     circles: p.circles !== false,
     tasks: p.tasks !== false,
+    weekly: p.weekly !== false,   /* v3.19.0: سطر «أسبوعك» كل جمعة */
     quietEnabled: n.quietEnabled === true,
     quietFrom: hhmm(n.quietFrom, '22:00'),
     quietTo: hhmm(n.quietTo, '07:00'),
@@ -92,6 +93,12 @@ export function buildDigest(src) {
     open.push({ row, key: hasDue ? o.dueDate : Infinity });
   }
   open.sort((a, b) => a.key - b.key);
+  /* v3.19.0: طلبات أجّلتَها من «مركز العمل» (id → أول يوم تعود فيه) — تتجاهلها الخادمة حتى ذلك اليوم */
+  const sz = {};
+  if (src.snoozed && typeof src.snoozed === 'object') {
+    const today = localYmd(now); const ids = new Set(open.map((x) => x.row.i));
+    for (const [id, until] of Object.entries(src.snoozed)) if (ids.has(String(id)) && typeof until === 'string' && until > today) sz[String(id)] = until;
+  }
 
   const cm = [];
   if (opts.commitments) {
@@ -141,6 +148,13 @@ export function buildDigest(src) {
     }
     if (cr.length) out.cr = cr.slice(0, 20);
   }
+  if (Object.keys(sz).length) out.sz = sz;
+  /* ملخص الأسبوع المضغوط (weeklyDigest) — تستعمله الخادمة يوم الجمعة فقط */
+  if (opts.weekly && src.weekly && typeof src.weekly === 'object') {
+    const w = src.weekly; const pick = (k) => Math.max(0, Math.round(Number(w[k]) || 0));
+    const wk = { inc: pick('inc'), exp: pick('exp'), del: pick('del'), ovd: pick('ovd'), rec: pick('rec') };
+    if (wk.inc || wk.exp || wk.del || wk.ovd) out.wk = wk;
+  }
   if (opts.tasks && Array.isArray(src.tasks)) {
     const tk = [];
     for (const t of src.tasks) {
@@ -168,6 +182,7 @@ export function serverPrefs(settings, tz) {
     documents: o.documents,
     circles: o.circles,
     tasks: o.tasks,
+    weekly: o.weekly,
     quiet: o.quietEnabled ? { from: o.quietFrom, to: o.quietTo } : null,
     tz: tz || 'Africa/Cairo',
   };

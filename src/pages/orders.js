@@ -31,6 +31,7 @@ import { syncTypesDatalist } from './orders/item-rows.js';
 import { renderStats, renderTopBanners } from './orders-summary.js';
 import { renderView, disposeOrdersList } from './orders-views.js';
 import { openOrderForm } from './orders/form.js';
+import { buildQuickEntry } from './orders/quick-entry.js';   /* v3.19.0: ⚡ إدخال طلب بجملة */
 import { deliverWithSignature as deliverWithSignatureImpl, openPartialDelivery as openPartialDeliveryImpl } from './orders/delivery.js';
 
 /* --- إعادة تصدير الواجهة العامة (نفس الأسماء والتواقيع) --- */
@@ -179,6 +180,7 @@ export const ordersPage = {
       style: { marginBottom: '12px' },
       onClick: () => ctx.openForm(),
     }, '➕ إضافة طلب'));
+    container.appendChild(buildQuickEntry(ctx));
 
     container.appendChild(el('div', { id: 'orders-view-toggle' }));
     container.appendChild(el('div', {

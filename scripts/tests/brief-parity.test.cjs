@@ -32,7 +32,12 @@ function sample(r) {
   });
   const notified = {};
   orders.forEach((o) => { if (o.d && r() < 0.3) notified[o.i] = o.d; });
-  const digest = { v: 1, orders, low: int(r, 0, 4), out: int(r, 0, 3) };
+  const digest = { v: 1, at: now - int(r, 0, 60) * 3600000, orders, low: int(r, 0, 4), out: int(r, 0, 3) };
+  /* v3.19.0: مؤجَّلات مركز العمل + ملخص الأسبوع */
+  const sz = {}; orders.forEach((o) => { if (r() < 0.2) sz[o.i] = ymdPlus(now, tz, int(r, -3, 5)); });
+  if (Object.keys(sz).length) digest.sz = sz;
+  if (r() < 0.7) digest.wk = { inc: int(r, 0, 9000), exp: int(r, 0, 4000), del: int(r, 0, 12), ovd: int(r, 0, 5), rec: int(r, 0, 3000) };
+  if (r() < 0.2) prefs.weekly = false;
   digest.cm = Array.from({ length: int(r, 0, 6) }, () => ({ day: int(r, 1, 31), t: 'ت' + int(r, 1, 9) }));
   if (r() < 0.8) digest.dc = Array.from({ length: int(r, 0, 6) }, () => ({ e: ymdPlus(now, tz, int(r, -40, 90)), r: pick(r, [0, 7, 30, 365]), t: 'م' + int(r, 1, 9) }));
   if (r() < 0.8) digest.cr = Array.from({ length: int(r, 0, 4) }, () => ({ day: int(r, 1, 31), t: 'ج' + int(r, 1, 9) }));
@@ -68,6 +73,7 @@ test('أسطر الإشعار تذكر نفس أعداد التطبيق (لا ت
     assert.equal(has(/🗂️/), c.docsExpired + c.docsNear > 0, 'مستندات ' + k);
     if (c.today) assert.ok(has(new RegExp(c.today === 1 ? '⏰' : '⏰ ' + c.today + ' طلب يُسلَّم اليوم')), 'اليوم ' + k); else assert.ok(!has(/⏰/), 'لا اليوم ' + k);
     if (c.tasksToday || c.tasksOverdue) assert.ok(has(/✅ .*(مهمة اليوم|متأخرة)/), 'مهام ' + k);
+    assert.equal(has(/📈 أسبوعك/), c.weekly === 1, 'أسبوعك ' + k);
   }
 });
 
@@ -92,4 +98,33 @@ test('daily-brief.js نقي: بلا استيرادات ولا DOM ولا شبك�
   const src = require('node:fs').readFileSync(path.join(__dirname, '..', '..', 'src', 'services', 'daily-brief.js'), 'utf8');
   assert.doesNotMatch(src, /^import\s/m);
   assert.doesNotMatch(src, /document\.|window\.|fetch\(|localStorage/);
+});
+
+test('v3.19.0: سطر «أسبوعك» يوم الجمعة فقط ومن ملخص حديث، وبلا طلبات أخرى يكفي لإرسال إشعار', async () => {
+  const brief = await import(briefUrl);
+  const fri = Date.UTC(2026, 10, 13, 9, 0);   /* الجمعة 13 نوفمبر 2026 */
+  const prefs = { tz: 'UTC', daysBefore: 1 };
+  const digest = { at: fri - 3600000, orders: [], wk: { inc: 12500, exp: 3000, del: 7, ovd: 2, rec: 900 } };
+  const m = server.buildMessage(digest, prefs, {}, fri);
+  assert.match(m.body, /📈 أسبوعك: محصّل 12,500 ج · مصروف 3,000 ج · سُلِّم 7 · متأخر 2/);
+  assert.equal(m.counts.weekly, 1);
+  assert.equal(brief.briefCounts(digest, prefs, {}, fri).counts.weekly, 1);
+  const thu = fri - 86400000;   /* الخميس: لا سطر */
+  assert.doesNotMatch(server.buildMessage(digest, prefs, {}, thu).body, /📈/);
+  const stale = { ...digest, at: fri - 72 * 3600000 };   /* ملخص عمره 3 أيام: لا أرقام قديمة */
+  assert.equal(server.buildMessage(stale, prefs, {}, fri).counts.weekly, 0);
+  assert.equal(server.buildMessage(digest, { ...prefs, weekly: false }, {}, fri).counts.weekly, 0);
+});
+
+test('v3.19.0: الطلب المؤجَّل من مركز العمل يختفي من كل الأقسام حتى يوم عودته', async () => {
+  const brief = await import(briefUrl);
+  const now = Date.UTC(2026, 10, 11, 9, 0);
+  const prefs = { tz: 'UTC', daysBefore: 3 };
+  const orders = [{ i: 'a', r: 0, d: '2026-11-01' }, { i: 'b', r: 1 }, { i: 'c', r: 0, d: '2026-11-11' }, { i: 'd', r: 0, d: '2026-11-12' }];
+  const base = { at: now, orders };
+  assert.deepEqual(['overdue', 'ready', 'today', 'soon'].map((k) => server.buildMessage(base, prefs, {}, now).counts[k]), [1, 1, 1, 1]);
+  const sz = { a: '2026-11-12', b: '2026-11-12', c: '2026-11-12', d: '2026-11-11' };   /* d: عاد اليوم فلا يُخفى */
+  const m = server.buildMessage({ ...base, sz }, prefs, {}, now);
+  assert.deepEqual(['overdue', 'ready', 'today', 'soon'].map((k) => m.counts[k]), [0, 0, 0, 1]);
+  assert.deepEqual(brief.briefCounts({ ...base, sz }, prefs, {}, now).counts, m.counts);
 });
