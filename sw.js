@@ -6,10 +6,10 @@
      - Static (CSS/JS/SVG/JSON): Network-first (مهلة 4 ثوانٍ) → ثم الكاش
        (يضمن وصول أي تعديل فوراً مع الاحتفاظ بالعمل offline)
      - External (fonts, Firebase): لا يُخزَّن
-   الإصدار: v3.20.0 — الصلاحيات: وضع الكشك
+   الإصدار: v3.20.1 — الصلاحيات: وضع الكشك
    ========================================================================== */
 
-const CACHE_VERSION = 'v3.20.0';
+const CACHE_VERSION = 'v3.20.1';
 const CACHE_NAME = 'jalabiya-' + CACHE_VERSION;
 
 /* ==========================================================================
@@ -265,6 +265,7 @@ const PRECACHE_URLS = [
   './src/services/image-worker-client.js',
   './src/services/input-checks.js',
   './src/services/insights.js',
+  './src/services/integrity-scan-default.js',
   './src/services/integrity-weekly.js',
   './src/services/investment.js',
   './src/services/invoice-image-order.js',

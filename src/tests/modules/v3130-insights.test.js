@@ -114,7 +114,7 @@ register('v3.13.0 التحليلات والتحسينات', async (t) => {
   await t.test('41. حد التسجيل لم يتغيّر (المقياس إرشاد لا منع)', (await src('sync/auth-sync.js')).includes("String(password).length < 6) return 'كلمة المرور 6 أحرف على الأقل'"));
   const nc = await src('ui/notifications-center.js'); const sf = await src('pages/suppliers-forms.js'); const sp = await src('pages/suppliers.js');
   await t.test('42. إشعار الموردين مغلَّف بـ try/catch حتى لا يعطّل بقية الإشعارات', /مستحقات موردين قديمة[\s\S]*?try \{[\s\S]*?overdueSupplierDues\(balancesBySupplier\(sup, ent\), Date\.now\(\), 30\)[\s\S]*?catch \(e\) \{ \/\* الموردون اختياريون/.test(nc));
-  await t.test('43. تعديل حركة المورد: يحدّث مصروفها المرتبط ولا يكرّر المصروف', sf.includes('await supplierEntries.update(existing.id, { ...r.data, date })') && sf.includes('await expenses.update(existing.expenseId') && sf.includes('const entry = isEdit ? existing : await supplierEntries.create(') && sp.includes("'data-action': 'edit-entry'"));
+  await t.test('43. تعديل حركة المورد: يحدّث مصروفها المرتبط ولا يكرّر المصروف', sf.includes('await supplierEntries.update(existing.id, patch, opts)') && sf.includes('store: STORES.EXPENSES, id: existing.expenseId, patch:') && sf.includes('await supplierEntries.create({ ...patch, supplierId: supplier.id }, opts)') && sf.includes('if (isPurchase && !(isEdit && existing.expenseId))') && sp.includes("'data-action': 'edit-entry'"));
   const ui = await src('ui/insight-cards.js');
   await t.test('44. بطاقات التحليل: عرض فقط بلا innerHTML ولا كتابة بيانات ولا import ديناميكي', !/innerHTML\s*=/.test(ui) && !/\bimport\(/.test(ui) && !/\.(create|update|remove|delete)\(/.test(ui));
 });

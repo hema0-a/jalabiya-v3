@@ -710,7 +710,7 @@ setTimeout(() => {
       /* 🩹 فحص سلامة البيانات الأسبوعي الصامت — بعد استقرار الإقلاع، قراءة فقط (النتيجة بند في مركز العمل) */
       try {
         const { runIntegrityIfDue } = await import('./services/integrity-weekly.js');
-        setTimeout(() => { runIntegrityIfDue().then((r) => { if (r.ran) console.log('[Integrity] فحص أسبوعي:', r.summary); }).catch(() => {}); }, 30000);
+        setTimeout(() => { runIntegrityIfDue({ scan: async () => (await import('./services/integrity-scan-default.js')).defaultScan() }).then((r) => { if (r.ran) console.log('[Integrity] فحص أسبوعي:', r.summary); }).catch(() => {}); }, 30000);
       } catch (e) { console.warn('[Integrity] تعذّر الجدولة:', e); }
     } catch (err) {
       console.warn('[AutoBackup] ❌ فشل:', err);

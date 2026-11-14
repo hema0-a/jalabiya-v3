@@ -48,36 +48,23 @@ export function summarizeScan(res) {
   };
 }
 
-/** يجمع المدخلات ويشغّل scanIntegrity (قراءة فقط) — نفس ما تفعله بطاقة حالة النظام. */
-export async function defaultScan() {
-  const [{ customers }, { orders }, { payments }, { appointments }, { quotes }, { scanIntegrity }, media, rel] = await Promise.all([
-    import('../data/repos/customers.js'), import('../data/repos/orders.js'), import('../data/repos/payments.js'),
-    import('../data/repos/appointments.js'), import('../data/repos/quotes.js'), import('./data-integrity.js'),
-    import('./order-media-scan.js'), import('./relation-inputs.js'),
-  ]);
-  const [c, o, p, a, q, mi, ri] = await Promise.all([
-    customers.list(), orders.list(), payments.list(), appointments.list(), quotes.list(),
-    media.loadMediaScanInputs(), rel.loadRelationInputs(),
-  ]);
-  return scanIntegrity({ customers: c, orders: o, payments: p, appointments: a, quotes: q, ...mi, ...ri });
-}
-
 /**
  * يشغّل الفحص إن حان. لا يرمي أبداً.
- * @param {{now?:number, storage?:Storage, scan?:Function, force?:boolean}} [deps]
+ * @param {{now?:number, storage?:Storage, scan:Function, force?:boolean}} deps — scan دالة async تُرجع نتيجة scanIntegrity (الافتراضية في integrity-scan-default.js وتُمرَّر من main.js)
  * @returns {Promise<{ran:boolean, reason:string, summary?:Object}>}
  */
 export async function runIntegrityIfDue(deps = {}) {
   const storage = deps.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
   const now = deps.now != null ? deps.now : Date.now();
   if (!storage) return { ran: false, reason: 'no-storage' };
+  if (typeof deps.scan !== 'function') return { ran: false, reason: 'no-scan' };
   const last = readJson(storage);
   const d = integrityDue(last, now);
   if (!d.due && !deps.force) return { ran: false, reason: d.reason };
   const keep = last ? { at: Number(last.at) || 0, total: last.total || 0, errors: last.errors || 0, warns: last.warns || 0 } : { at: 0, total: 0, errors: 0, warns: 0 };
   try {
     storage.setItem(INTEGRITY_KEY, JSON.stringify({ ...keep, startedAt: now }));   /* حارس الانهيار */
-    const res = await (deps.scan || defaultScan)();
+    const res = await deps.scan();
     const summary = summarizeScan(res);
     storage.setItem(INTEGRITY_KEY, JSON.stringify({ at: now, ...summary }));
     return { ran: true, reason: d.reason, summary };

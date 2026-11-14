@@ -73,7 +73,7 @@ register('v3.12.0 الموردون والمشتريات', async (t) => {
   await t.test('29. الراوتر يحمّل الصفحة وخريطة التصدير موجودة', main.includes("case 'suppliers':          return await import('./pages/suppliers.js');") && main.includes("suppliers:            'suppliersPage'"));
   const page = await src('pages/suppliers.js'); const forms = await src('pages/suppliers-forms.js');
   await t.test('30. الصفحة والنماذج: بلا innerHTML ولا import ديناميكي', !/innerHTML\s*=/.test(page + forms) && !/\bimport\(/.test(page + forms));
-  await t.test('31. تسجيل المشتريات كمصروف اختياري ولا تُسجَّل الدفعات كمصروف', forms.includes("data-role': 'entry-as-expense'") && forms.includes('if (isPurchase && expenseCb && expenseCb.checked)') && (forms.match(/expenses\.create\(/g) || []).length === 1 && forms.includes("category: 'fabric'"));
+  await t.test('31. تسجيل المشتريات كمصروف اختياري ولا تُسجَّل الدفعات كمصروف', forms.includes("data-role': 'entry-as-expense'") && forms.includes('if (isPurchase && expenseCb && expenseCb.checked)') && (forms.match(/store: STORES\.EXPENSES, data:/g) || []).length === 1 && forms.indexOf('store: STORES.EXPENSES, data:') > forms.indexOf('if (isPurchase && expenseCb && expenseCb.checked)') && forms.includes("category: 'fabric'"));
   await t.test('32. حذف الحركة يحذف مصروفها المرتبط فقط إن وُجد (expenseId)', forms.includes('if (entry.expenseId) await expenses.remove(entry.expenseId)'));
   await t.test('33. حذف المورد يحذف حركاته ويُبقي المصروفات المسجَّلة', forms.includes('supplierEntries.listBySupplier(supplier.id)') && forms.includes('المصروفات المسجَّلة من مشترياته تبقى'));
 });
