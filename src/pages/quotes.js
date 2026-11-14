@@ -7,6 +7,7 @@
    ========================================================================== */
 
 import { el, clear } from '../core/dom.js';
+import { STORES } from '../core/config.js';
 import { uid, formatEGP, formatDate, toNonNegative } from '../core/utils.js';
 import { customers } from '../data/repos/customers.js';
 import { orders } from '../data/repos/orders.js';
@@ -114,8 +115,12 @@ async function convert(q) {
   });
   if (!ok) return;
   try {
-    const order = await orders.create(quoteToOrderPayload(q));
-    await quotes.update(q.id, { status: 'accepted', orderId: order.id, acceptedAt: Date.now() });
+    /* الطلب الجديد وتعليم العرض «مقبول» في معاملة واحدة: انقطاع بينهما كان يترك العرض معلَّقاً
+       فيُحوَّل مرة ثانية ويتكرر الطلب. */
+    const orderId = uid();
+    await orders.create({ ...quoteToOrderPayload(q), id: orderId }, {
+      alongside: [{ store: STORES.QUOTES, id: q.id, patch: { status: 'accepted', orderId, acceptedAt: Date.now() } }],
+    });
     toast.success('تم إنشاء الطلب');
     await loadData(); draw();
   } catch (err) { console.error('[quotes] convert:', err); toast.error('تعذّر التحويل'); }

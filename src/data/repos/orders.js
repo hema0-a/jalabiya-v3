@@ -135,7 +135,7 @@ export const orders = {
   ...base,
 
   /* يُسجَّل readyAt لحظة دخول الطلب حالة «جاهز» (لتذكير الاستلام v3.3.30) */
-  async create(data) {
+  async create(data, opts) {
     const d = { ...(data || {}) };
     if (d.status === 'ready' && !d.readyAt) d.readyAt = Date.now();
     /* نسخة مقاسات وقت الطلب — إلا لو مُمرَّرة صراحةً (مثل الاستيراد/الاستعادة) */
@@ -148,10 +148,10 @@ export const orders = {
       const id = d.id || uid();
       const ex = externalizeMedia({ ...d, id }, null);
       if (ex.puts.length) await writeMedia(id, ex.puts);
-      try { return await base.create(ex.record); }
+      try { return await base.create(ex.record, opts); }
       catch (e) { await dropMedia(id, ex.puts.map((p) => p.slot)); throw e; }
     }
-    return base.create(d);
+    return base.create(d, opts);
   },
 
   /**

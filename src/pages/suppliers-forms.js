@@ -13,7 +13,7 @@ import { suppliers, supplierEntries } from '../data/repos/suppliers.js';
 import { expenses } from '../data/repos/expenses.js';
 import { trash } from '../data/repos/trash.js';
 import { STORES } from '../core/config.js';
-import { formatEGP, localDateInput, parseDateInput } from '../core/utils.js';
+import { formatEGP, localDateInput, parseDateInput, uid } from '../core/utils.js';
 import { checkSupplierInput, checkEntryInput, KINDS } from '../services/suppliers.js';
 
 const field = (label, input) => el('div', { className: 'field' }, [el('label', { className: 'field__label' }, label), input]);
@@ -100,23 +100,23 @@ export function openEntryForm(ctx, supplier, kind, existing = null) {
           if (!r.ok) return toast.warning(r.error);
           const date = parseDateInput(dateInput.value);
           try {
-            if (isEdit) {
-              await supplierEntries.update(existing.id, { ...r.data, date });
-              if (existing.expenseId) {   /* المصروف المرتبط يتبع تعديل الحركة */
-                await expenses.update(existing.expenseId, { amount: r.data.amount, date, notes: 'مشتريات — ' + supplier.name + (r.data.item ? ' · ' + r.data.item : '') })
-                  .catch(() => toast.warning('تعدّلت الحركة لكن تعذّر تحديث مصروفها المرتبط'));
-              }
+            /* الحركة ومصروفها المرتبط يُحفظان في معاملة واحدة (كان كل منهما معاملة، فانقطاع بينهما
+               يترك مشتريات بلا مصروف أو مصروفاً غير مربوط). */
+            const note = 'مشتريات — ' + supplier.name + (r.data.item ? ' · ' + r.data.item : '');
+            const alongside = [];
+            const patch = { ...r.data, date };
+            if (isEdit && existing.expenseId && await expenses.find(existing.expenseId)) {
+              /* المصروف المرتبط يتبع تعديل الحركة */
+              alongside.push({ store: STORES.EXPENSES, id: existing.expenseId, patch: { amount: r.data.amount, date, notes: note } });
             }
-            const entry = isEdit ? existing : await supplierEntries.create({ ...r.data, supplierId: supplier.id, date });
             if (isPurchase && expenseCb && expenseCb.checked) {
-              try {
-                const ex = await expenses.create({
-                  category: 'fabric', amount: r.data.amount, date,
-                  notes: 'مشتريات — ' + supplier.name + (r.data.item ? ' · ' + r.data.item : ''),
-                });
-                await supplierEntries.update(entry.id, { expenseId: ex.id });
-              } catch (e) { toast.warning('حُفظت الحركة لكن تعذّر تسجيلها كمصروف'); }
+              const exId = uid();
+              alongside.push({ store: STORES.EXPENSES, data: { id: exId, category: 'fabric', amount: r.data.amount, date, notes: note } });
+              patch.expenseId = exId;
             }
+            const opts = alongside.length ? { alongside } : undefined;
+            if (isEdit) await supplierEntries.update(existing.id, patch, opts);
+            else await supplierEntries.create({ ...patch, supplierId: supplier.id }, opts);
             toast.success('تم الحفظ');
             handle.close();
             await ctx.refresh();

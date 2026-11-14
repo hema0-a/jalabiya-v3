@@ -9,6 +9,31 @@ import { uid } from '../core/utils.js';
 import * as idb from './idb.js';
 
 /**
+ * يحوّل قائمة «سجلات مصاحبة» إلى خطوات لـ idb.writeAtomic.
+ *  - إنشاء: { store, data }            ⟵ سجل جديد (id مُمرَّر أو يُولَّد) بطوابع إنشاء وتحديث.
+ *  - تعديل: { store, id, patch }       ⟵ يُدمج patch في السجل الموجود؛ إن لم يوجد تُلغى المعاملة كلها.
+ * @param {Array<Object>} alongside
+ * @param {number} t — الزمن الموحّد للطوابع
+ * @returns {Array<{store:string,key:*,build:Function}>}
+ */
+export function buildAlongsideSteps(alongside, t) {
+  return (alongside || []).filter(Boolean).map((a) => {
+    if (a.patch && a.id != null) {
+      return {
+        store: a.store, key: a.id,
+        build: (existing) => {
+          if (!existing) { const e = new Error('السجل المرتبط لم يعد موجوداً'); e.code = 'alongside-missing'; throw e; }
+          return { ...existing, ...a.patch, id: a.id, updatedAt: t };
+        },
+      };
+    }
+    const rid = a.data.id ?? uid();
+    const rec = { ...a.data, id: rid, createdAt: a.data.createdAt ?? t, updatedAt: t };
+    return { store: a.store, key: rid, build: () => rec };
+  });
+}
+
+/**
  * إنشاء مستودع لأحد المخازن.
  * @param {string} storeName — اسم المخزن من STORES
  * @param {Object} [options]
@@ -43,14 +68,25 @@ export function createRepository(storeName, options = {}) {
     /**
      * إنشاء سجل جديد.
      * @param {Object} data
+     * @param {{alongside?:Array<Object>}} [opts] — سجلات تُنشأ ({store,data}) أو تُعدَّل ({store,id,patch})
+     *   مع هذا السجل في معاملة واحدة.
      * @returns {Promise<Object>} السجل الكامل (مع id وتواريخ)
      */
-    async create(data) {
+    async create(data, opts) {
       const id = fixedId ?? data.id ?? generateId();
       const record = { ...data, id };
       if (timestamps) {
         record.createdAt = data.createdAt ?? now();
         record.updatedAt = now();
+      }
+      const alongside = opts && Array.isArray(opts.alongside) ? opts.alongside.filter(Boolean) : [];
+      if (alongside.length) {
+        /* سجلات تُنشأ أو تُعدَّل مع هذا الإنشاء في معاملة واحدة (كلها أو لا شيء) */
+        await idb.writeAtomic([
+          { store: storeName, key: id, build: () => record },
+          ...buildAlongsideSteps(alongside, now()),
+        ]);
+        return record;
       }
       await idb.put(storeName, record);
       return record;
@@ -77,7 +113,7 @@ export function createRepository(storeName, options = {}) {
      * تحديث جزئي لسجل.
      * @param {string} id
      * @param {Object} patch — الحقول المراد تحديثها
-     * @param {{alongside?:Array<{store:string,data:Object}>}} [opts] — سجلات جديدة تُنشأ مع التحديث
+     * @param {{alongside?:Array<Object>}} [opts] — سجلات تُنشأ ({store,data}) أو تُعدَّل ({store,id,patch}) مع التحديث
      *   في **معاملة واحدة** (مثل دفعة التحصيل عند التسليم): إما يُحفظ الكل أو لا شيء.
      * @returns {Promise<Object|null>} السجل المُحدَّث أو null إن لم يوجد
      */
@@ -89,15 +125,10 @@ export function createRepository(storeName, options = {}) {
         if (timestamps) updated.updatedAt = now();
         const alongside = opts && Array.isArray(opts.alongside) ? opts.alongside.filter(Boolean) : [];
         if (alongside.length) {
-          /* سجلات جديدة تُكتب مع هذا التحديث في معاملة واحدة (كلها أو لا شيء) */
-          const t = now();
-          const extra = alongside.map(({ store, data }) => {
-            const rid = data.id ?? uid();
-            return { store, key: rid, record: { ...data, id: rid, createdAt: data.createdAt ?? t, updatedAt: t } };
-          });
+          /* سجلات تُنشأ أو تُعدَّل مع هذا التحديث في معاملة واحدة (كلها أو لا شيء) */
           await idb.writeAtomic([
             { store: storeName, key: id, build: () => updated },
-            ...extra.map((x) => ({ store: x.store, key: x.key, build: () => x.record })),
+            ...buildAlongsideSteps(alongside, now()),
           ]);
           return updated;
         }

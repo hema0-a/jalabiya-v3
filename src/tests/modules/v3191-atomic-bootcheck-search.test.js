@@ -102,3 +102,45 @@ register('v3.19.1 search cache', async (t) => {
   await customers.remove(a.id);
   clearSearchCache();
 });
+
+register('v3.19.2 alongside create/patch (عرض→طلب، مورد→مصروف)', async (t) => {
+  const quotesRepo = createRepository(STORES.QUOTES);
+  const ordersRepo = createRepository(STORES.ORDERS);
+  const expRepo = createRepository(STORES.EXPENSES);
+  const entRepo = createRepository(STORES.SUPPLIER_ENTRIES);
+
+  /* عرض ⟵ طلب: الإنشاء + تعديل العرض معاً */
+  const q = await quotesRepo.create({ status: 'sent', items: [] });
+  const oid = 'order-from-quote-1';
+  const order = await ordersRepo.create({ id: oid, amount: 300, status: 'pending', fromQuoteId: q.id }, {
+    alongside: [{ store: STORES.QUOTES, id: q.id, patch: { status: 'accepted', orderId: oid } }],
+  });
+  const q2 = await quotesRepo.find(q.id);
+  await t.test('1. الطلب أُنشئ بالمعرّف المحدد', order.id === oid && !!(await ordersRepo.find(oid)));
+  await t.test('2. والعرض صار مقبولاً ومربوطاً بالطلب (معاً)', q2.status === 'accepted' && q2.orderId === oid);
+
+  /* مصروف مرتبط مفقود ⟵ تُلغى المعاملة كلها: لا حركة جديدة */
+  let threw = false;
+  try {
+    await ordersRepo.create({ id: 'order-should-not-exist', amount: 1 }, {
+      alongside: [{ store: STORES.QUOTES, id: 'no-such-quote', patch: { status: 'accepted' } }],
+    });
+  } catch (e) { threw = e && e.code === 'alongside-missing'; }
+  await t.test('3. سجل مرتبط مفقود ⟵ يُرفض بالرمز alongside-missing', threw);
+  await t.test('4. ولا يُنشأ الطلب (ذرّية)', (await ordersRepo.find('order-should-not-exist')) === undefined);
+
+  /* مورد ⟵ مصروف: حركة جديدة + مصروف مربوط بمعرّفه */
+  const exId = 'exp-linked-1';
+  const ent = await entRepo.create({ supplierId: 's1', kind: 'purchase', amount: 90, expenseId: exId }, {
+    alongside: [{ store: STORES.EXPENSES, data: { id: exId, category: 'fabric', amount: 90 } }],
+  });
+  const ex = await expRepo.find(exId);
+  await t.test('5. الحركة والمصروف حُفظا معاً ومربوطان', !!ent && ex && ex.amount === 90 && (await entRepo.find(ent.id)).expenseId === exId);
+
+  /* تعديل الحركة + تعديل مصروفها */
+  await entRepo.update(ent.id, { amount: 120 }, { alongside: [{ store: STORES.EXPENSES, id: exId, patch: { amount: 120 } }] });
+  await t.test('6. تعديل الحركة يعدّل مصروفها معاً', (await entRepo.find(ent.id)).amount === 120 && (await expRepo.find(exId)).amount === 120);
+
+  await expRepo.remove(exId); await entRepo.remove(ent.id);
+  await ordersRepo.remove(oid); await quotesRepo.remove(q.id);
+});
