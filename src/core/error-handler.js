@@ -171,6 +171,47 @@ export function getRecent(limit = 10) {
 }
 
 /**
+ * أحدث الأخطاء المحفوظة في activity-log (تبقى بعد إعادة تحميل التطبيق، بخلاف حلقة الذاكرة).
+ * @param {number} [limit=15]
+ * @returns {Promise<Array>} بنفس شكل getRecent (الأحدث أولاً)
+ */
+export async function getRecentPersisted(limit = 15) {
+  const rows = await activity.listRecent(200);
+  return rows
+    .filter((a) => a && typeof a.type === 'string' && a.type.startsWith('error:'))
+    .slice(0, Math.max(1, Number(limit) || 15))
+    .map((a) => ({
+      message: String(a.description || '').replace(/^\[[^\]]*\]\s*/, '') || 'Unknown error',
+      stack: (a.metadata && a.metadata.stack) || '',
+      kind: a.type.slice(6),
+      timestamp: a.timestamp || 0,
+      url: (a.metadata && a.metadata.url) || '',
+      context: (a.metadata && a.metadata.context) || {},
+    }));
+}
+
+/**
+ * الأخطاء الأخيرة من الذاكرة + المحفوظة معاً (بلا تكرار، الأحدث أولاً): الخطأ الذي أسقط التطبيق
+ * وأُعيد تحميله بعده يبقى في تقرير التشخيص. فشل القراءة المحفوظة يُرجع ما في الذاكرة فقط.
+ * @param {number} [limit=15]
+ * @returns {Promise<Array>}
+ */
+export async function getRecentMerged(limit = 15) {
+  const n = Math.max(1, Number(limit) || 15);
+  let persisted = [];
+  try { persisted = await getRecentPersisted(n * 2); } catch (_) { persisted = []; }
+  const seen = new Set();
+  const out = [];
+  for (const e of [...getRecent(MAX_BUFFER), ...persisted]) {
+    const key = (e.timestamp || 0) + '|' + e.message;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, n);
+}
+
+/**
  * مسح حلقة الذاكرة (لا يمس activity-log).
  * @returns {void}
  */

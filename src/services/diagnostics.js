@@ -14,7 +14,7 @@
 import { APP_CONFIG, DB_CONFIG } from '../core/config.js';
 import { RECORD_STORES } from '../data/record-meta.js';
 import * as idb from '../data/idb.js';
-import { getRecent } from '../core/error-handler.js';
+import { getRecentMerged } from '../core/error-handler.js';
 import { getStatus as getSyncStatus } from '../sync/auto-sync.js';
 import { getKnownRev } from '../sync/firestore-sync.js';
 import { countConflicts } from '../sync/conflict-log.js';
@@ -140,7 +140,7 @@ export async function collectDiagnostics(env = {}) {
     try { return JSON.parse(localStorage.getItem('jalabiya_v3_record_schema_checked') || '{}'); } catch (e) { return {}; }
   });
 
-  d.errors = await safe(() => (env.errors || getRecent(MAX_ERRORS)).slice(0, MAX_ERRORS).map(sanitizeError), []);
+  d.errors = await safe(async () => (env.errors || await getRecentMerged(MAX_ERRORS)).slice(0, MAX_ERRORS).map(sanitizeError), []);
   return d;
 }
 

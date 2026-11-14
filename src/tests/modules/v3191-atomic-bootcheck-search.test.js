@@ -10,6 +10,10 @@ import { customers } from '../../data/repos/customers.js';
 import { searchAll, clearSearchCache } from '../../data/search.js';
 import { assessStartup } from '../../services/boot-check.js';
 import { describeSaveError } from '../../core/save-error.js';
+import { integrityDue, summarizeScan, runIntegrityIfDue, INTEGRITY_KEY, INTEGRITY_EVERY_MS } from '../../services/integrity-weekly.js';
+import { buildActionCenter } from '../../services/action-center.js';
+import { getRecentMerged, getRecentPersisted, report } from '../../core/error-handler.js';
+import { activity } from '../../data/repos/activity.js';
 
 register('v3.19.1 writeAtomic + update alongside', async (t) => {
   const repo = createRepository(STORES.ORDERS);
@@ -143,4 +147,82 @@ register('v3.19.2 alongside create/patch (عرض→طلب، مورد→مصرو�
 
   await expRepo.remove(exId); await entRepo.remove(ent.id);
   await ordersRepo.remove(oid); await quotesRepo.remove(q.id);
+});
+
+/* ===== v3.20.0 ===== */
+const memStore = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+
+register('v3.20.0 integrity-weekly', async (t) => {
+  const W = INTEGRITY_EVERY_MS; const now = 10 * W;
+  await t.test('1. لا فحص سابق ⟵ حان', integrityDue(null, now).due === true);
+  await t.test('2. فحص حديث ⟵ لم يحن', integrityDue({ at: now - 1000, total: 0 }, now).due === false);
+  await t.test('3. مضى أسبوع ⟵ حان', integrityDue({ at: now - W - 1 }, now).due === true);
+  await t.test('4. بدأ ولم يكتمل (انهيار محتمل) ⟵ يُتخطّى أسبوعاً', integrityDue({ at: now - 2 * W, startedAt: now - 1000 }, now).reason === 'crash-guard');
+  await t.test('5. التلخيص يعدّ الأخطاء والتحذيرات', (() => { const r = summarizeScan({ issues: [{ severity: 'error' }, { severity: 'warn' }, { severity: 'warn' }, { severity: 'info' }] }); return r.total === 4 && r.errors === 1 && r.warns === 2; })());
+  await t.test('6. مدخل null لا ينهار', summarizeScan(null).total === 0);
+
+  const st = memStore();
+  const r1 = await runIntegrityIfDue({ storage: st, now, scan: async () => ({ issues: [{ severity: 'error' }, { severity: 'warn' }] }) });
+  const saved = JSON.parse(st.getItem(INTEGRITY_KEY));
+  await t.test('7. أول تشغيل يحفظ النتيجة', r1.ran && saved.total === 2 && saved.errors === 1 && saved.at === now && !saved.startedAt);
+  const r2 = await runIntegrityIfDue({ storage: st, now: now + 1000, scan: async () => { throw new Error('should not run'); } });
+  await t.test('8. بعدها مباشرة لا يعيد الفحص', r2.ran === false && r2.reason === 'recent');
+  const st2 = memStore();
+  const r3 = await runIntegrityIfDue({ storage: st2, now, scan: async () => { throw new Error('boom'); } });
+  const s3 = JSON.parse(st2.getItem(INTEGRITY_KEY));
+  await t.test('9. فشل الفحص لا يرمي ويمنع تكراره فوراً', r3.ran === false && /boom/.test(r3.reason) && s3.at === now);
+
+  const withIssues = buildActionCenter({ now: Date.now(), integrity: { total: 3, errors: 1 } });
+  const item = withIssues.items.find((i) => i.kind === 'integrity');
+  await t.test('10. بند «سلامة البيانات» يظهر في مركز العمل عند وجود ملاحظات', !!item && item.route === '#/settings/data-care' && /3 ملاحظة/.test(item.subtitle));
+  await t.test('11. ولا يظهر عند صفر ملاحظات', !buildActionCenter({ now: Date.now(), integrity: { total: 0 } }).items.some((i) => i.kind === 'integrity'));
+});
+
+register('v3.20.0 tab sync (BroadcastChannel)', async (t) => {
+  if (typeof BroadcastChannel === 'undefined') { await t.test('0. BroadcastChannel غير متاح هنا (تخطٍّ)', true); return; }
+  idb.startTabSync();
+  const probe = new BroadcastChannel('jalabiya_v3_idb');
+  if (typeof probe.unref === 'function') probe.unref();
+  const got = [];
+  probe.onmessage = (e) => got.push(e.data);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const repo = createRepository(STORES.TODOS);
+  const rec = await repo.create({ title: 'tab-sync-test' });
+  await wait(60);
+  await t.test('1. كتابتي تُعلَن للتبويبات الأخرى باسم المخزن', got.some((m) => Array.isArray(m.names) && m.names.includes(STORES.TODOS) && typeof m.tab === 'string'));
+
+  const seen = []; idb.onRemoteWrite((names) => seen.push(names));
+  const v0 = idb.getWriteVersion();
+  probe.postMessage({ tab: 'another-tab', names: [STORES.ORDERS] });
+  await wait(60);
+  await t.test('2. إعلان تبويب آخر يزيد عدّاد الكتابة (يُبطل الكاش)', idb.getWriteVersion() === v0 + 1);
+  await t.test('3. ويستدعي onRemoteWrite بأسماء المخازن', seen.length === 1 && seen[0][0] === STORES.ORDERS);
+
+  const own = got.find((m) => m.names.includes(STORES.TODOS));
+  const v1 = idb.getWriteVersion();
+  probe.postMessage({ tab: own.tab, names: [STORES.ORDERS] });
+  await wait(60);
+  await t.test('4. صدى كتابتي نفسها لا يُحسب (لا حلقة)', idb.getWriteVersion() === v1 && seen.length === 1);
+  probe.postMessage({ nonsense: true });
+  await wait(30);
+  await t.test('5. رسالة مشوّهة تُتجاهل', idb.getWriteVersion() === v1);
+  await repo.remove(rec.id);
+  probe.close();
+});
+
+register('v3.20.0 persisted errors', async (t) => {
+  const marker = 'persisted-error-test-' + Date.now();
+  await activity.log({ type: 'error:promise', description: '[promise] ' + marker, metadata: { stack: 'at x', url: '#/orders', context: {} } });
+  await activity.log({ type: 'order:created', description: 'ليس خطأ' });
+  const p = await getRecentPersisted(30);
+  const hit = p.find((e) => e.message === marker);
+  await t.test('1. الخطأ المحفوظ يُقرأ بشكل getRecent (kind/message/url)', !!hit && hit.kind === 'promise' && hit.url === '#/orders');
+  await t.test('2. أنشطة غير الأخطاء لا تدخل', !p.some((e) => /ليس خطأ/.test(e.message)));
+  const origErr = console.error; console.error = () => {};
+  try { await report(new Error('mem-only-' + marker), {}); } catch (_) { /* ignore */ }
+  console.error = origErr;
+  const merged = await getRecentMerged(30);
+  await t.test('3. الدمج يجمع الذاكرة والمحفوظ', merged.some((e) => e.message === marker) && merged.some((e) => /mem-only-/.test(e.message)));
+  await t.test('4. بلا تكرار (الخطأ الذي في الذاكرة وفي السجل يظهر مرة)', merged.filter((e) => /mem-only-/.test(e.message)).length === 1);
 });

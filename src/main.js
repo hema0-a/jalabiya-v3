@@ -185,6 +185,25 @@ try {
 }
 if (bootBlock) throw bootBlock;
 
+/* 🔗 مزامنة التبويبات: إن عُدِّلت البيانات من نافذة أخرى للتطبيق نُنبّه مرة (كل دقيقة بحد أقصى)
+   مع زر «تحديث». لا نعيد رسم شيء تلقائياً كي لا نُفسد نموذجاً مفتوحاً. كاش البحث يُبطَل تلقائياً. */
+try {
+  const idbSync = await import('./data/idb.js');
+  let lastTabToast = 0;
+  idbSync.onRemoteWrite((names) => {
+    try {
+      if (document.visibilityState !== 'visible') return;
+      const NOISE = ['activity', 'backups', 'settings', 'orderMedia'];
+      if (names.every((n) => NOISE.includes(n))) return;   /* ضجيج داخلي: لا يستحق تنبيهاً */
+      const t = Date.now();
+      if (t - lastTabToast < 60000) return;
+      lastTabToast = t;
+      toast.info('تغيّرت البيانات من نافذة أخرى للتطبيق', { duration: 8000, action: { label: 'تحديث', onClick: () => window.location.reload() } });
+    } catch (_) { /* ignore */ }
+  });
+  idbSync.startTabSync();
+} catch (e) { console.warn('[TabSync] تعذّر التفعيل:', e); }
+
 /* 🧬 ترحيل السجلات القديمة لآخر شكل بيانات — بعد القفل وقبل رسم أي صفحة.
    لا يفعل شيئاً (ولا يقرأ شيئاً) ما دام سجل الترحيلات فارغاً. فشله لا يمنع فتح التطبيق. */
 try {
@@ -688,6 +707,11 @@ setTimeout(() => {
           console.log('[BackupVerify] ✅ النسخة سليمة', v.warnings.length ? '(مع تحذيرات)' : '');
         }
       } catch (e) { console.warn('[BackupVerify] فشل الفحص:', e); }
+      /* 🩹 فحص سلامة البيانات الأسبوعي الصامت — بعد استقرار الإقلاع، قراءة فقط (النتيجة بند في مركز العمل) */
+      try {
+        const { runIntegrityIfDue } = await import('./services/integrity-weekly.js');
+        setTimeout(() => { runIntegrityIfDue().then((r) => { if (r.ran) console.log('[Integrity] فحص أسبوعي:', r.summary); }).catch(() => {}); }, 30000);
+      } catch (e) { console.warn('[Integrity] تعذّر الجدولة:', e); }
     } catch (err) {
       console.warn('[AutoBackup] ❌ فشل:', err);
     }

@@ -42,6 +42,7 @@ export const KINDS = Object.freeze({
   machine: { icon: '🛠️', label: 'صيانة ماكينة', route: '#/actions' },
   winback: { icon: '💤', label: 'عميل منقطع', route: '#/customers' },
   'month-close': { icon: '🔒', label: 'إقفال الشهر', route: '#/reports', finance: true },
+  integrity: { icon: '🩹', label: 'سلامة البيانات', route: '#/settings/data-care' },
 });
 
 /** مفاتيح بنود الطلبات التي تُرحَّل إلى digest ليحترم الإشعار تأجيلها. */
@@ -149,6 +150,8 @@ export function buildActionCenter(input = {}) {
   if (cf && Array.isArray(cf.tightWeeks) && cf.tightWeeks.length) { const w = cf.tightWeeks[0]; add('cashflow', w.from, 66, 'أسبوع ضيق قادم (' + dm(w.from) + ')', 'الخارج ' + money(w.outflow) + ' مقابل داخل ' + money(w.inflow), { amount: Math.abs(n(w.net)) }); }
   const mc = s.monthClose;
   if (mc && mc.open && n(mc.warns) > 0) add('month-close', mc.ym, 45, 'إقفال ' + (mc.label || 'الشهر'), mc.warns + ' بند يحتاج عملاً قبل الإقفال', {});
+  const ig = s.integrity;   /* فحص السلامة الأسبوعي الصامت: ملاحظات تنتظر مراجعتك (لا إصلاح آلي) */
+  if (ig && n(ig.total) > 0) add('integrity', 'weekly', n(ig.errors) > 0 ? 72 : 40, 'مراجعة سلامة البيانات', n(ig.total) + ' ملاحظة' + (n(ig.errors) > 0 ? ' (منها ' + n(ig.errors) + ' خطأ)' : '') + ' — افتح «صيانة البيانات»', {});
   for (const m of machineAlerts(s.machines)) add('machine', m.id, m.state === 'due' ? 78 : 48, m.name, m.subtitle, { machineId: m.id });
   for (const w of winbackList(arr(s.customers), arr(s.orders), now).slice(0, 3)) add('winback', w.customerId, 20, w.name, 'لم يطلب منذ ' + w.daysSince + ' يوم', { customerId: w.customerId, phone: w.phone, amount: w.totalSpent });
 

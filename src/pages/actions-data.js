@@ -29,6 +29,7 @@ import { buildPurchasePlan } from '../services/purchase-plan.js';
 import { buildCashflow } from '../services/cashflow-forecast.js';
 import { buildMonthClose, closeWindow } from '../services/month-close.js';
 import { sanitizeMachines } from '../services/machinery.js';
+import { getLastIntegrityRun } from '../services/integrity-weekly.js';
 
 const safe = (p, d = []) => Promise.resolve(p).catch(() => d);
 
@@ -61,7 +62,7 @@ export async function loadActionCenter(now = Date.now()) {
     } catch (e) { console.warn('[actions] finance sources failed:', e); }
   }
   const state = pruneState(st && st.actionCenter, now);
-  const model = buildActionCenter({ now, orders: ords, customers: custs, payments: pays, appointments: appts, documents: docs, commitments: cms, circles: circs, tasks: tds, outOfStock, settings: st, state, canFinance, purchase, cashflow, monthClose, machines: sanitizeMachines(st && st.machines && st.machines.list) });
+  const model = buildActionCenter({ now, orders: ords, customers: custs, payments: pays, appointments: appts, documents: docs, commitments: cms, circles: circs, tasks: tds, outOfStock, settings: st, integrity: getLastIntegrityRun(), state, canFinance, purchase, cashflow, monthClose, machines: sanitizeMachines(st && st.machines && st.machines.list) });
   return { model, state, role, canFinance, machines: sanitizeMachines(st && st.machines && st.machines.list) };
 }
 

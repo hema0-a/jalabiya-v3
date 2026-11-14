@@ -15,6 +15,40 @@ let dbInstance = null;
 let writeVersion = 0;
 export function getWriteVersion() { return writeVersion; }
 
+/* ==========================================================================
+   مزامنة التبويبات (BroadcastChannel)
+   ==========================================================================
+   عدّاد الكتابة وإشعارات onWrite تخص التبويب الواحد. إن فُتح التطبيق في تبويبين، فكتابة أحدهما لا تصل
+   للآخر (فيبقى كاش البحث وغيره قديماً). الآن كل كتابة مكتملة تُعلَن للتبويبات الأخرى فقط:
+   عندها يزيد عدّادها (يُبطل كاش البحث) وتُستدعى onRemoteWrite. لا نستدعي onWrite هناك عمداً:
+   مستمعوها (المزامنة السحابية، حالة الاتساخ، الدفتر) خاصة بمن كتب فعلاً. لا يرمي أبداً. */
+const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const remoteListeners = [];
+export function onRemoteWrite(cb) { if (typeof cb === 'function') remoteListeners.push(cb); }
+let channel = null;
+function getChannel() {
+  if (channel !== null) return channel || null;
+  channel = false;
+  try {
+    if (typeof BroadcastChannel === 'undefined') return null;
+    const ch = new BroadcastChannel('jalabiya_v3_idb');
+    if (typeof ch.unref === 'function') ch.unref();   /* Node (اختبارات): لا تُبقِ العملية حيّة */
+    ch.onmessage = (ev) => {
+      const m = ev && ev.data;
+      if (!m || m.tab === TAB_ID || !Array.isArray(m.names)) return;
+      writeVersion++;
+      for (const cb of remoteListeners) { try { cb(m.names); } catch (e) { console.warn('[idb] remote listener:', e); } }
+    };
+    channel = ch;
+  } catch (_) { channel = false; }
+  return channel || null;
+}
+function broadcastWrite(names) {
+  try { const ch = getChannel(); if (ch) ch.postMessage({ tab: TAB_ID, names: [...names] }); } catch (_) { /* ignore */ }
+}
+/** يفتح القناة مبكراً كي يستقبل هذا التبويب إعلانات غيره حتى قبل أول كتابة منه. */
+export function startTabSync() { getChannel(); }
+
 /* مستمعو الكتابة: يُستدعون بعد اكتمال كل معاملة كتابة بأسماء المخازن (تتبّع «تعديلات لم تُرفع») */
 const writeListeners = [];
 export function onWrite(cb) { if (typeof cb === 'function') writeListeners.push(cb); }
@@ -223,7 +257,7 @@ async function writeOp(storeName, run) {
     try { tx = db.transaction(storeName, 'readwrite'); }
     catch (e) { reject(e); return; }
     let result;
-    tx.oncomplete = () => { writeVersion++; notifyWrite([storeName]); resolve(result); };
+    tx.oncomplete = () => { writeVersion++; broadcastWrite([storeName]); notifyWrite([storeName]); resolve(result); };
     tx.onerror = () => reject(tx.error || new Error('[idb] write failed'));
     tx.onabort = () => reject(tx.error || new Error('[idb] write aborted'));
     try {
@@ -257,7 +291,7 @@ async function putStamped(storeName, value) {
     try { tx = db.transaction(storeName, 'readwrite'); }
     catch (e) { reject(e); return; }
     let result;
-    tx.oncomplete = () => { writeVersion++; notifyWrite([storeName]); resolve(result); };
+    tx.oncomplete = () => { writeVersion++; broadcastWrite([storeName]); notifyWrite([storeName]); resolve(result); };
     tx.onerror = () => reject(tx.error || new Error('[idb] write failed'));
     tx.onabort = () => reject(tx.error || new Error('[idb] write aborted'));
     const fail = (e) => { try { tx.abort(); } catch (_) { /* ignore */ } reject(e); };
@@ -390,7 +424,7 @@ export async function writeBatch(plan, opts = {}) {
     try {
       tx = db.transaction(names, 'readwrite');
     } catch (e) { reject(e); return; }
-    tx.oncomplete = () => { writeVersion++; notifyWrite(names); notifyBatch(names); resolve(counts); };
+    tx.oncomplete = () => { writeVersion++; broadcastWrite(names); notifyWrite(names); notifyBatch(names); resolve(counts); };
     /* عند إلغاء الحارس تُطلق الطلبات المعلّقة أخطاء AbortError قبل حدث abort: لا نرفض بها كي يصل رمز guard-mismatch */
     tx.onerror = () => { if (mismatch) return; reject(tx.error || new Error('[idb] batch failed')); };
     tx.onabort = () => {
@@ -458,6 +492,7 @@ export async function writeAtomic(steps) {
     let failure = null;
     tx.oncomplete = () => {
       writeVersion++;
+      broadcastWrite(names);
       notifyWrite(names);
       list.forEach((s, i) => { const r = written[i]; if (r) notifyRec(putListeners, s.store, r.id); });
       resolve(written);
