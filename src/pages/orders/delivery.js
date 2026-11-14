@@ -7,6 +7,8 @@
 
 import { el } from '../../core/dom.js';
 import { formatEGP } from '../../core/utils.js';
+import { STORES } from '../../core/config.js';
+import { saveFailMessage } from '../../core/save-error.js';
 import { orders } from '../../data/repos/orders.js';
 import { customers } from '../../data/repos/customers.js';
 import { payments as paymentsRepo } from '../../data/repos/payments.js';
@@ -234,22 +236,20 @@ export function openPartialDelivery(ctx, order) {
           const res = applyDelivery(fresh, sel, { note: noteInput.value, signature });
           if (!res.ok) { toast.warning(res.error); return; }
           const deliveryId = res.patch.deliveries[res.patch.deliveries.length - 1].id;
+          /* التسليم وتحصيل دفعته يُحفظان في معاملة واحدة: إما الاثنان أو لا شيء.
+             (كانا معاملتين: إغلاق التطبيق بينهما يترك طلباً مُسلَّماً بلا دفعته.) */
+          const collectPayment = collectAmt > 0 ? {
+            store: STORES.PAYMENTS,
+            data: {
+              customerId: fresh.customerId, orderId: fresh.id, amount: collectAmt,
+              method: methodSel.value, notes: 'تحصيل عند تسليم جزئي', isDeposit: false, deliveryId,
+            },
+          } : null;
           try {
-            await orders.update(order.id, res.patch);
-          } catch (err) { toast.danger('فشل التسليم: ' + err.message); return; }
-
-          let collected = 0;
-          if (collectAmt > 0) {
-            try {
-              await paymentsRepo.create({
-                customerId: fresh.customerId, orderId: fresh.id, amount: collectAmt,
-                method: methodSel.value, notes: 'تحصيل عند تسليم جزئي', isDeposit: false, deliveryId,
-              });
-              collected = collectAmt;
-            } catch (err) {
-              toast.warning('تم التسليم لكن تعذّر تسجيل الدفعة — سجّلها يدوياً من صفحة المدفوعات');
-            }
-          }
+            const saved = await orders.update(order.id, res.patch, collectPayment ? { alongside: [collectPayment] } : undefined);
+            if (!saved) { toast.danger('الطلب لم يعد موجوداً — لم يُحفظ شيء'); return; }
+          } catch (err) { toast.danger(saveFailMessage(err, 'فشل التسليم — لم يُحفظ شيء')); return; }
+          const collected = collectAmt > 0 ? collectAmt : 0;
 
           modal.close();
           /* الإيصال أولاً: تعذّر تحديث القائمة لا يجوز أن يحجبه (التسليم والدفعة محفوظان).

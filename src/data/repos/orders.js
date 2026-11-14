@@ -168,7 +168,7 @@ export const orders = {
     return snap;
   },
 
-  async update(id, patch) {
+  async update(id, patch, opts) {
     let p = patch;
     let prev = null;
     /* نحتاج الطلب السابق لتغيّر الحالة/المبلغ (مواءمة نقاط الولاء + إغلاق مؤقت العمل) */
@@ -192,7 +192,7 @@ export const orders = {
       p = ex.record;
       if (ex.puts.length) await writeMedia(id, ex.puts);
     }
-    const res = await base.update(id, p);
+    const res = await base.update(id, p, opts);
     if (ex) {
       if (!res) await dropMedia(id, ex.puts.map((x) => x.slot));       /* الطلب غير موجود: لا بايتات يتيمة */
       else if (ex.deletes.length) await dropMedia(id, ex.deletes);

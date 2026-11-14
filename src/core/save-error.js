@@ -51,7 +51,7 @@ export function describeSaveError(err) {
   if (name === 'InvalidStateError' || /connection is closing|database.*clos|DatabaseClosed/i.test(msg)) {
     return 'انقطع اتصال التطبيق بقاعدة البيانات. أعد تحميل الصفحة ثم أعد المحاولة.';
   }
-  if (/\[idb\] (write|batch) (failed|aborted)/i.test(msg) || name === 'AbortError') {
+  if (/\[idb\] (write|batch|atomic write) (failed|aborted)/i.test(msg) || name === 'AbortError') {
     return 'تعذّر إكمال الكتابة في قاعدة البيانات، ولم يُحفظ هذا السجل. أعد المحاولة، وإن تكرر فأعد تشغيل التطبيق.';
   }
   /* رسالة عربية كتبها التطبيق نفسه للمستخدم (مثل «الرصيد لا يكفي») تُعرض كما هي */

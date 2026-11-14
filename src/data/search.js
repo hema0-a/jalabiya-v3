@@ -19,6 +19,32 @@ import { personalLoans as loansRepo } from './repos/personal-loans.js';
 import { referrals as referralsRepo } from './repos/referrals.js';
 import { portfolio as portfolioRepo } from './repos/portfolio.js';
 import { normalizeSearch, phoneMatches } from '../core/utils.js';
+import { getWriteVersion } from './idb.js';
+
+/* كاش القوائم: البحث يُستدعى مع كل ضغطة (بعد تأخير قصير) وكان يقرأ ١١ مخزناً كاملاً في كل مرة.
+   الآن تُقرأ مرة ثم تُعاد من الذاكرة ما دام عدّاد الكتابة (getWriteVersion) لم يتغيّر في هذا التبويب،
+   مع انتهاء صلاحية قصير لالتقاط تعديلات تبويب آخر لا يصل عدّادها إلى هنا.
+   لا يُخزَّن شيء إن فشلت قراءة أي مخزن أو إن وقعت كتابة أثناء القراءة. */
+export const SEARCH_CACHE_TTL_MS = 15000;
+let _cache = null;
+
+/** إبطال الكاش يدوياً (للاختبار أو بعد عمليات خارج idb). */
+export function clearSearchCache() { _cache = null; }
+
+async function loadAll() {
+  const ver = getWriteVersion();
+  const t0 = Date.now();
+  if (_cache && _cache.ver === ver && t0 - _cache.at < SEARCH_CACHE_TTL_MS) return _cache.data;
+  let failed = false;
+  const safe = (repo) => repo.list().catch(() => { failed = true; return []; });
+  const data = await Promise.all([
+    safe(customersRepo), safe(ordersRepo), safe(paymentsRepo), safe(inventoryRepo),
+    safe(workersRepo), safe(expensesRepo), safe(commitmentsRepo), safe(goalsRepo),
+    safe(loansRepo), safe(referralsRepo), safe(portfolioRepo),
+  ]);
+  _cache = (!failed && getWriteVersion() === ver) ? { ver, at: t0, data } : null;
+  return data;
+}
 
 /**
  * وصف حالة الطلب (نص + لون).
@@ -59,23 +85,11 @@ export async function searchAll(query) {
 
   const results = { ...empty };
 
-  /* جلب كل البيانات بالتوازي */
+  /* جلب كل البيانات بالتوازي (من الكاش إن لم تتغيّر البيانات) */
   const [
     customers, orders, payments, inventory, workers, expenses,
     commitments, goals, loans, referrals, portfolio,
-  ] = await Promise.all([
-    customersRepo.list().catch(() => []),
-    ordersRepo.list().catch(() => []),
-    paymentsRepo.list().catch(() => []),
-    inventoryRepo.list().catch(() => []),
-    workersRepo.list().catch(() => []),
-    expensesRepo.list().catch(() => []),
-    commitmentsRepo.list().catch(() => []),
-    goalsRepo.list().catch(() => []),
-    loansRepo.list().catch(() => []),
-    referralsRepo.list().catch(() => []),
-    portfolioRepo.list().catch(() => []),
-  ]);
+  ] = await loadAll();
 
   /* خريطة العملاء (لربط الطلبات والدفعات) */
   const custMap = {};

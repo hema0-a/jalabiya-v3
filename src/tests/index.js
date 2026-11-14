@@ -164,5 +164,6 @@ import './modules/v3162-integrity-relations.test.js';
 import './modules/v3170-trash-push-today.test.js';
 import './modules/v3180-calendar-diagnostics-brief.test.js';
 import './modules/v3190-actions-cashflow-quickorder.test.js';
+import './modules/v3191-atomic-bootcheck-search.test.js';
 
 export { runAll, register } from './registry.js';

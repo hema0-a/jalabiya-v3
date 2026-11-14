@@ -77,14 +77,30 @@ export function createRepository(storeName, options = {}) {
      * تحديث جزئي لسجل.
      * @param {string} id
      * @param {Object} patch — الحقول المراد تحديثها
+     * @param {{alongside?:Array<{store:string,data:Object}>}} [opts] — سجلات جديدة تُنشأ مع التحديث
+     *   في **معاملة واحدة** (مثل دفعة التحصيل عند التسليم): إما يُحفظ الكل أو لا شيء.
      * @returns {Promise<Object|null>} السجل المُحدَّث أو null إن لم يوجد
      */
-    async update(id, patch) {
+    async update(id, patch, opts) {
       return runExclusive(storeName + ':' + id, async () => {
         const existing = await idb.get(storeName, id);
         if (!existing) return null;
         const updated = { ...existing, ...patch, id };
         if (timestamps) updated.updatedAt = now();
+        const alongside = opts && Array.isArray(opts.alongside) ? opts.alongside.filter(Boolean) : [];
+        if (alongside.length) {
+          /* سجلات جديدة تُكتب مع هذا التحديث في معاملة واحدة (كلها أو لا شيء) */
+          const t = now();
+          const extra = alongside.map(({ store, data }) => {
+            const rid = data.id ?? uid();
+            return { store, key: rid, record: { ...data, id: rid, createdAt: data.createdAt ?? t, updatedAt: t } };
+          });
+          await idb.writeAtomic([
+            { store: storeName, key: id, build: () => updated },
+            ...extra.map((x) => ({ store: x.store, key: x.key, build: () => x.record })),
+          ]);
+          return updated;
+        }
         await idb.put(storeName, updated);
         return updated;
       });

@@ -437,6 +437,53 @@ export async function writeBatch(plan, opts = {}) {
   });
 }
 
+/**
+ * كتابة ذرّية **مختومة** لعدة سجلات (قد تكون في مخازن مختلفة) في معاملة واحدة: كلها تُحفظ أو لا شيء.
+ * الفرق عن writeBatch: كل سجل يُقرأ ويُختم (_v/_ft/_fb) داخل المعاملة نفسها كما تفعل put،
+ * فتبقى المزامنة تعرف الحقول المتغيّرة. تُستعمل حين تلزم كتابتان معاً (مثل تسليم طلب + تحصيل دفعته).
+ * @param {Array<{store:string, key:*, build:(existing:(Object|undefined))=>Object}>} steps
+ *   build تُرجع السجل المراد كتابته؛ وإن رمت خطأً أُلغيت المعاملة كلها ورُفض الوعد بالخطأ نفسه.
+ * @returns {Promise<Object[]>} السجلات المكتوبة (بترتيب steps، قبل الختم)
+ */
+export async function writeAtomic(steps) {
+  const list = Array.isArray(steps) ? steps.filter(Boolean) : [];
+  if (list.length === 0) return [];
+  const db = await openDB();
+  const names = [...new Set(list.map((s) => s.store))];
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction(names, 'readwrite'); }
+    catch (e) { reject(e); return; }
+    const written = new Array(list.length);
+    let failure = null;
+    tx.oncomplete = () => {
+      writeVersion++;
+      notifyWrite(names);
+      list.forEach((s, i) => { const r = written[i]; if (r) notifyRec(putListeners, s.store, r.id); });
+      resolve(written);
+    };
+    tx.onerror = () => { if (failure) return; reject(tx.error || new Error('[idb] atomic write failed')); };
+    tx.onabort = () => reject(failure || tx.error || new Error('[idb] atomic write aborted'));
+    const fail = (e) => { if (!failure) failure = e; try { tx.abort(); } catch (_) { /* ignore */ } };
+    list.forEach((step, i) => {
+      try {
+        const store = tx.objectStore(step.store);
+        const g = store.get(step.key);
+        g.onsuccess = () => {
+          try {
+            const built = step.build(g.result);
+            let toWrite = built;
+            try { toWrite = stampForWrite(step.store, g.result, built, Date.now()); }
+            catch (e) { console.warn('[idb] ختم السجل فشل — يُكتب كما هو:', e); toWrite = built; }
+            const req = store.put(toWrite);
+            req.onsuccess = () => { written[i] = built; };
+          } catch (e) { fail(e); }
+        };
+      } catch (e) { fail(e); }
+    });
+  });
+}
+
 export function closeDB() {
   if (dbInstance) {
     dbInstance.close();

@@ -138,6 +138,53 @@ try {
   }
 }
 
+/* 🛟 فحص سلامة التخزين — بعد القفل (فلا يُتجاوز الرقم السري) وقبل أي ترحيل أو رسم.
+   يتوقف الإقلاع بشاشة واضحة في حالتين فقط: تعذّر فتح القاعدة، أو فتحها فارغة رغم نسخ سابقة
+   (حذف المتصفح للتخزين). لا استعادة صامتة. وفشل الفحص نفسه لا يمنع فتح التطبيق. */
+let bootBlock = null;
+try {
+  const [{ assessStartup, BOOT_ACK_KEY }, cfg, idbMod] = await Promise.all([
+    import('./services/boot-check.js'), import('./core/config.js'), import('./data/idb.js'),
+  ]);
+  const num = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch (_) { return 0; } };
+  const lastAuto = num(cfg.STORAGE_KEYS.V3_LAST_AUTO_BACKUP);
+  const lastExt = num(cfg.STORAGE_KEYS.V3_LAST_EXTERNAL_BACKUP);
+  let openError = null;
+  try { await idbMod.openDB(); } catch (e) { openError = e; }
+  let recordCount = 0;
+  let backupCount = 0;
+  if (!openError) {
+    for (const name of Object.values(cfg.STORES)) {
+      let n = 0;
+      try { n = await idbMod.count(name); } catch (_) { n = 0; }
+      if (name === cfg.STORES.BACKUPS) backupCount = n;
+      else if (name !== cfg.STORES.SETTINGS) recordCount += n;
+    }
+  }
+  const verdict = assessStartup({
+    openError, lastAutoBackupAt: lastAuto, lastExternalBackupAt: lastExt,
+    recordCount, backupCount, ackedAt: num(BOOT_ACK_KEY),
+  });
+  if (verdict.status !== 'ok') {
+    console.error('[BootCheck] ⚠️ ' + verdict.status, openError || '');
+    const appEl = document.getElementById('app');
+    const { renderDbFailure } = await import('./ui/db-failure.js');
+    renderDbFailure(appEl, {
+      status: verdict.status,
+      error: openError,
+      onImport: async (file) => { await (await import('./pages/settings/section-backup-io.js')).importAllData(file); },
+      onStartFresh: () => {
+        try { localStorage.setItem(BOOT_ACK_KEY, String(Math.max(lastAuto, lastExt))); } catch (_) { /* ignore */ }
+        window.location.reload();
+      },
+    });
+    bootBlock = new Error('[BootCheck] ' + verdict.status);
+  }
+} catch (e) {
+  console.warn('[BootCheck] تعذّر الفحص (يكمل الإقلاع):', e);
+}
+if (bootBlock) throw bootBlock;
+
 /* 🧬 ترحيل السجلات القديمة لآخر شكل بيانات — بعد القفل وقبل رسم أي صفحة.
    لا يفعل شيئاً (ولا يقرأ شيئاً) ما دام سجل الترحيلات فارغاً. فشله لا يمنع فتح التطبيق. */
 try {
