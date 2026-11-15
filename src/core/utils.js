@@ -342,14 +342,26 @@ export function normalizeSearch(s) {
  * @returns {boolean}
  */
 export function phoneMatches(phone, query) {
-  const q = toLatinDigits(query).replace(/\D/g, '');
-  if (!q) return false;
+  return phoneMatchesPrepared(preparePhone(phone), query);
+}
+
+/* v3.20.2: تجهيز الهاتف مرة واحدة لمقارنات كثيرة (البحث يقارن آلاف الأرقام عند كل ضغطة مفتاح).
+   phoneMatches أعلاه غلاف رقيق فوقهما، فالمعنى مطابق حرفياً (تحرسه اختبارات التكافؤ). */
+const nationalOf = (x) => { let y = x.replace(/^00/, ''); if (y.startsWith('20') && y.length >= 11) y = y.slice(2); return y.replace(/^0/, ''); };
+
+/** @returns {{p:string, n:string}|null} الأرقام فقط (بلا 00 البادئة) وصيغتها المحلية؛ null إن لا أرقام. */
+export function preparePhone(phone) {
   let p = toLatinDigits(phone).replace(/\D/g, '');
-  if (!p) return false;
+  if (!p) return null;
   if (p.startsWith('00')) p = p.slice(2);
-  if (p.includes(q)) return true;
-  /* التكافؤ دولي ⟷ محلي (+2010… ⟷ 010…) لا يُطبَّق على الاستعلامات القصيرة كي لا تتوسّع (كتابة «010» لا تعني «10») */
+  return { p, n: nationalOf(p) };
+}
+
+/** مطابقة هاتف مجهَّز (preparePhone) لنص بحث. */
+export function phoneMatchesPrepared(prep, query) {
+  const q = toLatinDigits(query).replace(/\D/g, '');
+  if (!q || !prep) return false;
+  if (prep.p.includes(q)) return true;
   if (q.length < 8) return false;
-  const national = (x) => { let y = x.replace(/^00/, ''); if (y.startsWith('20') && y.length >= 11) y = y.slice(2); return y.replace(/^0/, ''); };
-  return national(p).includes(national(q));
+  return prep.n.includes(nationalOf(q));
 }

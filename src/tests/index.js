@@ -165,5 +165,6 @@ import './modules/v3170-trash-push-today.test.js';
 import './modules/v3180-calendar-diagnostics-brief.test.js';
 import './modules/v3190-actions-cashflow-quickorder.test.js';
 import './modules/v3191-atomic-bootcheck-search.test.js';
+import './modules/v3202-search-memo.test.js';
 
 export { runAll, register } from './registry.js';
