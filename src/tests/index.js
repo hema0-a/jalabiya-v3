@@ -166,5 +166,7 @@ import './modules/v3180-calendar-diagnostics-brief.test.js';
 import './modules/v3190-actions-cashflow-quickorder.test.js';
 import './modules/v3191-atomic-bootcheck-search.test.js';
 import './modules/v3202-search-memo.test.js';
+import './modules/v3203-actions-ux.test.js';
+import './modules/v3204-error-dedupe.test.js';
 
 export { runAll, register } from './registry.js';

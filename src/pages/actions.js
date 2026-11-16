@@ -15,7 +15,7 @@ import { loadActionCenter, saveActionState, saveMachines } from './actions-data.
 import { buildMachinesSection } from './actions-machines.js';
 import { addHours, serviceDone } from '../services/machinery.js';
 
-let ui = { container: null, data: null, filter: 'all', showHidden: false };
+let ui = { container: null, data: null, filter: 'all', showHidden: false, machinesOpen: false };
 
 const SNOOZES = [['غداً', 1], ['3 أيام', 3], ['أسبوع', 7]];
 const SEL = { fontSize: '13px', width: 'auto', minWidth: '96px', flex: '0 0 auto' };
@@ -86,19 +86,19 @@ function draw() {
     c.appendChild(el('button', { type: 'button', className: 'btn btn--sm btn--ghost', 'data-testid': 'actions-toggle-hidden', style: { margin: '8px 0' }, onClick: () => { ui.showHidden = !ui.showHidden; draw(); } }, (ui.showHidden ? '▲ إخفاء' : '▼ عرض') + ' المؤجَّل والمُنجَز (' + hidden + ')'));
     if (ui.showHidden) { m.snoozed.forEach((it) => c.appendChild(itemCard(it, 'snoozed'))); m.done.forEach((it) => c.appendChild(itemCard(it, 'done'))); }
   }
-  c.appendChild(buildMachinesSection({ machines: ui.data.machines || [], onSave: async (list) => { try { await saveMachines(list); await refresh(); } catch (e) { toast.danger('تعذّر الحفظ'); } } }));
+  c.appendChild(buildMachinesSection({ machines: ui.data.machines || [], open: ui.machinesOpen, onToggle: (v) => { ui.machinesOpen = v; }, onSave: async (list) => { try { await saveMachines(list); await refresh(); } catch (e) { toast.danger('تعذّر الحفظ'); } } }));
 }
 
 async function refresh() { ui.data = await loadActionCenter(); draw(); }
 
 export const actionsPage = {
   async render(container) {
-    ui = { container, data: null, filter: 'all', showHidden: false };
+    ui = { container, data: null, filter: 'all', showHidden: false, machinesOpen: false };
     container.appendChild(el('div', { style: { padding: '24px', textAlign: 'center', color: '#888' } }, 'جارٍ التحميل...'));
     try { await refresh(); } catch (err) {
       console.error('[actions] render:', err); clear(container);
       container.appendChild(el('div', { className: 'card', style: { padding: '16px', color: '#C62828' } }, 'تعذّر التحميل: ' + (err && err.message || err)));
     }
   },
-  destroy() { ui = { container: null, data: null, filter: 'all', showHidden: false }; },
+  destroy() { ui = { container: null, data: null, filter: 'all', showHidden: false, machinesOpen: false }; },
 };

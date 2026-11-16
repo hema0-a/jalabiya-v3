@@ -18,7 +18,7 @@ export const activity = {
 
   /**
    * تسجيل نشاط جديد (مع تقليم تلقائي عند تجاوز الحد).
-   * @param {Object} data — { type, entityId?, description, metadata? }
+   * @param {Object} data — { type, entityId?, description, metadata?, timestamp? } — timestamp اختياري (v3.20.3): يمرّره error-handler ليتطابق وقت نسخة الخطأ المحفوظة مع نسخة الذاكرة
    * @returns {Promise<Object>}
    */
   async log(data) {
@@ -27,7 +27,7 @@ export const activity = {
       entityId: data.entityId || null,
       description: String(data.description || ''),
       metadata: data.metadata || null,
-      timestamp: Date.now(),
+      timestamp: Number(data.timestamp) > 0 ? Number(data.timestamp) : Date.now(),
     });
 
     /* تقليم دوري (10% احتمال) لتجنب التكرار */

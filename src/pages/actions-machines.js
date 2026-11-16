@@ -10,8 +10,11 @@ import { addHours, serviceDone, machineStatus, newMachine, DEFAULT_INTERVAL_H, M
 
 const COLOR = { ok: '#2E7D32', soon: '#F57C00', due: '#C62828' };
 
-export function buildMachinesSection({ machines = [], onSave }) {
+export function buildMachinesSection({ machines = [], onSave, open = false, onToggle }) {
   const sec = el('details', { className: 'card machines-section', 'data-testid': 'machines-section', style: { padding: '12px', marginTop: '12px' } });
+  /* v3.20.3: الصفحة تُعاد رسمها بعد كل حفظ، فتبقى حالة الفتح محفوظة وإلا انطوى القسم تحت إصبعك بعد كل ضغطة */
+  sec.open = !!open;
+  sec.addEventListener('toggle', () => { if (onToggle) onToggle(sec.open); });
   sec.appendChild(el('summary', { style: { cursor: 'pointer', fontWeight: '700' } }, '🛠️ الماكينات (' + machines.length + ')'));
   const save = (list) => onSave && onSave(list);
 

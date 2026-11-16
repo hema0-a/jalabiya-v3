@@ -87,6 +87,7 @@ async function recordError(rawErr, kind, context = {}) {
   try {
     await activity.log({
       type: 'error:' + kind,
+      timestamp: entry.timestamp,   /* v3.20.3: الوقت نفسه في الذاكرة والمحفوظ ليُزال التكرار بدقة */
       description: '[' + kind + '] ' + entry.message,
       metadata: {
         stack: entry.stack,
@@ -196,17 +197,19 @@ export async function getRecentPersisted(limit = 15) {
  * @param {number} [limit=15]
  * @returns {Promise<Array>}
  */
+const DEDUPE_WINDOW_MS = 2000;
 export async function getRecentMerged(limit = 15) {
   const n = Math.max(1, Number(limit) || 15);
   let persisted = [];
   try { persisted = await getRecentPersisted(n * 2); } catch (_) { persisted = []; }
-  const seen = new Set();
-  const out = [];
-  for (const e of [...getRecent(MAX_BUFFER), ...persisted]) {
-    const key = (e.timestamp || 0) + '|' + e.message;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(e);
+  /* v3.20.3: نسخة الذاكرة والمحفوظة لخطأ واحد وقتاهما متطابقان الآن، لكن سجلات أقدم (قبل الإصلاح) كان وقتها يتباعد
+     ميلّي ثوانٍ فيظهر الخطأ مرتين. فالمحفوظ يُحذف إن وُجد في الذاكرة خطأ بالنوع والرسالة نفسيهما خلال ± 2 ثانية.
+     (تكرارات الذاكرة نفسها تبقى كلها: الإزالة بين الذاكرة والمحفوظ فقط.) */
+  const mem = getRecent(MAX_BUFFER);
+  const out = [...mem];
+  for (const e of persisted) {
+    const dup = mem.some((m) => m.kind === e.kind && m.message === e.message && Math.abs((m.timestamp || 0) - (e.timestamp || 0)) <= DEDUPE_WINDOW_MS);
+    if (!dup) out.push(e);
   }
   return out.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, n);
 }
