@@ -34,7 +34,7 @@ export function diffDays(a, b) {
 
 export const EMPTY_COUNTS = Object.freeze({
   today: 0, soon: 0, overdue: 0, ready: 0,
-  out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0, weekly: 0,
+  out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0, weekly: 0, appointmentsToday: 0, appointmentsTomorrow: 0, receivables: 0,
 });
 
 /**
@@ -72,6 +72,15 @@ export function briefCounts(digest, prefs, state, nowMs = Date.now()) {
   /* «أسبوعك» كل جمعة من ملخص لا يتجاوز عمره 48 ساعة (نفس شرط الخادمة) */
   counts.weekly = (p.weekly !== false && digest.wk && typeof digest.wk === 'object' && lp.dow === 5
     && Number(nowMs) - Number(digest.at) <= 48 * 3600000 && Number(nowMs) - Number(digest.at) >= -3600000) ? 1 : 0;
+  /* v3.21.0: مواعيد اليوم/غداً + عدد عملاء المستحقات (نفس قواعد الخادمة) */
+  if (Array.isArray(digest.ap)) {
+    for (const a of digest.ap) {
+      if (!a || typeof a.d !== 'string') continue;
+      const diff = diffDays(lp.ymd, a.d);
+      if (diff === 0) counts.appointmentsToday++; else if (diff === 1) counts.appointmentsTomorrow++;
+    }
+  }
+  if (digest.rc && typeof digest.rc === 'object' && Number(digest.rc.n) > 0 && Number(digest.rc.a) > 0) counts.receivables = Math.round(Number(digest.rc.n));
   counts.out = Number(digest.out) > 0 ? Number(digest.out) : 0;
   counts.low = Number(digest.low) > 0 ? Number(digest.low) : 0;
 

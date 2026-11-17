@@ -52,6 +52,8 @@ export function pushOptions(settings) {
     circles: p.circles !== false,
     tasks: p.tasks !== false,
     weekly: p.weekly !== false,   /* v3.19.0: سطر «أسبوعك» كل جمعة */
+    appointments: p.appointments !== false,   /* v3.21.0: مواعيد اليوم وغداً */
+    receivables: p.receivables !== false,     /* v3.21.0: المستحقات المتأخرة عند العملاء */
     quietEnabled: n.quietEnabled === true,
     quietFrom: hhmm(n.quietFrom, '22:00'),
     quietTo: hhmm(n.quietTo, '07:00'),
@@ -149,6 +151,28 @@ export function buildDigest(src) {
     if (cr.length) out.cr = cr.slice(0, 20);
   }
   if (Object.keys(sz).length) out.sz = sz;
+  /* v3.21.0: مواعيد اليوم وغداً (القياس والزيارات) — تُحسب بتوقيت الجهاز ثم تصنّفها الخادمة نسبةً إلى يومها */
+  if (opts.appointments && Array.isArray(src.appointments)) {
+    const d0 = new Date(now);
+    const today = localYmd(now);
+    const tomorrow = localYmd(new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 1, 12).getTime());
+    const ap = [];
+    for (const a of src.appointments) {
+      if (!a || a.status === 'done' || a.status === 'cancelled' || !(Number(a.date) > 0)) continue;
+      const d = localYmd(Number(a.date));
+      if (d !== today && d !== tomorrow) continue;
+      const row = { d };
+      if (opts.includeNames && a.title) row.t = String(a.title).slice(0, 24);
+      ap.push(row);
+      if (ap.length >= 20) break;
+    }
+    if (ap.length) out.ap = ap;
+  }
+  /* v3.21.0: المستحقات المتأخرة (عدد العملاء + المجموع) — أرقام مجمَّعة بلا أسماء */
+  if (opts.receivables && src.receivables && typeof src.receivables === 'object') {
+    const n = Math.max(0, Math.round(Number(src.receivables.n) || 0)); const a = Math.max(0, Math.round(Number(src.receivables.a) || 0));
+    if (n > 0 && a > 0) out.rc = { n, a };
+  }
   /* ملخص الأسبوع المضغوط (weeklyDigest) — تستعمله الخادمة يوم الجمعة فقط */
   if (opts.weekly && src.weekly && typeof src.weekly === 'object') {
     const w = src.weekly; const pick = (k) => Math.max(0, Math.round(Number(w[k]) || 0));
@@ -183,6 +207,8 @@ export function serverPrefs(settings, tz) {
     circles: o.circles,
     tasks: o.tasks,
     weekly: o.weekly,
+    appointments: o.appointments,
+    receivables: o.receivables,
     quiet: o.quietEnabled ? { from: o.quietFrom, to: o.quietTo } : null,
     tz: tz || 'Africa/Cairo',
   };

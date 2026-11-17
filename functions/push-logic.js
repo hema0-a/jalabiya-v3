@@ -56,7 +56,7 @@ function isDue(prefs, state, nowMs) {
 
 /** تصنيف خام لبقية الأقسام (مخزون · التزامات · مستندات · جمعيات · مهام) بلا مفاتيح التفعيل. */
 function classifyExtras(digest, prefs, lp) {
-  const c = { out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0, weekly: 0 };
+  const c = { out: 0, low: 0, commitments: 0, docsExpired: 0, docsNear: 0, circles: 0, tasksToday: 0, tasksOverdue: 0, weekly: 0, appointmentsToday: 0, appointmentsTomorrow: 0, receivables: 0 };
   if (!digest) return c;
   c.out = Number(digest.out) > 0 ? Number(digest.out) : 0;
   c.low = Number(digest.low) > 0 ? Number(digest.low) : 0;
@@ -80,6 +80,15 @@ function classifyExtras(digest, prefs, lp) {
       if (diff < 0) c.tasksOverdue++; else if (diff === 0) c.tasksToday++;
     }
   }
+  /* v3.21.0: مواعيد اليوم/غداً (نسبةً ليوم الخادمة لا ليوم الرفع) + عدد عملاء المستحقات */
+  if (Array.isArray(digest.ap)) {
+    for (const a of digest.ap) {
+      if (!a || typeof a.d !== 'string') continue;
+      const diff = diffDays(lp.ymd, a.d);
+      if (diff === 0) c.appointmentsToday++; else if (diff === 1) c.appointmentsTomorrow++;
+    }
+  }
+  if (digest.rc && typeof digest.rc === 'object' && Number(digest.rc.n) > 0 && Number(digest.rc.a) > 0) c.receivables = Math.round(Number(digest.rc.n));
   return c;
 }
 
@@ -181,6 +190,18 @@ function buildMessage(digest, prefs, state, nowMs) {
     if (od + td > 0) lines.push('✅ ' + (td ? td + ' مهمة اليوم' : '') + (td && od ? ' و' : '') + (od ? od + ' متأخرة' : ''));
   }
 
+  /* v3.21.0: مواعيد اليوم وغداً + المستحقات المتأخرة (من ملخص التطبيق) */
+  const ext = classifyExtras(digest, prefs, lp);
+  if (prefs.appointments !== false && (ext.appointmentsToday || ext.appointmentsTomorrow)) {
+    const first = Array.isArray(digest.ap) ? digest.ap.find((a) => a && a.t && diffDays(lp.ymd, a.d) === 0) : null;
+    lines.push(ext.appointmentsToday === 1 && !ext.appointmentsTomorrow && first
+      ? '🗓️ موعد اليوم: ' + first.t
+      : '🗓️ ' + [ext.appointmentsToday ? ext.appointmentsToday + ' موعد اليوم' : '', ext.appointmentsTomorrow ? ext.appointmentsTomorrow + ' غداً' : ''].filter(Boolean).join(' و'));
+  }
+  if (prefs.receivables !== false && ext.receivables > 0) {
+    lines.push('🧾 مستحقات متأخرة ' + Math.round(Number(digest.rc.a)).toLocaleString('en-US') + ' ج عند ' + ext.receivables + ' عميل');
+  }
+
   /* v3.19.0: «أسبوعك» كل جمعة من ملخص رفعه التطبيق خلال آخر 48 ساعة (أقدم منه ⟵ لا سطر بدل أرقام قديمة) */
   const weeklyOn = !!(prefs.weekly !== false && digest && digest.wk && typeof digest.wk === 'object' && lp.dow === 5 && Number(nowMs) - Number(digest.at) <= 48 * 3600000 && Number(nowMs) - Number(digest.at) >= -3600000);
   if (weeklyOn) {
@@ -189,11 +210,12 @@ function buildMessage(digest, prefs, state, nowMs) {
   }
 
   /* v3.18.0: أعداد منظَّمة (تصنيف خام بلا مفاتيح التفعيل) — يقارنها اختبار التكافؤ مع services/daily-brief.js */
-  const counts = classifyExtras(digest, prefs, lp);
+  const counts = ext;   /* نفس التصنيف الخام الذي بُنيت منه الأسطر أعلاه */
   counts.weekly = weeklyOn ? 1 : 0;
   counts.today = today.length; counts.soon = soon.length; counts.overdue = overdue.length; counts.ready = ready.length;
 
-  const url = today.length || overdue.length || soon.length ? '#/orders' : (lines.length ? '#/dashboard' : '#/dashboard');
+  /* v3.21.0: الطلبات تفتح صفحتها، وبقية البنود (مواعيد · مستحقات · مستندات · التزامات…) تفتح «مركز العمل» حيث يُنجَز كل شيء */
+  const url = today.length || overdue.length || soon.length ? '#/orders' : (lines.length ? '#/actions' : '#/dashboard');
   return {
     lines, ids, url, counts,
     title: lines.length > 1 ? '🧵 نشرة اليوم (' + lines.length + ')' : '🧵 ورشة الجلابيب',

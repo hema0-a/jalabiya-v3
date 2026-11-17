@@ -38,6 +38,11 @@ function sample(r) {
   if (Object.keys(sz).length) digest.sz = sz;
   if (r() < 0.7) digest.wk = { inc: int(r, 0, 9000), exp: int(r, 0, 4000), del: int(r, 0, 12), ovd: int(r, 0, 5), rec: int(r, 0, 3000) };
   if (r() < 0.2) prefs.weekly = false;
+  /* v3.21.0: مواعيد اليوم/غداً + مستحقات متأخرة + مفاتيحهما */
+  if (r() < 0.7) digest.ap = Array.from({ length: int(r, 0, 6) }, () => ({ d: ymdPlus(now, tz, int(r, -2, 3)), t: r() < 0.5 ? 'قياس ' + int(r, 1, 9) : undefined })).map((a) => (a.t === undefined ? { d: a.d } : a));
+  if (r() < 0.6) digest.rc = { n: int(r, 0, 5), a: int(r, 0, 9000) };
+  if (r() < 0.2) prefs.appointments = false;
+  if (r() < 0.2) prefs.receivables = false;
   digest.cm = Array.from({ length: int(r, 0, 6) }, () => ({ day: int(r, 1, 31), t: 'ت' + int(r, 1, 9) }));
   if (r() < 0.8) digest.dc = Array.from({ length: int(r, 0, 6) }, () => ({ e: ymdPlus(now, tz, int(r, -40, 90)), r: pick(r, [0, 7, 30, 365]), t: 'م' + int(r, 1, 9) }));
   if (r() < 0.8) digest.cr = Array.from({ length: int(r, 0, 4) }, () => ({ day: int(r, 1, 31), t: 'ج' + int(r, 1, 9) }));
@@ -74,6 +79,8 @@ test('أسطر الإشعار تذكر نفس أعداد التطبيق (لا ت
     if (c.today) assert.ok(has(new RegExp(c.today === 1 ? '⏰' : '⏰ ' + c.today + ' طلب يُسلَّم اليوم')), 'اليوم ' + k); else assert.ok(!has(/⏰/), 'لا اليوم ' + k);
     if (c.tasksToday || c.tasksOverdue) assert.ok(has(/✅ .*(مهمة اليوم|متأخرة)/), 'مهام ' + k);
     assert.equal(has(/📈 أسبوعك/), c.weekly === 1, 'أسبوعك ' + k);
+    assert.equal(has(/🗓️/), (c.appointmentsToday + c.appointmentsTomorrow > 0) && s.prefs.appointments !== false, 'مواعيد ' + k);
+    assert.equal(has(/🧾/), c.receivables > 0 && s.prefs.receivables !== false, 'مستحقات ' + k);
   }
 });
 
@@ -127,4 +134,43 @@ test('v3.19.0: الطلب المؤجَّل من مركز العمل يختفي �
   const m = server.buildMessage({ ...base, sz }, prefs, {}, now);
   assert.deepEqual(['overdue', 'ready', 'today', 'soon'].map((k) => m.counts[k]), [0, 0, 0, 1]);
   assert.deepEqual(brief.briefCounts({ ...base, sz }, prefs, {}, now).counts, m.counts);
+});
+
+test('v3.21.0: أسطر المواعيد تُصنَّف نسبةً ليوم الخادمة (اليوم/غداً فقط، لا الأمس ولا بعد غد)', async () => {
+  const brief = await import(briefUrl);
+  const now = Date.UTC(2026, 10, 11, 9, 0);   /* الأربعاء 11/11 */
+  const prefs = { tz: 'UTC', daysBefore: 1 };
+  const mk = (ap) => ({ at: now, orders: [], ap });
+  let m = server.buildMessage(mk([{ d: '2026-11-11', t: 'قياس جلابية' }]), prefs, {}, now);
+  assert.match(m.body, /🗓️ موعد اليوم: قياس جلابية/);
+  m = server.buildMessage(mk([{ d: '2026-11-11' }, { d: '2026-11-11' }, { d: '2026-11-12' }]), prefs, {}, now);
+  assert.match(m.body, /🗓️ 2 موعد اليوم و1 غداً/);
+  m = server.buildMessage(mk([{ d: '2026-11-12' }]), prefs, {}, now);
+  assert.match(m.body, /🗓️ 1 غداً/);
+  m = server.buildMessage(mk([{ d: '2026-11-10' }, { d: '2026-11-13' }]), prefs, {}, now);
+  assert.equal(m.lines.length, 0);   /* الأمس وبعد غد لا يُذكران */
+  assert.equal(server.buildMessage(mk([{ d: '2026-11-11' }]), { ...prefs, appointments: false }, {}, now).lines.length, 0);
+  const c = brief.briefCounts(mk([{ d: '2026-11-11' }, { d: '2026-11-12' }, { d: '2026-11-12' }]), prefs, {}, now).counts;
+  assert.deepEqual([c.appointmentsToday, c.appointmentsTomorrow], [1, 2]);
+});
+
+test('v3.21.0: سطر المستحقات المتأخرة (مجموع وعدد عملاء) ويُهمل المعطوب', async () => {
+  const brief = await import(briefUrl);
+  const now = Date.UTC(2026, 10, 11, 9, 0); const prefs = { tz: 'UTC', daysBefore: 1 };
+  let m = server.buildMessage({ at: now, orders: [], rc: { n: 3, a: 4500 } }, prefs, {}, now);
+  assert.match(m.body, /🧾 مستحقات متأخرة 4,500 ج عند 3 عميل/);
+  assert.equal(m.counts.receivables, 3);
+  assert.equal(brief.briefCounts({ at: now, orders: [], rc: { n: 3, a: 4500 } }, prefs, {}, now).counts.receivables, 3);
+  for (const bad of [{ n: 0, a: 100 }, { n: 2, a: 0 }, { n: 'x', a: 'y' }, null, 5, { n: -1, a: -5 }]) assert.equal(server.buildMessage({ at: now, orders: [], rc: bad }, prefs, {}, now).lines.length, 0);
+  assert.equal(server.buildMessage({ at: now, orders: [], rc: { n: 3, a: 4500 } }, { ...prefs, receivables: false }, {}, now).lines.length, 0);
+});
+
+test('v3.21.0: وجهة النقر: الطلبات ⟵ صفحة الطلبات، وغيرها ⟵ مركز العمل، وبلا أسطر ⟵ اللوحة', () => {
+  const now = Date.UTC(2026, 10, 11, 9, 0); const prefs = { tz: 'UTC', daysBefore: 1 };
+  assert.equal(server.buildMessage({ at: now, orders: [{ i: 'a', r: 0, d: '2026-11-11' }], rc: { n: 1, a: 100 } }, prefs, {}, now).url, '#/orders');
+  assert.equal(server.buildMessage({ at: now, orders: [], rc: { n: 1, a: 100 } }, prefs, {}, now).url, '#/actions');
+  assert.equal(server.buildMessage({ at: now, orders: [], out: 2 }, prefs, {}, now).url, '#/actions');
+  assert.equal(server.buildMessage({ at: now, orders: [] }, prefs, {}, now).url, '#/dashboard');
+  /* الجاهز وحده (بلا تسليم اليوم/متأخر/قريب) لا يفتح الطلبات بل مركز العمل حيث يتصل بالعميل */
+  assert.equal(server.buildMessage({ at: now, orders: [{ i: 'r', r: 1 }] }, prefs, {}, now).url, '#/actions');
 });
