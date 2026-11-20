@@ -6,6 +6,7 @@
    الحالة (تأجيل/تم) في settings.actionCenter فتتزامن بين الأجهزة، وتُرحَّل مؤجَّلات الطلبات إلى الإشعار عبر push-sync.
    ========================================================================== */
 
+import { getWriteVersion } from '../data/idb.js';
 import { orders } from '../data/repos/orders.js';
 import { customers } from '../data/repos/customers.js';
 import { payments } from '../data/repos/payments.js';
@@ -33,9 +34,20 @@ import { getLastIntegrityRun } from '../services/integrity-weekly.js';
 
 const safe = (p, d = []) => Promise.resolve(p).catch(() => d);
 
+/* v3.21.2: ذاكرة مؤقتة قصيرة: بطاقة اللوحة ثم صفحة مركز العمل (وكل عودة للوحة) كانت تعيد تحميل ~15 مصدراً وحساب السيولة والمشتريات
+   في كل مرة (≈ 150 م.ث. عند 5 آلاف طلب، ≈ 1.1 ث عند 50 ألفاً). تُعاد النتيجة نفسها ما دام عدّاد الكتابة (getWriteVersion) لم يتغيّر
+   (أي كتابة في أي تبويب تُبطلها) وما دامت أقل من دقيقة (لأن بنود اليوم/الأيام تعتمد الساعة). نداء بـ now صريح لا يستعمل الذاكرة. */
+const CACHE_TTL_MS = 60000;
+let _cache = null;
+export function clearActionCenterCache() { _cache = null; }
+
 /** يحمّل كل ما يلزم لمركز العمل (والمعاينة في اللوحة). */
-export async function loadActionCenter(now = Date.now()) {
+export async function loadActionCenter(nowArg) {
+  const useCache = nowArg === undefined;
+  const now = useCache ? Date.now() : nowArg;
+  const ver = getWriteVersion();
   const role = getRole();
+  if (useCache && _cache && _cache.ver === ver && _cache.role === role && now - _cache.at < CACHE_TTL_MS) return _cache.data;
   const canFinance = canAccess(role, 'financial-center');
   const [ords, custs, pays, appts, docs, cms, cmps, circs, tds, inv, st] = await Promise.all([
     safe(orders.list()), safe(customers.list()), safe(payments.list()), safe(appointments.list()), safe(documents.list()),
@@ -63,7 +75,10 @@ export async function loadActionCenter(now = Date.now()) {
   }
   const state = pruneState(st && st.actionCenter, now);
   const model = buildActionCenter({ now, orders: ords, customers: custs, payments: pays, appointments: appts, documents: docs, commitments: cms, circles: circs, tasks: tds, outOfStock, settings: st, integrity: getLastIntegrityRun(), state, canFinance, purchase, cashflow, monthClose, machines: sanitizeMachines(st && st.machines && st.machines.list) });
-  return { model, state, role, canFinance, machines: sanitizeMachines(st && st.machines && st.machines.list) };
+  const data = { model, state, role, canFinance, machines: sanitizeMachines(st && st.machines && st.machines.list) };
+  /* لا تُحفَظ إن حدثت كتابة أثناء الحساب (قد تكون المصادر قديمة) */
+  _cache = (useCache && getWriteVersion() === ver) ? { ver, role, at: now, data } : null;
+  return data;
 }
 
 /** يحفظ الحالة كاملة (snoozed + done معاً: update يدمج سطحياً على مستوى المفتاح فيمسح ما حُذف). */

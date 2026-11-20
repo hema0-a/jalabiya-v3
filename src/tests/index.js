@@ -169,5 +169,6 @@ import './modules/v3202-search-memo.test.js';
 import './modules/v3203-actions-ux.test.js';
 import './modules/v3204-error-dedupe.test.js';
 import './modules/v3210-push-appointments-receivables.test.js';
+import './modules/v3212-actions-cache.test.js';
 
 export { runAll, register } from './registry.js';
